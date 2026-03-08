@@ -1,0 +1,53 @@
+import { useState, useEffect } from 'react'
+import { supabase } from './supabase'
+import Login from './pages/Login'
+import Dashboard from './pages/Dashboard'
+import StudentDetail from './pages/StudentDetail'
+import WorkoutEditor from './pages/WorkoutEditor'
+import StudentView from './pages/StudentView'
+
+export default function App() {
+  const [session, setSession] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState('dashboard')
+  const [pageParams, setPageParams] = useState({})
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+      setLoading(false)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      setSession(session)
+    })
+    // Check for public student view URL: /view/STUDENT_ID
+    const match = window.location.pathname.match(/^\/view\/(.+)$/)
+    if (match) {
+      setPage('student-view')
+      setPageParams({ id: match[1] })
+    }
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const navigate = (name, params = {}) => {
+    setPage(name)
+    setPageParams(params)
+  }
+
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#080B12', color: '#34D399', fontSize: 18 }}>
+      Carregando...
+    </div>
+  )
+
+  if (page === 'student-view') return <StudentView studentId={pageParams.id} />
+  if (!session) return <Login onLogin={() => navigate('dashboard')} />
+
+  return (
+    <>
+      {page === 'dashboard'       && <Dashboard navigate={navigate} session={session} />}
+      {page === 'student-detail'  && <StudentDetail navigate={navigate} studentId={pageParams.id} />}
+      {page === 'workout-editor'  && <WorkoutEditor navigate={navigate} studentId={pageParams.studentId} planId={pageParams.planId} />}
+    </>
+  )
+}
