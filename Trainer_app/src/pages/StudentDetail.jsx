@@ -37,7 +37,7 @@ export default function StudentDetail({ navigate, studentId }) {
 
   useEffect(() => {
     fetchAll()
-    setShareLink(`${window.location.origin}/view/${studentId}`)
+    setShareLink(`https://trainer-app-nu.vercel.app/view/${studentId}`)
   }, [studentId])
 
   const fetchAll = async () => {
