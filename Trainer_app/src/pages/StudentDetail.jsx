@@ -11,33 +11,40 @@ const s = {
   card: { background: '#0D1117', borderRadius: 16, padding: 20, border: '1px solid rgba(255,255,255,0.07)', marginBottom: 12 },
   label: { fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 },
   val: { fontSize: 15, fontWeight: 700, color: '#fff' },
-  input: { width: '100%', background: '#161B27', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '10px 12px', color: '#E2E8F0', fontSize: 14, outline: 'none', marginBottom: 10 },
-  select: { width: '100%', background: '#161B27', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '10px 12px', color: '#E2E8F0', fontSize: 14, outline: 'none', marginBottom: 10 },
+  input: { width: '100%', background: '#161B27', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '10px 12px', color: '#E2E8F0', fontSize: 14, outline: 'none', marginBottom: 10, boxSizing: 'border-box' },
+  select: { width: '100%', background: '#161B27', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '10px 12px', color: '#E2E8F0', fontSize: 14, outline: 'none', marginBottom: 10, boxSizing: 'border-box' },
   btn: (color = '#34D399') => ({ background: `linear-gradient(135deg,${color},${color}99)`, border: 'none', borderRadius: 8, padding: '10px 16px', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }),
   outlineBtn: { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '10px 16px', color: '#94A3B8', fontWeight: 600, fontSize: 13, cursor: 'pointer' },
   shareBox: { background: 'rgba(0,201,255,0.08)', border: '1px solid rgba(0,201,255,0.25)', borderRadius: 10, padding: '12px 16px', fontSize: 12, color: '#7DD3FC', wordBreak: 'break-all', marginTop: 12 },
 }
 
-const GOALS = ['Ganho de Massa', 'Emagrecimento', 'Condicionamento', 'Força e Performance']
+const GOALS  = ['Ganho de Massa', 'Emagrecimento', 'Condicionamento', 'Força e Performance']
 const LEVELS = ['Iniciante', 'Intermediário', 'Avançado']
 const STATUS_COLOR = { active: '#34D399', draft: '#FBBF24', archived: '#64748B' }
 const STATUS_LABEL = { active: 'Ativo', draft: 'Rascunho', archived: 'Arquivado' }
 
 export default function StudentDetail({ navigate, studentId }) {
-  const [student, setStudent] = useState(null)
-  const [plans, setPlans] = useState([])
-  const [progress, setProgress] = useState([])
-  const [tab, setTab] = useState('plans')
-  const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState({})
-  const [newProgress, setNewProgress] = useState({ date: new Date().toISOString().slice(0, 10), weight: '', notes: '', waist: '', chest: '', hip: '', thigh: '' })
+  const isNew = studentId === 'new'
+
+  // ── todos os hooks ANTES de qualquer return condicional ──
+  const [student, setStudent]           = useState(null)
+  const [plans, setPlans]               = useState([])
+  const [progress, setProgress]         = useState([])
+  const [tab, setTab]                   = useState('plans')
+  const [editing, setEditing]           = useState(false)
+  const [form, setForm]                 = useState({})
+  const [newForm, setNewForm]           = useState({ name: '', age: '', weight: '', height: '', goal: GOALS[0], level: LEVELS[0], notes: '' })
+  const [newProgress, setNewProgress]   = useState({ date: new Date().toISOString().slice(0, 10), weight: '', notes: '', waist: '', chest: '', hip: '', thigh: '' })
   const [showProgressForm, setShowProgressForm] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [shareLink, setShareLink] = useState('')
+  const [saving, setSaving]             = useState(false)
+  const [error, setError]               = useState('')
+  const [shareLink, setShareLink]       = useState('')
 
   useEffect(() => {
-    fetchAll()
-    setShareLink(`https://trainer-app-nu.vercel.app/view/${studentId}`)
+    if (!isNew) {
+      fetchAll()
+      setShareLink(`https://trainer-app-nu.vercel.app/view/${studentId}`)
+    }
   }, [studentId])
 
   const fetchAll = async () => {
@@ -49,6 +56,26 @@ export default function StudentDetail({ navigate, studentId }) {
     if (st) { setStudent(st); setForm(st) }
     if (pl) setPlans(pl)
     if (pr) setProgress(pr)
+  }
+
+  const saveNewStudent = async () => {
+    if (!newForm.name.trim()) { setError('Nome é obrigatório'); return }
+    setSaving(true)
+    setError('')
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data, error: err } = await supabase.from('students').insert([{
+      name:       newForm.name.trim(),
+      age:        newForm.age    ? +newForm.age    : null,
+      weight:     newForm.weight ? +newForm.weight : null,
+      height:     newForm.height ? +newForm.height : null,
+      goal:       newForm.goal,
+      level:      newForm.level,
+      notes:      newForm.notes,
+      teacher_id: user.id,
+    }]).select().single()
+    setSaving(false)
+    if (err) { setError(err.message); return }
+    navigate('student-detail', { id: data.id })
   }
 
   const saveStudent = async () => {
@@ -80,6 +107,49 @@ export default function StudentDetail({ navigate, studentId }) {
     await fetchAll()
   }
 
+  // ── TELA DE NOVO ALUNO ───────────────────────────────────────────────────
+  if (isNew) return (
+    <div style={s.wrap}>
+      <div style={s.inner}>
+        <button style={s.back} onClick={() => navigate('dashboard')}>← Voltar ao Painel</button>
+        <div style={s.header}>
+          <div style={{ fontSize: 10, color: '#34D399', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 8 }}>Novo Aluno</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginBottom: 20 }}>Cadastrar Aluno</div>
+          {error && <div style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 8, padding: '10px 14px', color: '#FCA5A5', fontSize: 13, marginBottom: 16 }}>{error}</div>}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {[['Nome completo', 'name', 'text'], ['Idade', 'age', 'number'], ['Peso (kg)', 'weight', 'number'], ['Altura (cm)', 'height', 'number']].map(([l, f, t]) => (
+              <div key={f}>
+                <div style={{ fontSize: 10, color: '#64748B', marginBottom: 4, textTransform: 'uppercase' }}>{l}</div>
+                <input style={s.input} type={t} placeholder={l} value={newForm[f]} onChange={e => setNewForm(x => ({ ...x, [f]: e.target.value }))} />
+              </div>
+            ))}
+            <div>
+              <div style={{ fontSize: 10, color: '#64748B', marginBottom: 4, textTransform: 'uppercase' }}>Objetivo</div>
+              <select style={s.select} value={newForm.goal} onChange={e => setNewForm(x => ({ ...x, goal: e.target.value }))}>
+                {GOALS.map(g => <option key={g}>{g}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: '#64748B', marginBottom: 4, textTransform: 'uppercase' }}>Nível</div>
+              <select style={s.select} value={newForm.level} onChange={e => setNewForm(x => ({ ...x, level: e.target.value }))}>
+                {LEVELS.map(l => <option key={l}>{l}</option>)}
+              </select>
+            </div>
+            <div style={{ gridColumn: '1/-1' }}>
+              <div style={{ fontSize: 10, color: '#64748B', marginBottom: 4, textTransform: 'uppercase' }}>Observações</div>
+              <textarea style={{ ...s.input, minHeight: 60, resize: 'vertical' }} value={newForm.notes} placeholder="Ex: aluno com problema no joelho..." onChange={e => setNewForm(x => ({ ...x, notes: e.target.value }))} />
+            </div>
+            <div style={{ gridColumn: '1/-1', display: 'flex', gap: 10 }}>
+              <button style={s.btn()} onClick={saveNewStudent} disabled={saving}>{saving ? 'Salvando...' : '✅ Cadastrar Aluno'}</button>
+              <button style={s.outlineBtn} onClick={() => navigate('dashboard')}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  // ── TELA DE ALUNO EXISTENTE ──────────────────────────────────────────────
   if (!student) return <div style={{ padding: 40, color: '#475569' }}>Carregando...</div>
 
   const imc = student.weight && student.height ? (student.weight / ((student.height / 100) ** 2)).toFixed(1) : '—'
@@ -89,7 +159,6 @@ export default function StudentDetail({ navigate, studentId }) {
       <div style={s.inner}>
         <button style={s.back} onClick={() => navigate('dashboard')}>← Voltar ao Painel</button>
 
-        {/* Header */}
         <div style={s.header}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
             <div>
@@ -139,23 +208,20 @@ export default function StudentDetail({ navigate, studentId }) {
             </div>
           )}
 
-          {/* Share link */}
           <div style={{ marginTop: 16 }}>
-            <div style={{ fontSize: 11, color: '#475569', marginBottom: 4 }}>🔗 Link do aluno (compartilhe para ele ver o treino):</div>
+            <div style={{ fontSize: 11, color: '#475569', marginBottom: 4 }}>🔗 Link do aluno:</div>
             <div style={s.shareBox} onClick={() => { navigator.clipboard.writeText(shareLink); alert('Link copiado!') }}>
               {shareLink} <span style={{ color: '#34D399', marginLeft: 8, cursor: 'pointer' }}>📋 Copiar</span>
             </div>
           </div>
         </div>
 
-        {/* Tabs */}
         <div style={s.tabs}>
           {[['plans', '🏋️ Treinos'], ['progress', '📈 Evolução'], ['notes', '📋 Observações']].map(([id, label]) => (
             <button key={id} style={s.tab(tab === id)} onClick={() => setTab(id)}>{label}</button>
           ))}
         </div>
 
-        {/* PLANS TAB */}
         {tab === 'plans' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
@@ -173,21 +239,17 @@ export default function StudentDetail({ navigate, studentId }) {
                   <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>{plan.title}</div>
                   <div style={{ fontSize: 12, color: '#475569' }}>Criado em {new Date(plan.created_at).toLocaleDateString('pt-BR')}</div>
                 </div>
-                <button style={s.btn('#00C9FF')} onClick={() => navigate('workout-editor', { studentId, planId: plan.id })}>
-                  ✏️ Editar Treino
-                </button>
+                <button style={s.btn('#00C9FF')} onClick={() => navigate('workout-editor', { studentId, planId: plan.id })}>✏️ Editar Treino</button>
               </div>
             ))}
           </div>
         )}
 
-        {/* PROGRESS TAB */}
         {tab === 'progress' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
               <button style={s.btn()} onClick={() => setShowProgressForm(!showProgressForm)}>+ Registrar Evolução</button>
             </div>
-
             {showProgressForm && (
               <div style={{ ...s.card, marginBottom: 16 }}>
                 <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 16 }}>Novo Registro</div>
@@ -206,7 +268,6 @@ export default function StudentDetail({ navigate, studentId }) {
                 <button style={s.btn()} onClick={addProgress} disabled={saving}>{saving ? 'Salvando...' : 'Salvar Registro'}</button>
               </div>
             )}
-
             {progress.length === 0 && <div style={{ textAlign: 'center', padding: 60, color: '#334155' }}>Nenhum registro ainda</div>}
             {progress.map((p, i) => (
               <div key={p.id} style={{ ...s.card, marginBottom: 10 }}>
@@ -232,15 +293,13 @@ export default function StudentDetail({ navigate, studentId }) {
           </div>
         )}
 
-        {/* NOTES TAB */}
         {tab === 'notes' && (
           <div style={s.card}>
             <div style={{ fontSize: 14, fontWeight: 600, color: '#94A3B8', marginBottom: 8 }}>Observações do Aluno</div>
-            {editing ? null : (
-              student.notes
-                ? <div style={{ fontSize: 14, color: '#CBD5E1', lineHeight: 1.7 }}>{student.notes}</div>
-                : <div style={{ color: '#334155', fontSize: 14 }}>Nenhuma observação registrada. Clique em "Editar Perfil" para adicionar.</div>
-            )}
+            {student.notes
+              ? <div style={{ fontSize: 14, color: '#CBD5E1', lineHeight: 1.7 }}>{student.notes}</div>
+              : <div style={{ color: '#334155', fontSize: 14 }}>Nenhuma observação registrada. Clique em "Editar Perfil" para adicionar.</div>
+            }
           </div>
         )}
       </div>
