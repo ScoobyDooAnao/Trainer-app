@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard'
 import StudentDetail from './pages/StudentDetail'
 import WorkoutEditor from './pages/WorkoutEditor'
 import StudentView from './pages/StudentView'
+import TeacherProfile from './pages/TeacherProfile'
 
 export default function App() {
   const [session, setSession] = useState(null)
@@ -20,7 +21,6 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       setSession(session)
     })
-    // Check for public student view URL: /view/STUDENT_ID
     const match = window.location.pathname.match(/^\/view\/(.+)$/)
     if (match) {
       setPage('student-view')
@@ -45,9 +45,10 @@ export default function App() {
 
   return (
     <>
-      {page === 'dashboard'       && <Dashboard navigate={navigate} session={session} />}
-      {page === 'student-detail'  && <StudentDetail navigate={navigate} studentId={pageParams.id} />}
-      {page === 'workout-editor'  && <WorkoutEditor navigate={navigate} studentId={pageParams.studentId} planId={pageParams.planId} />}
+      {page === 'dashboard'        && <Dashboard navigate={navigate} session={session} />}
+      {page === 'student-detail'   && <StudentDetail navigate={navigate} studentId={pageParams.id} />}
+      {page === 'workout-editor'   && <WorkoutEditor navigate={navigate} studentId={pageParams.studentId} planId={pageParams.planId} />}
+      {page === 'teacher-profile'  && <TeacherProfile navigate={navigate} session={session} />}
     </>
   )
 }
