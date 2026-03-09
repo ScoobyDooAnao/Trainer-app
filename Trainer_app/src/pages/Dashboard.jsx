@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabase";
 
 const C = {
@@ -34,79 +33,57 @@ function delta(arr, key) {
   return +(last - prev).toFixed(1);
 }
 
-// ── SVG Line Chart ────────────────────────────────────────────────────────────
-function LineChart({ data, dataKey, color, label, height = 140 }) {
+function LineChart({ data, dataKey, color, height = 140 }) {
   if (!data || data.length < 2) return (
     <div style={{ height, display:"flex", alignItems:"center", justifyContent:"center", color:C.textSub, fontSize:12 }}>
       Dados insuficientes
     </div>
   );
-
   const values = data.map(d => parseFloat(d[dataKey])).filter(v => !isNaN(v));
-  if (values.length < 2) return null;
+  if (values.length < 2) return <div style={{ height, display:"flex", alignItems:"center", justifyContent:"center", color:C.textSub, fontSize:12 }}>Dados insuficientes</div>;
 
   const W = 340, H = height;
   const pad = { top:10, right:10, bottom:24, left:36 };
   const innerW = W - pad.left - pad.right;
   const innerH = H - pad.top - pad.bottom;
-
   const minV = Math.min(...values) * 0.98;
   const maxV = Math.max(...values) * 1.02;
   const range = maxV - minV || 1;
-
   const points = values.map((v, i) => ({
     x: pad.left + (i / (values.length - 1)) * innerW,
     y: pad.top + (1 - (v - minV) / range) * innerH,
-    v,
     label: data[i]?.date || i,
   }));
-
-  const pathD = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
-  const areaD = `${pathD} L ${points[points.length-1].x} ${pad.top + innerH} L ${points[0].x} ${pad.top + innerH} Z`;
+  const pathD = points.map((p, i) => `${i===0?"M":"L"} ${p.x} ${p.y}`).join(" ");
+  const areaD = `${pathD} L ${points[points.length-1].x} ${pad.top+innerH} L ${points[0].x} ${pad.top+innerH} Z`;
 
   return (
-    <div style={{ overflowX:"auto" }}>
-      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display:"block" }}>
-        {/* Grid lines */}
-        {[0, 0.25, 0.5, 0.75, 1].map((t, i) => {
-          const y = pad.top + t * innerH;
-          const val = (maxV - t * range).toFixed(1);
-          return (
-            <g key={i}>
-              <line x1={pad.left} y1={y} x2={pad.left + innerW} y2={y} stroke={C.border} strokeWidth="1" />
-              <text x={pad.left - 4} y={y + 4} fontSize="9" fill={C.textSub} textAnchor="end">{val}</text>
-            </g>
-          );
-        })}
-
-        {/* Area fill */}
-        <path d={areaD} fill={color} fillOpacity="0.08" />
-
-        {/* Line */}
-        <path d={pathD} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-
-        {/* Dots + labels */}
-        {points.map((p, i) => (
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display:"block" }}>
+      {[0,0.25,0.5,0.75,1].map((t,i) => {
+        const y = pad.top + t * innerH;
+        return (
           <g key={i}>
-            <circle cx={p.x} cy={p.y} r="4" fill={color} stroke={C.white} strokeWidth="1.5" />
-            <text x={p.x} y={H - 6} fontSize="9" fill={C.textSub} textAnchor="middle">{p.label}</text>
+            <line x1={pad.left} y1={y} x2={pad.left+innerW} y2={y} stroke={C.border} strokeWidth="1" />
+            <text x={pad.left-4} y={y+4} fontSize="9" fill={C.textSub} textAnchor="end">{(maxV - t*range).toFixed(1)}</text>
           </g>
-        ))}
-      </svg>
-    </div>
+        );
+      })}
+      <path d={areaD} fill={color} fillOpacity="0.08" />
+      <path d={pathD} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      {points.map((p,i) => (
+        <g key={i}>
+          <circle cx={p.x} cy={p.y} r="4" fill={color} stroke={C.white} strokeWidth="1.5" />
+          <text x={p.x} y={H-6} fontSize="9" fill={C.textSub} textAnchor="middle">{p.label}</text>
+        </g>
+      ))}
+    </svg>
   );
 }
 
 function MultiLineChart({ data, keys, colors, labels, height = 140 }) {
-  if (!data || data.length < 2) return (
-    <div style={{ height, display:"flex", alignItems:"center", justifyContent:"center", color:C.textSub, fontSize:12 }}>
-      Dados insuficientes
-    </div>
-  );
-
+  if (!data || data.length < 2) return <div style={{ height, display:"flex", alignItems:"center", justifyContent:"center", color:C.textSub, fontSize:12 }}>Dados insuficientes</div>;
   const allValues = keys.flatMap(k => data.map(d => parseFloat(d[k]))).filter(v => !isNaN(v));
   if (allValues.length === 0) return null;
-
   const W = 340, H = height;
   const pad = { top:10, right:10, bottom:24, left:36 };
   const innerW = W - pad.left - pad.right;
@@ -114,36 +91,26 @@ function MultiLineChart({ data, keys, colors, labels, height = 140 }) {
   const minV = Math.min(...allValues) * 0.98;
   const maxV = Math.max(...allValues) * 1.02;
   const range = maxV - minV || 1;
-
   const getPoints = (key) => data.map((d, i) => ({
-    x: pad.left + (i / (data.length - 1)) * innerW,
+    x: pad.left + (i / (data.length-1)) * innerW,
     y: pad.top + (1 - (parseFloat(d[key]) - minV) / range) * innerH,
   }));
-
   return (
     <div>
       <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display:"block" }}>
-        {[0, 0.5, 1].map((t, i) => {
-          const y = pad.top + t * innerH;
-          return <line key={i} x1={pad.left} y1={y} x2={pad.left+innerW} y2={y} stroke={C.border} strokeWidth="1" />;
-        })}
+        {[0,0.5,1].map((t,i) => <line key={i} x1={pad.left} y1={pad.top+t*innerH} x2={pad.left+innerW} y2={pad.top+t*innerH} stroke={C.border} strokeWidth="1" />)}
         {keys.map((key, ki) => {
           const pts = getPoints(key);
-          const d = pts.map((p, i) => `${i===0?"M":"L"} ${p.x} ${p.y}`).join(" ");
+          const d = pts.map((p,i) => `${i===0?"M":"L"} ${p.x} ${p.y}`).join(" ");
           return <path key={ki} d={d} fill="none" stroke={colors[ki]} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />;
         })}
-        {keys.map((key, ki) =>
-          getPoints(key).map((p, i) => <circle key={`${ki}-${i}`} cx={p.x} cy={p.y} r="3" fill={colors[ki]} stroke={C.white} strokeWidth="1.5" />)
-        )}
-        {data.map((d, i) => (
-          <text key={i} x={pad.left + (i / (data.length-1)) * innerW} y={H-6} fontSize="9" fill={C.textSub} textAnchor="middle">{d.date}</text>
-        ))}
+        {keys.map((key, ki) => getPoints(key).map((p,i) => <circle key={`${ki}-${i}`} cx={p.x} cy={p.y} r="3" fill={colors[ki]} stroke={C.white} strokeWidth="1.5" />))}
+        {data.map((d,i) => <text key={i} x={pad.left+(i/(data.length-1))*innerW} y={H-6} fontSize="9" fill={C.textSub} textAnchor="middle">{d.date}</text>)}
       </svg>
       <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginTop:6 }}>
-        {labels.map((l, i) => (
+        {labels.map((l,i) => (
           <div key={i} style={{ display:"flex", alignItems:"center", gap:5, fontSize:10, color:C.textSub }}>
-            <div style={{ width:10, height:10, borderRadius:"50%", background:colors[i] }} />
-            {l}
+            <div style={{ width:10, height:10, borderRadius:"50%", background:colors[i] }} />{l}
           </div>
         ))}
       </div>
@@ -155,7 +122,7 @@ function DeltaBadge({ value, goal, metric }) {
   if (value === null || value === undefined) return null;
   const positive = goal === "Ganho de Massa" ? value > 0 : value < 0;
   return (
-    <span style={{ fontSize:11, fontWeight:700, padding:"3px 8px", borderRadius:20, background: positive ? C.emeraldLight : "#FEE2E2", color: positive ? C.emerald : "#DC2626" }}>
+    <span style={{ fontSize:11, fontWeight:700, padding:"3px 8px", borderRadius:20, background:positive?C.emeraldLight:"#FEE2E2", color:positive?C.emerald:"#DC2626" }}>
       {value > 0 ? "+" : ""}{value} {metric} {positive ? "🔥" : "⚠️"}
     </span>
   );
@@ -199,9 +166,9 @@ function WavySidebar({ activeTab, setActiveTab, professorEmail, onLogout }) {
           {navItems.map(([id, icon, label, enabled]) => (
             <div key={id} onClick={() => enabled && setActiveTab(id)} style={{
               display:"flex", alignItems:"center", gap:10, padding:"11px 14px", borderRadius:12, marginBottom:4,
-              cursor: enabled ? "pointer" : "not-allowed", opacity: enabled ? 1 : 0.35,
-              background: activeTab===id ? "rgba(255,255,255,0.13)" : "transparent",
-              borderLeft: activeTab===id ? `3px solid ${C.mustardMid}` : "3px solid transparent",
+              cursor:enabled?"pointer":"not-allowed", opacity:enabled?1:0.35,
+              background:activeTab===id?"rgba(255,255,255,0.13)":"transparent",
+              borderLeft:activeTab===id?`3px solid ${C.mustardMid}`:"3px solid transparent",
               transition:"all 0.18s",
             }}>
               <span style={{ fontSize:16 }}>{icon}</span>
@@ -225,7 +192,6 @@ function WavySidebar({ activeTab, setActiveTab, professorEmail, onLogout }) {
   );
 }
 
-// ── ABA ALUNOS ────────────────────────────────────────────────────────────────
 function TabAlunos({ students, loading, navigate }) {
   const [hovered, setHovered] = useState(null);
   if (loading) return <Spinner />;
@@ -236,7 +202,7 @@ function TabAlunos({ students, loading, navigate }) {
           <div style={{ fontSize:10, color:C.textSub, letterSpacing:2, textTransform:"uppercase", marginBottom:4 }}>Painel Principal</div>
           <h1 style={{ margin:0, fontSize:24, fontWeight:800, color:C.text }}>Meus Alunos 👥</h1>
         </div>
-        <button onClick={() => navigate("/students/new")} style={{ background:C.navy, border:"none", borderRadius:12, padding:"11px 20px", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer", boxShadow:`0 4px 16px ${C.navy}44` }}>+ Novo Aluno</button>
+        <button onClick={() => navigate("student-detail", { id: "new" })} style={{ background:C.navy, border:"none", borderRadius:12, padding:"11px 20px", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer", boxShadow:`0 4px 16px ${C.navy}44` }}>+ Novo Aluno</button>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:28 }}>
         {[
@@ -270,8 +236,8 @@ function TabAlunos({ students, loading, navigate }) {
             return (
               <div key={st.id}
                 onMouseEnter={() => setHovered(st.id)} onMouseLeave={() => setHovered(null)}
-                onClick={() => navigate(`/students/${st.id}`)}
-                style={{ background:C.white, borderRadius:20, padding:20, boxShadow: hovered===st.id?`0 8px 28px ${C.navy}22`:"0 2px 12px rgba(0,0,0,0.06)", border: hovered===st.id?`1.5px solid ${C.navyLight}`:`1.5px solid ${C.border}`, cursor:"pointer", transition:"all 0.22s", transform: hovered===st.id?"translateY(-3px)":"none" }}>
+                onClick={() => navigate("student-detail", { id: st.id })}
+                style={{ background:C.white, borderRadius:20, padding:20, boxShadow:hovered===st.id?`0 8px 28px ${C.navy}22`:"0 2px 12px rgba(0,0,0,0.06)", border:hovered===st.id?`1.5px solid ${C.navyLight}`:`1.5px solid ${C.border}`, cursor:"pointer", transition:"all 0.22s", transform:hovered===st.id?"translateY(-3px)":"none" }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12 }}>
                   <div style={{ width:44, height:44, borderRadius:13, background:`${goalColor[st.goal]||C.navy}18`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:21 }}>{goalIcon[st.goal]||"🏋️"}</div>
                   <span style={{ fontSize:10, padding:"3px 10px", borderRadius:20, fontWeight:700, background:planBg[st.plan_status]||C.navyLight, color:planColor[st.plan_status]||C.navy }}>{st.plan_status||"Sem treino"}</span>
@@ -300,7 +266,7 @@ function TabAlunos({ students, loading, navigate }) {
               </div>
             );
           })}
-          <div onClick={() => navigate("/students/new")} style={{ background:"transparent", borderRadius:20, padding:20, border:`2px dashed ${C.border}`, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", cursor:"pointer", minHeight:180, gap:8, transition:"all 0.2s" }}
+          <div onClick={() => navigate("student-detail", { id: "new" })} style={{ background:"transparent", borderRadius:20, padding:20, border:`2px dashed ${C.border}`, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", cursor:"pointer", minHeight:180, gap:8, transition:"all 0.2s" }}
             onMouseEnter={e=>{e.currentTarget.style.background=C.mustardLight;e.currentTarget.style.borderColor=C.mustard}}
             onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.border}}>
             <div style={{ width:42, height:42, borderRadius:13, background:C.navyLight, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, color:C.navy }}>+</div>
@@ -312,7 +278,6 @@ function TabAlunos({ students, loading, navigate }) {
   );
 }
 
-// ── ABA TREINOS ───────────────────────────────────────────────────────────────
 function TabTreinos({ students, workoutDays, loading }) {
   const allDays = ["Seg","Ter","Qua","Qui","Sex","Sab","Dom"];
   const planMap = {};
@@ -329,8 +294,8 @@ function TabTreinos({ students, workoutDays, loading }) {
       </div>
       <div style={{ display:"flex", gap:8, marginBottom:24, flexWrap:"wrap" }}>
         {allDays.map(d => (
-          <div key={d} style={{ flex:1, minWidth:60, padding:"10px 6px", borderRadius:12, textAlign:"center", background: d===todayKey?C.navy:C.white, border: d===todayKey?`2px solid ${C.navy}`:`1px solid ${C.border}`, boxShadow: d===todayKey?`0 4px 14px ${C.navy}33`:"none" }}>
-            <div style={{ fontSize:11, fontWeight:800, color: d===todayKey?C.mustardMid:C.textSub }}>{d}</div>
+          <div key={d} style={{ flex:1, minWidth:60, padding:"10px 6px", borderRadius:12, textAlign:"center", background:d===todayKey?C.navy:C.white, border:d===todayKey?`2px solid ${C.navy}`:`1px solid ${C.border}`, boxShadow:d===todayKey?`0 4px 14px ${C.navy}33`:"none" }}>
+            <div style={{ fontSize:11, fontWeight:800, color:d===todayKey?C.mustardMid:C.textSub }}>{d}</div>
             {d===todayKey && <div style={{ fontSize:9, color:"rgba(255,255,255,0.6)", marginTop:2 }}>Hoje</div>}
           </div>
         ))}
@@ -346,7 +311,7 @@ function TabTreinos({ students, workoutDays, loading }) {
                 <div style={{ width:46, height:46, borderRadius:13, background:`${goalColor[st.goal]||C.navy}18`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>{goalIcon[st.goal]||"🏋️"}</div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>{st.name}</div>
-                  <span style={{ fontSize:12, fontWeight:600, color: w?C.navy:C.textSub, background: w?C.navyLight:C.bg, padding:"4px 12px", borderRadius:20, border:`1px solid ${w?C.navyLight:C.border}` }}>
+                  <span style={{ fontSize:12, fontWeight:600, color:w?C.navy:C.textSub, background:w?C.navyLight:C.bg, padding:"4px 12px", borderRadius:20, border:`1px solid ${w?C.navyLight:C.border}` }}>
                     {w ? `🏋️ ${w}` : "😴 Dia de Descanso"}
                   </span>
                 </div>
@@ -362,14 +327,14 @@ function TabTreinos({ students, workoutDays, loading }) {
           <div style={{ background:C.white, borderRadius:16, overflow:"hidden", border:`1px solid ${C.border}` }}>
             <div style={{ display:"grid", gridTemplateColumns:"1.5fr repeat(7,1fr)", background:C.navy }}>
               <div style={{ padding:"10px 16px", fontSize:11, color:"rgba(255,255,255,0.5)", fontWeight:600 }}>Aluno</div>
-              {allDays.map(d => <div key={d} style={{ padding:"10px 8px", fontSize:11, fontWeight:700, color: d===todayKey?C.mustardMid:"rgba(255,255,255,0.6)", textAlign:"center" }}>{d}</div>)}
+              {allDays.map(d => <div key={d} style={{ padding:"10px 8px", fontSize:11, fontWeight:700, color:d===todayKey?C.mustardMid:"rgba(255,255,255,0.6)", textAlign:"center" }}>{d}</div>)}
             </div>
             {students.map((st,i) => (
-              <div key={st.id} style={{ display:"grid", gridTemplateColumns:"1.5fr repeat(7,1fr)", borderTop:`1px solid ${C.border}`, background: i%2===0?C.white:C.bg }}>
+              <div key={st.id} style={{ display:"grid", gridTemplateColumns:"1.5fr repeat(7,1fr)", borderTop:`1px solid ${C.border}`, background:i%2===0?C.white:C.bg }}>
                 <div style={{ padding:"12px 16px", fontSize:12, fontWeight:700, color:C.text, display:"flex", alignItems:"center", gap:6 }}><span>{goalIcon[st.goal]||"🏋️"}</span>{st.name.split(" ")[0]}</div>
                 {allDays.map(d => {
                   const w = planMap[st.id]?.[d];
-                  return <div key={d} style={{ padding:"10px 6px", fontSize:10, textAlign:"center", color: !w?C.border:d===todayKey?C.navy:C.textSub, fontWeight: d===todayKey?700:400, background: d===todayKey?C.navyLight:"transparent" }}>{w||"—"}</div>;
+                  return <div key={d} style={{ padding:"10px 6px", fontSize:10, textAlign:"center", color:!w?C.border:d===todayKey?C.navy:C.textSub, fontWeight:d===todayKey?700:400, background:d===todayKey?C.navyLight:"transparent" }}>{w||"—"}</div>;
                 })}
               </div>
             ))}
@@ -380,7 +345,6 @@ function TabTreinos({ students, workoutDays, loading }) {
   );
 }
 
-// ── ABA EVOLUCAO ──────────────────────────────────────────────────────────────
 function TabEvolucao({ students, loading }) {
   const [selectedId, setSelectedId] = useState(null);
   useEffect(() => { if (students.length > 0 && !selectedId) setSelectedId(students[0].id); }, [students]);
@@ -410,7 +374,7 @@ function TabEvolucao({ students, loading }) {
       </div>
       <div style={{ display:"flex", gap:8, marginBottom:20, flexWrap:"wrap" }}>
         {students.map(s => (
-          <button key={s.id} onClick={() => setSelectedId(s.id)} style={{ padding:"9px 16px", borderRadius:10, cursor:"pointer", background: selectedId===s.id?C.navy:C.white, color: selectedId===s.id?"#fff":C.textSub, fontWeight:700, fontSize:12, border:`1px solid ${selectedId===s.id?C.navy:C.border}`, boxShadow: selectedId===s.id?`0 4px 12px ${C.navy}33`:"none" }}>
+          <button key={s.id} onClick={() => setSelectedId(s.id)} style={{ padding:"9px 16px", borderRadius:10, cursor:"pointer", background:selectedId===s.id?C.navy:C.white, color:selectedId===s.id?"#fff":C.textSub, fontWeight:700, fontSize:12, border:`1px solid ${selectedId===s.id?C.navy:C.border}`, boxShadow:selectedId===s.id?`0 4px 12px ${C.navy}33`:"none" }}>
             {goalIcon[s.goal]||"🏋️"} {s.name.split(" ")[0]}
           </button>
         ))}
@@ -438,29 +402,24 @@ function TabEvolucao({ students, loading }) {
         <div style={{ textAlign:"center", padding:40, color:C.textSub, background:C.white, borderRadius:16, border:`1px solid ${C.border}` }}>
           <div style={{ fontSize:32, marginBottom:10 }}>📊</div>
           <div style={{ fontSize:15, fontWeight:600 }}>Dados insuficientes para graficos</div>
-          <div style={{ fontSize:12, marginTop:6 }}>Adicione pelo menos 2 medicoes de progresso para visualizar a evolucao</div>
+          <div style={{ fontSize:12, marginTop:6 }}>Adicione pelo menos 2 medicoes de progresso para visualizar</div>
         </div>
       ) : (
         <>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
             {chartCard("⚖️ Peso (kg)", st.goal==="Ganho de Massa"?"Meta: ganhar massa":"Meta: reduzir peso",
-              <LineChart data={prog} dataKey="weight" color={C.navy} label="Peso (kg)" />
+              <LineChart data={prog} dataKey="weight" color={C.navy} />
             )}
             {chartCard("📊 IMC", "Indice de massa corporal",
-              <LineChart data={prog} dataKey="imcVal" color={C.mustard} label="IMC" />
+              <LineChart data={prog} dataKey="imcVal" color={C.mustard} />
             )}
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
             {chartCard("📏 Medidas Corporais (cm)", "Cintura · Peito · Coxa",
-              <MultiLineChart
-                data={prog}
-                keys={["waist_cm","chest_cm","thigh_cm"]}
-                colors={[C.emerald, C.navy, C.mustard]}
-                labels={["Cintura","Peito","Coxa"]}
-              />
+              <MultiLineChart data={prog} keys={["waist_cm","chest_cm","thigh_cm"]} colors={[C.emerald,C.navy,C.mustard]} labels={["Cintura","Peito","Coxa"]} />
             )}
             {chartCard("🏋️ Carga nos Exercicios (kg)", "Progressao de forca",
-              <LineChart data={prog} dataKey="notes" color="#7C3AED" label="Carga (kg)" />
+              <LineChart data={prog} dataKey="notes" color="#7C3AED" />
             )}
           </div>
         </>
@@ -469,20 +428,18 @@ function TabEvolucao({ students, loading }) {
   );
 }
 
-// ── DASHBOARD PRINCIPAL ───────────────────────────────────────────────────────
-export default function Dashboard() {
+export default function Dashboard({ navigate, session }) {
   const [activeTab,   setActiveTab]   = useState("alunos");
   const [students,    setStudents]    = useState([]);
   const [workoutDays, setWorkoutDays] = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [userEmail,   setUserEmail]   = useState("");
-  const navigate = useNavigate();
 
   useEffect(() => {
     async function loadAll() {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { navigate("/"); return; }
+      if (!user) return;
       setUserEmail(user.email);
 
       const [
@@ -501,7 +458,6 @@ export default function Dashboard() {
 
       const progressMap   = {};
       const planStatusMap = {};
-
       (allProgress||[]).forEach(p => {
         if (!progressMap[p.student_id]) progressMap[p.student_id] = [];
         progressMap[p.student_id].push(p);
@@ -512,8 +468,8 @@ export default function Dashboard() {
 
       setStudents(studs.map(st => ({
         ...st,
-        progress:    progressMap[st.id]    || [],
-        plan_status: planStatusMap[st.id]  || null,
+        progress:    progressMap[st.id]   || [],
+        plan_status: planStatusMap[st.id] || null,
       })));
 
       setWorkoutDays(
@@ -529,7 +485,6 @@ export default function Dashboard() {
 
   async function handleLogout() {
     await supabase.auth.signOut();
-    navigate("/");
   }
 
   return (
