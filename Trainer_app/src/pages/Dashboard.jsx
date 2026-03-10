@@ -895,27 +895,45 @@ const CARDIO_TYPES = [
 const PSE_LABELS = ['', 'Muito leve', 'Leve', 'Moderado leve', 'Moderado', 'Moderado intenso', 'Intenso', 'Muito intenso', 'Difícil', 'Muito difícil', 'Máximo']
 
 const PRESCRICAO = {
-  'Emagrecimento':       { zonas: [2,3],   tipo: ['corrida','esteira','eliptico'], desc: 'Priorize Z2 e Z3 — queima de gordura eficiente. 3–4x/semana, 30–50min.' },
-  'Ganho de Massa':      { zonas: [1,2],   tipo: ['esteira','bike','eliptico'],    desc: 'Cardio leve como recuperação ativa. 2x/semana, 20–30min em Z1–Z2.' },
-  'Condicionamento':     { zonas: [2,3,4], tipo: ['corrida','hiit','bike'],        desc: 'Variar intensidade. 3x/semana base Z2 + 1x HIIT ou Z4.' },
-  'Força e Performance': { zonas: [1,2],   tipo: ['bike','eliptico','natacao'],    desc: 'Cardio não deve comprometer recuperação. Low-impact, Z1–Z2, 2x/semana.' },
+  'Emagrecimento': {
+    tipo: ['corrida','esteira','eliptico'],
+    sessoes: '3–4x/semana',
+    duracao: '30–50 min',
+    pse: { min: 4, max: 6, label: 'PSE 4–6 — Moderado' },
+    pace: 'Pace confortável — consegue conversar durante o esforço',
+    volume: '120–200 min/semana',
+    obs: 'Priorize esforço contínuo e controlado. Evite intensidade alta demais — compromete a recuperação e aumenta o apetite.',
+  },
+  'Ganho de Massa': {
+    tipo: ['esteira','bike','eliptico'],
+    sessoes: '2x/semana',
+    duracao: '20–30 min',
+    pse: { min: 3, max: 5, label: 'PSE 3–5 — Leve a moderado' },
+    pace: 'Recuperação ativa — ritmo bem leve, sem gerar fadiga',
+    volume: '40–60 min/semana',
+    obs: 'Cardio deve preservar a recuperação muscular. Volume alto prejudica o ganho de massa.',
+  },
+  'Condicionamento': {
+    tipo: ['corrida','hiit','bike'],
+    sessoes: '3–4x/semana',
+    duracao: '30–45 min (base) + 1 sessão HIIT',
+    pse: { min: 5, max: 8, label: 'PSE 5–8 — Moderado a intenso' },
+    pace: 'Varie: 2–3 sessões em ritmo estável + 1 HIIT com esforços curtos e máximos',
+    volume: '150–200 min/semana',
+    obs: 'Periodize a intensidade — não faça todo treino no mesmo ritmo.',
+  },
+  'Força e Performance': {
+    tipo: ['bike','eliptico','natacao'],
+    sessoes: '2x/semana',
+    duracao: '20–30 min',
+    pse: { min: 3, max: 4, label: 'PSE 3–4 — Leve' },
+    pace: 'Low-impact e baixa intensidade — foco em recuperação, não em performance aeróbia',
+    volume: '40–60 min/semana',
+    obs: 'Cardio intenso compete com os ganhos de força. Mantenha volume mínimo.',
+  },
 }
 
-function calcFCmax(age) {
-  if (!age) return null
-  return age >= 40 ? Math.round(208 - 0.7 * age) : 220 - age
-}
 
-function calcZonas(fcmax) {
-  if (!fcmax) return []
-  return [
-    { z: 1, label: 'Z1 — Recuperação', pct: '50–60%', min: Math.round(fcmax * 0.50), max: Math.round(fcmax * 0.60), color: '#60A5FA', desc: 'Aquecimento, recuperação ativa' },
-    { z: 2, label: 'Z2 — Base aeróbia', pct: '60–70%', min: Math.round(fcmax * 0.60), max: Math.round(fcmax * 0.70), color: '#34D399', desc: 'Queima de gordura, resistência' },
-    { z: 3, label: 'Z3 — Aeróbio',     pct: '70–80%', min: Math.round(fcmax * 0.70), max: Math.round(fcmax * 0.80), color: '#F5C842', desc: 'Condicionamento cardiovascular' },
-    { z: 4, label: 'Z4 — Limiar',      pct: '80–90%', min: Math.round(fcmax * 0.80), max: Math.round(fcmax * 0.90), color: '#F59E0B', desc: 'Alta intensidade, performance' },
-    { z: 5, label: 'Z5 — Máximo',      pct: '90–100%',min: Math.round(fcmax * 0.90), max: fcmax,                    color: '#EF4444', desc: 'Sprints, HIIT máximo' },
-  ]
-}
 
 function formatPace(distKm, durMin) {
   if (!distKm || !durMin || distKm === 0) return '—'
@@ -1055,8 +1073,6 @@ function TabCardio({ students }) {
   const [filterType, setFilterType] = useState('todos')
 
   const student = students.find(s => s.id === selectedId)
-  const fcmax   = calcFCmax(student?.age)
-  const zonas   = calcZonas(fcmax)
   const presc   = PRESCRICAO[student?.goal]
 
   const fetchSessions = useCallback(async (sid) => {
@@ -1142,53 +1158,59 @@ function TabCardio({ students }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
 
           {/* ── PRESCRIÇÃO INTELIGENTE ── */}
-          <div style={GLASS_CARD}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251', marginBottom: 16 }}>🎯 Prescrição Inteligente</div>
-            <div style={{ display: 'grid', gridTemplateColumns: fcmax ? '1fr 1fr' : '1fr', gap: 16 }}>
+          {presc && (
+            <div style={GLASS_CARD}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251' }}>🎯 Prescrição Inteligente</div>
+                <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: `${GOAL[student.goal]?.accent}20`, color: GOAL[student.goal]?.accent, border: `1px solid ${GOAL[student.goal]?.accent}40` }}>
+                  {GOAL[student.goal]?.icon} {student.goal}
+                </span>
+              </div>
 
-              {/* Objetivo */}
-              {presc && (
-                <div style={{ background: 'rgba(255,255,255,0.6)', borderRadius: 12, padding: '14px 16px', border: '1px solid rgba(255,255,255,0.8)' }}>
-                  <div style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
-                    {GOAL[student.goal]?.icon} Baseado no objetivo: {student.goal}
+              {/* Cards de prescrição */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 14 }}>
+                {[
+                  { icon: '📅', label: 'Frequência',  val: presc.sessoes  },
+                  { icon: '⏱',  label: 'Duração',     val: presc.duracao  },
+                  { icon: '📊', label: 'Volume/semana',val: presc.volume   },
+                ].map(({ icon, label, val }) => (
+                  <div key={label} style={{ background: 'rgba(255,255,255,0.65)', borderRadius: 12, padding: '12px 14px', border: '1px solid rgba(255,255,255,0.85)', textAlign: 'center' }}>
+                    <div style={{ fontSize: 18, marginBottom: 4 }}>{icon}</div>
+                    <div style={{ fontSize: 9, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{label}</div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: '#0C3251', lineHeight: 1.3 }}>{val}</div>
                   </div>
-                  <div style={{ fontSize: 13, color: '#334155', lineHeight: 1.6, marginBottom: 10 }}>{presc.desc}</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {presc.tipo.map(t => {
-                      const info = CARDIO_TYPES.find(x => x.id === t)
-                      return <span key={t} style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: `${info?.color}20`, color: info?.color, border: `1px solid ${info?.color}40` }}>{info?.icon} {info?.label}</span>
-                    })}
-                  </div>
-                </div>
-              )}
+                ))}
+              </div>
 
-              {/* Zonas de FC */}
-              {fcmax ? (
-                <div style={{ background: 'rgba(255,255,255,0.6)', borderRadius: 12, padding: '14px 16px', border: '1px solid rgba(255,255,255,0.8)' }}>
-                  <div style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
-                    ❤️ Zonas de FC — FCmáx: {fcmax} bpm {student.age >= 40 ? '(Tanaka)' : '(220-idade)'}
+              {/* PSE alvo */}
+              <div style={{ background: 'rgba(255,255,255,0.65)', borderRadius: 12, padding: '12px 16px', border: '1px solid rgba(255,255,255,0.85)', marginBottom: 10 }}>
+                <div style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>🎯 PSE Alvo — Esforço Percebido</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ flex: 1, height: 10, borderRadius: 10, background: 'linear-gradient(90deg,#60A5FA,#34D399,#F5C842,#F59E0B,#EF4444)', position: 'relative' }}>
+                    <div style={{ position: 'absolute', left: `${(presc.pse.min - 1) / 9 * 100}%`, width: `${(presc.pse.max - presc.pse.min) / 9 * 100}%`, height: '100%', background: 'rgba(12,50,81,0.35)', borderRadius: 10, border: '2px solid #0C3251' }} />
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                    {zonas.map(z => {
-                      const isRecomendada = presc?.zonas?.includes(z.z)
-                      return (
-                        <div key={z.z} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 8, background: isRecomendada ? `${z.color}20` : 'rgba(255,255,255,0.4)', border: isRecomendada ? `1.5px solid ${z.color}60` : '1px solid transparent' }}>
-                          <div style={{ width: 10, height: 10, borderRadius: '50%', background: z.color, flexShrink: 0, boxShadow: isRecomendada ? `0 0 6px ${z.color}` : 'none' }} />
-                          <span style={{ fontSize: 11, fontWeight: isRecomendada ? 800 : 600, color: '#0C3251', flex: 1 }}>{z.label}</span>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: z.color }}>{z.min}–{z.max}</span>
-                          {isRecomendada && <span style={{ fontSize: 9, fontWeight: 800, color: z.color, background: `${z.color}15`, padding: '1px 6px', borderRadius: 20 }}>✓ recomendada</span>}
-                        </div>
-                      )
-                    })}
-                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: '#0C3251', whiteSpace: 'nowrap' }}>{presc.pse.label}</span>
                 </div>
-              ) : (
-                <div style={{ background: 'rgba(255,255,255,0.5)', borderRadius: 12, padding: 16, border: '1px dashed rgba(12,74,110,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8', fontSize: 13, textAlign: 'center' }}>
-                  Cadastre a idade do aluno para calcular as zonas de FC
+                <div style={{ fontSize: 11, color: '#64748B', marginTop: 6 }}>🏃 {presc.pace}</div>
+              </div>
+
+              {/* Modalidades recomendadas */}
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Modalidades recomendadas</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                  {presc.tipo.map(t => {
+                    const info = CARDIO_TYPES.find(x => x.id === t)
+                    return <span key={t} style={{ fontSize: 12, fontWeight: 700, padding: '5px 13px', borderRadius: 20, background: `${info?.color}18`, color: info?.color, border: `1px solid ${info?.color}40` }}>{info?.icon} {info?.label}</span>
+                  })}
                 </div>
-              )}
+              </div>
+
+              {/* Observação clínica */}
+              <div style={{ background: 'rgba(12,74,110,0.06)', borderRadius: 10, padding: '10px 14px', borderLeft: '3px solid #155E8E' }}>
+                <span style={{ fontSize: 12, color: '#334155', lineHeight: 1.6 }}>💡 {presc.obs}</span>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* ── STATS GERAIS ── */}
           {sessions.length > 0 && (
