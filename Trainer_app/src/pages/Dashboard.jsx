@@ -110,6 +110,62 @@ function calcStreak(dates, plannedDays) {
   return streak
 }
 
+// ── Clouds background ─────────────────────────────────────────────────────
+const CLOUDS = [
+  { top:'6%',  left:'-10%', scale:1.3,  dur:90,  delay:0,   opacity:0.85 },
+  { top:'18%', left:'-12%', scale:0.8,  dur:120, delay:-35, opacity:0.6  },
+  { top:'38%', left:'-8%',  scale:1.0,  dur:100, delay:-60, opacity:0.7  },
+  { top:'55%', left:'-15%', scale:1.5,  dur:140, delay:-20, opacity:0.5  },
+  { top:'72%', left:'-10%', scale:0.9,  dur:110, delay:-80, opacity:0.65 },
+  { top:'85%', left:'-12%', scale:1.1,  dur:130, delay:-50, opacity:0.55 },
+]
+
+function Cloud({ top, left, scale, dur, delay, opacity }) {
+  const style = {
+    position: 'absolute', top, left,
+    opacity,
+    transform: `scale(${scale})`,
+    animation: `cloudFloat ${dur}s linear ${delay}s infinite`,
+    pointerEvents: 'none',
+    zIndex: 0,
+  }
+  return (
+    <div style={style}>
+      <svg width="220" height="70" viewBox="0 0 220 70" fill="none">
+        <ellipse cx="110" cy="50" rx="100" ry="22" fill="white" />
+        <ellipse cx="75"  cy="38" rx="55"  ry="30" fill="white" />
+        <ellipse cx="138" cy="36" rx="48"  ry="26" fill="white" />
+        <ellipse cx="105" cy="28" rx="38"  ry="24" fill="white" />
+      </svg>
+    </div>
+  )
+}
+
+function SkyBackground() {
+  return (
+    <>
+      <style>{`
+        @keyframes cloudFloat {
+          0%   { transform: translateX(0)   scale(var(--s,1)); }
+          100% { transform: translateX(110vw) scale(var(--s,1)); }
+        }
+      `}</style>
+      <div style={{ position:'fixed', inset:0, zIndex:0, pointerEvents:'none', overflow:'hidden',
+        background:'linear-gradient(175deg, #4AB8E8 0%, #7DCEEF 30%, #B3E5F7 60%, #D9F1FB 100%)' }}>
+        {/* Sol */}
+        <div style={{ position:'absolute', top:'-60px', right:'12%', width:220, height:220,
+          borderRadius:'50%', background:'radial-gradient(circle, #FFE566 30%, #FFD000 60%, transparent 75%)',
+          boxShadow:'0 0 80px 40px rgba(255,220,0,0.35)', pointerEvents:'none' }} />
+        {/* Raios do sol */}
+        <div style={{ position:'absolute', top:'-40px', right:'calc(12% - 10px)', width:240, height:240,
+          borderRadius:'50%', background:'radial-gradient(circle, transparent 35%, rgba(255,230,80,0.12) 65%, transparent 75%)',
+          pointerEvents:'none' }} />
+        {CLOUDS.map((c, i) => <Cloud key={i} {...c} />)}
+      </div>
+    </>
+  )
+}
+
 // ── WaveDivider ────────────────────────────────────────────────────────────
 function WaveDivider() {
   return (
@@ -311,8 +367,8 @@ function TabTreinos({ workouts, navigate }) {
       {modalWorkout && <WorkoutModal workout={modalWorkout} onClose={() => setModalWorkout(null)} navigate={navigate} />}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#2C1500', letterSpacing: '-0.5px', marginBottom: 4 }}>Treinos da Semana</h1>
-          <p style={{ fontSize: 13, color: '#92400E' }}>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0C3251', letterSpacing: '-0.5px', marginBottom: 4, textShadow:'0 1px 3px rgba(255,255,255,0.5)' }}>Treinos da Semana</h1>
+          <p style={{ fontSize: 13, color: '#0C4A6E' }}>
             <span style={{ color: '#059669', fontWeight: 700 }}>{workouts.length} planos ativos</span>
             {' · '}{uniqueStudents.length} alunos com treino
           </p>
@@ -320,11 +376,11 @@ function TabTreinos({ workouts, navigate }) {
       </div>
 
       {/* Filtro */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18, padding: '12px 16px', background: 'rgba(255,255,255,0.7)', borderRadius: 12, border: '1px solid rgba(245,200,66,0.3)' }}>
-        <span style={{ fontSize: 11, color: '#92400E', fontWeight: 700, alignSelf: 'center', marginRight: 4 }}>👤 Filtrar:</span>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18, padding: '12px 16px', background: 'rgba(255,255,255,0.5)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.8)', backdropFilter:'blur(8px)' }}>
+        <span style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, alignSelf: 'center', marginRight: 4 }}>👤 Filtrar:</span>
         {[{ id: null, name: 'Todos' }, ...uniqueStudents].map(opt => (
           <button key={opt.id ?? 'all'} onClick={() => setSelectedStudent(opt.id)}
-            style={{ padding: '7px 16px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none', transition: 'all 0.15s', background: selectedStudent === opt.id ? 'linear-gradient(135deg,#F5C842,#D97706)' : '#FFF', color: selectedStudent === opt.id ? '#431C00' : '#64748B', boxShadow: selectedStudent === opt.id ? '0 3px 10px rgba(245,200,66,0.4)' : '0 1px 3px rgba(0,0,0,0.07)' }}>
+            style={{ padding: '7px 16px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none', transition: 'all 0.15s', background: selectedStudent === opt.id ? 'linear-gradient(135deg,#F5C842,#D97706)' : 'rgba(255,255,255,0.7)', color: selectedStudent === opt.id ? '#431C00' : '#64748B', boxShadow: selectedStudent === opt.id ? '0 3px 10px rgba(245,200,66,0.4)' : '0 1px 3px rgba(0,0,0,0.07)' }}>
             {opt.name === 'Todos' ? 'Todos' : opt.name.split(' ')[0]}
           </button>
         ))}
@@ -363,10 +419,10 @@ function TabTreinos({ workouts, navigate }) {
         {[{ emoji: '👍', label: 'Feito' }, { emoji: '⏳', label: 'Ainda dá' }, { emoji: '😓', label: 'Faltou' }, { emoji: '📅', label: 'Agendado' }].map(({ emoji, label }) => (
           <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <span style={{ fontSize: 13 }}>{emoji}</span>
-            <span style={{ fontSize: 11, color: '#92400E', fontWeight: 600 }}>{label}</span>
+            <span style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 600 }}>{label}</span>
           </div>
         ))}
-        <span style={{ fontSize: 11, color: '#92400E', opacity: 0.6 }}>· Clique num treino para ver detalhes</span>
+        <span style={{ fontSize: 11, color: '#0C4A6E', opacity: 0.7 }}>· Clique num treino para ver detalhes</span>
       </div>
     </div>
   )
@@ -498,13 +554,14 @@ export default function Dashboard({ navigate, session }) {
   const ativos   = students.filter(s => s.lastSeenDays < 5).length
   const inativos = students.length - ativos
 
-  if (loading) return <div style={{ minHeight: '100vh', background: '#F5EFE0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: SIDEBAR_BG, fontSize: 16, fontWeight: 700, fontFamily: "'DM Sans',sans-serif" }}>Carregando...</div>
+  if (loading) return <div style={{ minHeight: '100vh', background: 'linear-gradient(175deg,#4AB8E8,#B3E5F7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFF', fontSize: 16, fontWeight: 700, fontFamily: "'DM Sans',sans-serif", textShadow: '0 1px 4px rgba(0,0,0,0.2)' }}>☀️ Carregando...</div>
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
+    <div style={{ display: 'flex', minHeight: '100vh', fontFamily: "'DM Sans','Segoe UI',sans-serif", position: 'relative' }}>
+      <SkyBackground />
 
       {/* SIDEBAR */}
-      <div style={{ position: 'relative', flexShrink: 0, width: 220 }}>
+      <div style={{ position: 'relative', flexShrink: 0, width: 220, zIndex: 2 }}>
         <aside style={{ width: 220, background: SIDEBAR_BG, display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh' }}>
           <div style={{ padding: '26px 18px 12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -532,15 +589,15 @@ export default function Dashboard({ navigate, session }) {
       </div>
 
       {/* MAIN */}
-      <main style={{ flex: 1, padding: '32px 28px', background: '#F5EFE0', overflowY: 'auto' }}>
+      <main style={{ flex: 1, padding: '32px 28px', background: 'transparent', overflowY: 'auto', position: 'relative', zIndex: 1 }}>
 
         {/* ABA: MEUS ALUNOS */}
         {nav === 'alunos' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <div>
-                <h1 style={{ fontSize: 26, fontWeight: 800, color: '#2C1500', letterSpacing: '-0.5px', marginBottom: 3 }}>Meus Alunos</h1>
-                <p style={{ fontSize: 13, color: '#64748B' }}>
+                <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0C3251', letterSpacing: '-0.5px', marginBottom: 3, textShadow:'0 1px 3px rgba(255,255,255,0.5)' }}>Meus Alunos</h1>
+                <p style={{ fontSize: 13, color: '#0C4A6E', fontWeight:600 }}>
                   <span style={{ color: '#34D399', fontWeight: 700 }}>{ativos} ativos</span>{' · '}
                   <span style={{ color: YELLOW, fontWeight: 700 }}>{inativos} inativos</span>{' · '}
                   {students.length} cadastrados
@@ -556,12 +613,12 @@ export default function Dashboard({ navigate, session }) {
               <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
                 <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: '#94A3B8' }}>🔍</span>
                 <input placeholder="Buscar aluno..." value={search} onChange={e => setSearch(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px 10px 36px', background: '#FFF', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 13, color: '#0D1B2A', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                  style={{ width: '100%', padding: '10px 12px 10px 36px', background: 'rgba(255,255,255,0.75)', border: '1.5px solid rgba(255,255,255,0.9)', borderRadius: 10, fontSize: 13, color: '#0D1B2A', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', backdropFilter:'blur(6px)' }} />
               </div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {['Todos', 'Ativos', 'Inativos', 'Ganho de Massa', 'Emagrecimento', 'Força e Performance', 'Condicionamento'].map(f => (
                   <button key={f} onClick={() => setFilter(f)}
-                    style={{ padding: '8px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none', transition: 'all 0.15s', background: filter === f ? `linear-gradient(135deg,${YELLOW},#F59E0B)` : '#FFF', color: filter === f ? '#7C3700' : '#64748B', boxShadow: filter === f ? '0 3px 10px rgba(245,200,66,0.4)' : '0 1px 3px rgba(0,0,0,0.07)' }}>
+                    style={{ padding: '8px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none', transition: 'all 0.15s', background: filter === f ? `linear-gradient(135deg,${YELLOW},#F59E0B)` : 'rgba(255,255,255,0.7)', color: filter === f ? '#7C3700' : '#64748B', boxShadow: filter === f ? '0 3px 10px rgba(245,200,66,0.4)' : '0 1px 3px rgba(0,0,0,0.07)' }}>
                     {f}
                   </button>
                 ))}
@@ -569,18 +626,18 @@ export default function Dashboard({ navigate, session }) {
             </div>
 
             {/* Legenda ofensiva */}
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 20, padding: '10px 16px', background: 'rgba(245,200,66,0.07)', borderRadius: 10, border: `1px solid ${YELLOW_BORDER}` }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: YELLOW }}>🔥 Ofensiva:</span>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 20, padding: '10px 16px', background: 'rgba(255,255,255,0.45)', borderRadius: 10, border: `1px solid rgba(255,255,255,0.7)`, backdropFilter:'blur(6px)' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#0C4A6E' }}>🔥 Ofensiva:</span>
               {[{ label: '1–6d', c: '#FDE68A' }, { label: '1 sem+', c: '#FCD34D' }, { label: '2 sem+', c: '#F5C842' }, { label: '1 mês+', c: '#F59E0B' }, { label: '3 mes+', c: '#EA580C' }, { label: '6 mes+', c: '#DC2626' }, { label: '1 ano 👑', c: '#D97706' }].map(({ label, c }) => (
                 <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: c, boxShadow: `0 0 5px ${c}80` }} />
-                  <span style={{ fontSize: 10, color: '#64748B', fontWeight: 600 }}>{label}</span>
+                  <span style={{ fontSize: 10, color: '#0C4A6E', fontWeight: 600 }}>{label}</span>
                 </div>
               ))}
             </div>
 
             {students.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '80px 20px', color: '#92400E', opacity: 0.4 }}>
+              <div style={{ textAlign: 'center', padding: '80px 20px', color: '#0C4A6E', opacity: 0.5 }}>
                 <div style={{ fontSize: 48, marginBottom: 14 }}>🏋️</div>
                 <div style={{ fontSize: 18, fontWeight: 700 }}>Nenhum aluno cadastrado</div>
                 <div style={{ fontSize: 13, marginTop: 6 }}>Clique em "+ Novo Aluno" para começar</div>
@@ -599,7 +656,7 @@ export default function Dashboard({ navigate, session }) {
 
         {/* OUTRAS ABAS */}
         {nav !== 'alunos' && nav !== 'treinos' && (
-          <div style={{ padding: '80px 20px', textAlign: 'center', color: '#92400E', opacity: 0.35 }}>
+          <div style={{ padding: '80px 20px', textAlign: 'center', color: '#0C4A6E', opacity: 0.5 }}>
             <div style={{ fontSize: 48, marginBottom: 14 }}>🚧</div>
             <div style={{ fontSize: 18, fontWeight: 700 }}>Em desenvolvimento</div>
           </div>
