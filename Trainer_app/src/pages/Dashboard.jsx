@@ -880,6 +880,448 @@ function TabEvolucao({ students }) {
   )
 }
 
+
+// ── TabCardio ──────────────────────────────────────────────────────────────
+const CARDIO_TYPES = [
+  { id: 'corrida',     label: 'Corrida',       icon: '🏃', color: '#EF4444', hasDistance: true,  hasHR: true,  isHIIT: false },
+  { id: 'bike',        label: 'Bike',          icon: '🚴', color: '#F59E0B', hasDistance: true,  hasHR: true,  isHIIT: false },
+  { id: 'esteira',     label: 'Esteira',       icon: '🏃', color: '#8B5CF6', hasDistance: true,  hasHR: true,  isHIIT: false },
+  { id: 'eliptico',    label: 'Elíptico',      icon: '⭕', color: '#06B6D4', hasDistance: false, hasHR: true,  isHIIT: false },
+  { id: 'natacao',     label: 'Natação',       icon: '🏊', color: '#3B82F6', hasDistance: true,  hasHR: false, isHIIT: false },
+  { id: 'pular_corda', label: 'Pular Corda',   icon: '🪢', color: '#10B981', hasDistance: false, hasHR: true,  isHIIT: false },
+  { id: 'hiit',        label: 'HIIT',          icon: '⚡', color: '#F5C842', hasDistance: false, hasHR: true,  isHIIT: true  },
+]
+
+const PSE_LABELS = ['', 'Muito leve', 'Leve', 'Moderado leve', 'Moderado', 'Moderado intenso', 'Intenso', 'Muito intenso', 'Difícil', 'Muito difícil', 'Máximo']
+
+const PRESCRICAO = {
+  'Emagrecimento':       { zonas: [2,3],   tipo: ['corrida','esteira','eliptico'], desc: 'Priorize Z2 e Z3 — queima de gordura eficiente. 3–4x/semana, 30–50min.' },
+  'Ganho de Massa':      { zonas: [1,2],   tipo: ['esteira','bike','eliptico'],    desc: 'Cardio leve como recuperação ativa. 2x/semana, 20–30min em Z1–Z2.' },
+  'Condicionamento':     { zonas: [2,3,4], tipo: ['corrida','hiit','bike'],        desc: 'Variar intensidade. 3x/semana base Z2 + 1x HIIT ou Z4.' },
+  'Força e Performance': { zonas: [1,2],   tipo: ['bike','eliptico','natacao'],    desc: 'Cardio não deve comprometer recuperação. Low-impact, Z1–Z2, 2x/semana.' },
+}
+
+function calcFCmax(age) {
+  if (!age) return null
+  return age >= 40 ? Math.round(208 - 0.7 * age) : 220 - age
+}
+
+function calcZonas(fcmax) {
+  if (!fcmax) return []
+  return [
+    { z: 1, label: 'Z1 — Recuperação', pct: '50–60%', min: Math.round(fcmax * 0.50), max: Math.round(fcmax * 0.60), color: '#60A5FA', desc: 'Aquecimento, recuperação ativa' },
+    { z: 2, label: 'Z2 — Base aeróbia', pct: '60–70%', min: Math.round(fcmax * 0.60), max: Math.round(fcmax * 0.70), color: '#34D399', desc: 'Queima de gordura, resistência' },
+    { z: 3, label: 'Z3 — Aeróbio',     pct: '70–80%', min: Math.round(fcmax * 0.70), max: Math.round(fcmax * 0.80), color: '#F5C842', desc: 'Condicionamento cardiovascular' },
+    { z: 4, label: 'Z4 — Limiar',      pct: '80–90%', min: Math.round(fcmax * 0.80), max: Math.round(fcmax * 0.90), color: '#F59E0B', desc: 'Alta intensidade, performance' },
+    { z: 5, label: 'Z5 — Máximo',      pct: '90–100%',min: Math.round(fcmax * 0.90), max: fcmax,                    color: '#EF4444', desc: 'Sprints, HIIT máximo' },
+  ]
+}
+
+function formatPace(distKm, durMin) {
+  if (!distKm || !durMin || distKm === 0) return '—'
+  const paceMin = durMin / distKm
+  const m = Math.floor(paceMin)
+  const s = Math.round((paceMin - m) * 60).toString().padStart(2, '0')
+  return `${m}:${s}/km`
+}
+
+// Modal de registro de sessão de cardio (pelo aluno)
+function CardioSessionModal({ studentId, onSave, onClose }) {
+  const today = new Date().toISOString().slice(0, 10)
+  const [date, setDate]           = useState(today)
+  const [type, setType]           = useState('corrida')
+  const [duration, setDuration]   = useState('')
+  const [distance, setDistance]   = useState('')
+  const [avgHr, setAvgHr]         = useState('')
+  const [maxHr, setMaxHr]         = useState('')
+  const [workSec, setWorkSec]     = useState('30')
+  const [restSec, setRestSec]     = useState('15')
+  const [rounds, setRounds]       = useState('8')
+  const [pse, setPse]             = useState(5)
+  const [notes, setNotes]         = useState('')
+  const [saving, setSaving]       = useState(false)
+
+  const typeInfo = CARDIO_TYPES.find(t => t.id === type)
+
+  const save = async () => {
+    setSaving(true)
+    const payload = {
+      student_id: studentId,
+      date,
+      type,
+      duration_minutes: +duration || null,
+      distance_km:      typeInfo?.hasDistance ? (+distance || null) : null,
+      avg_hr:           typeInfo?.hasHR       ? (+avgHr   || null) : null,
+      max_hr:           typeInfo?.hasHR       ? (+maxHr   || null) : null,
+      work_seconds:     typeInfo?.isHIIT      ? (+workSec || null) : null,
+      rest_seconds:     typeInfo?.isHIIT      ? (+restSec || null) : null,
+      rounds:           typeInfo?.isHIIT      ? (+rounds  || null) : null,
+      pse:              +pse,
+      notes,
+    }
+    await supabase.from('cardio_sessions').insert([payload])
+    setSaving(false)
+    onSave()
+    onClose()
+  }
+
+  const inp = { background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.9)', borderRadius: 8, padding: '9px 12px', color: '#0D1B2A', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }
+  const lbl = { fontSize: 11, color: '#0C4A6E', fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 5, display: 'block', marginTop: 14 }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'rgba(255,255,255,0.93)', backdropFilter: 'blur(16px)', borderRadius: 20, padding: 28, width: '100%', maxWidth: 440, maxHeight: '90vh', overflowY: 'auto', border: '1.5px solid rgba(255,255,255,0.9)', boxShadow: '0 20px 60px rgba(12,50,81,0.2)' }}>
+        <div style={{ fontSize: 17, fontWeight: 800, color: '#0C3251', marginBottom: 18 }}>❤️ Registrar Sessão de Cárdio</div>
+
+        <label style={lbl}>Data</label>
+        <input type="date" style={inp} value={date} onChange={e => setDate(e.target.value)} />
+
+        <label style={lbl}>Modalidade</label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 2 }}>
+          {CARDIO_TYPES.map(t => (
+            <button key={t.id} onClick={() => setType(t.id)}
+              style={{ padding: '7px 13px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none', background: type === t.id ? t.color : 'rgba(255,255,255,0.7)', color: type === t.id ? '#FFF' : '#0C4A6E', transition: 'all 0.15s', boxShadow: type === t.id ? `0 3px 10px ${t.color}55` : 'none' }}>
+              {t.icon} {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 4 }}>
+          <div>
+            <label style={lbl}>Duração (min)</label>
+            <input type="number" placeholder="Ex: 30" style={inp} value={duration} onChange={e => setDuration(e.target.value)} />
+          </div>
+          {typeInfo?.hasDistance && (
+            <div>
+              <label style={lbl}>Distância (km)</label>
+              <input type="number" step="0.1" placeholder="Ex: 5.2" style={inp} value={distance} onChange={e => setDistance(e.target.value)} />
+            </div>
+          )}
+          {typeInfo?.hasHR && (
+            <>
+              <div>
+                <label style={lbl}>FC Média (bpm)</label>
+                <input type="number" placeholder="Ex: 145" style={inp} value={avgHr} onChange={e => setAvgHr(e.target.value)} />
+              </div>
+              <div>
+                <label style={lbl}>FC Máx (bpm)</label>
+                <input type="number" placeholder="Ex: 172" style={inp} value={maxHr} onChange={e => setMaxHr(e.target.value)} />
+              </div>
+            </>
+          )}
+          {typeInfo?.isHIIT && (
+            <>
+              <div>
+                <label style={lbl}>Esforço (seg)</label>
+                <input type="number" placeholder="30" style={inp} value={workSec} onChange={e => setWorkSec(e.target.value)} />
+              </div>
+              <div>
+                <label style={lbl}>Descanso (seg)</label>
+                <input type="number" placeholder="15" style={inp} value={restSec} onChange={e => setRestSec(e.target.value)} />
+              </div>
+              <div>
+                <label style={lbl}>Rodadas</label>
+                <input type="number" placeholder="8" style={inp} value={rounds} onChange={e => setRounds(e.target.value)} />
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* PSE */}
+        <label style={{ ...lbl, marginTop: 18 }}>PSE — Esforço Percebido: <span style={{ color: '#EF4444', fontWeight: 800 }}>{pse} — {PSE_LABELS[pse]}</span></label>
+        <input type="range" min="1" max="10" value={pse} onChange={e => setPse(+e.target.value)}
+          style={{ width: '100%', accentColor: '#155E8E', marginBottom: 4 }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#94A3B8', fontWeight: 600 }}>
+          <span>1 Leve</span><span>5 Moderado</span><span>10 Máximo</span>
+        </div>
+
+        <label style={lbl}>Observações</label>
+        <textarea style={{ ...inp, minHeight: 55, resize: 'vertical' }} placeholder="Como foi o treino?" value={notes} onChange={e => setNotes(e.target.value)} />
+
+        <button onClick={save} disabled={saving} style={{ width: '100%', background: 'linear-gradient(135deg,#F5C842,#D97706)', border: 'none', borderRadius: 10, padding: 13, color: '#431C00', fontWeight: 800, fontSize: 14, cursor: 'pointer', marginTop: 20 }}>
+          {saving ? 'Salvando...' : 'Salvar Sessão'}
+        </button>
+        <button onClick={onClose} style={{ width: '100%', background: 'transparent', border: '1px solid rgba(12,74,110,0.2)', borderRadius: 10, padding: 12, color: '#0C4A6E', fontWeight: 600, fontSize: 13, cursor: 'pointer', marginTop: 8 }}>Cancelar</button>
+      </div>
+    </div>
+  )
+}
+
+function TabCardio({ students }) {
+  const [selectedId, setSelectedId] = useState(null)
+  const [sessions, setSessions]     = useState([])
+  const [modal, setModal]           = useState(false)
+  const [loading, setLoading]       = useState(false)
+  const [filterType, setFilterType] = useState('todos')
+
+  const student = students.find(s => s.id === selectedId)
+  const fcmax   = calcFCmax(student?.age)
+  const zonas   = calcZonas(fcmax)
+  const presc   = PRESCRICAO[student?.goal]
+
+  const fetchSessions = useCallback(async (sid) => {
+    if (!sid) return
+    setLoading(true)
+    const { data } = await supabase
+      .from('cardio_sessions')
+      .select('*')
+      .eq('student_id', sid)
+      .order('date', { ascending: true })
+    setSessions(data || [])
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { if (selectedId) fetchSessions(selectedId) }, [selectedId])
+
+  const filtered = filterType === 'todos' ? sessions : sessions.filter(s => s.type === filterType)
+
+  // Dados gráfico pace (corrida/esteira/bike com distância)
+  const paceData = sessions
+    .filter(s => s.distance_km && s.duration_minutes && ['corrida','esteira','bike'].includes(s.type))
+    .map(s => ({
+      date:   fmtDate(s.date),
+      Pace:   parseFloat((s.duration_minutes / s.distance_km).toFixed(2)),
+      type:   s.type,
+    }))
+
+  // Dados gráfico volume semanal (minutos por semana)
+  const volumeData = (() => {
+    const byWeek = {}
+    sessions.forEach(s => {
+      const d   = new Date(s.date + 'T12:00:00')
+      const mon = new Date(d); mon.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+      const key = mon.toISOString().slice(5, 10) // MM-DD
+      byWeek[key] = (byWeek[key] || 0) + (s.duration_minutes || 0)
+    })
+    return Object.entries(byWeek).sort().map(([week, min]) => ({ week, Min: min }))
+  })()
+
+  // Stats gerais
+  const totalSessoes = sessions.length
+  const totalMin     = sessions.reduce((a, s) => a + (s.duration_minutes || 0), 0)
+  const totalKm      = sessions.reduce((a, s) => a + (s.distance_km || 0), 0)
+  const avgPse       = sessions.length ? (sessions.reduce((a, s) => a + (s.pse || 0), 0) / sessions.length).toFixed(1) : '—'
+
+  return (
+    <div>
+      {modal && <CardioSessionModal studentId={selectedId} onSave={() => fetchSessions(selectedId)} onClose={() => setModal(false)} />}
+
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
+        <div>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0C3251', letterSpacing: '-0.5px', marginBottom: 4, textShadow: '0 1px 3px rgba(255,255,255,0.5)' }}>Cárdio</h1>
+          <p style={{ fontSize: 13, color: '#0C4A6E', fontWeight: 600 }}>Monitoramento e prescrição cardiovascular</p>
+        </div>
+      </div>
+
+      {/* Seletor de aluno */}
+      <div style={{ ...GLASS_CARD, padding: '16px 20px', marginBottom: 20 }}>
+        <div style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>👤 Selecionar Aluno</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {students.map(s => {
+            const sel = s.id === selectedId
+            const g   = GOAL[s.goal]
+            return (
+              <button key={s.id} onClick={() => setSelectedId(s.id)}
+                style={{ padding: '8px 16px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: sel ? 'none' : '1px solid rgba(12,74,110,0.15)', background: sel ? `linear-gradient(135deg,${YELLOW},#F59E0B)` : 'rgba(255,255,255,0.7)', color: sel ? '#431C00' : '#0C4A6E', boxShadow: sel ? '0 3px 12px rgba(245,200,66,0.4)' : 'none', transition: 'all 0.15s' }}>
+                {g?.icon} {s.name.split(' ')[0]}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {!selectedId && (
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: '#0C4A6E', opacity: 0.4 }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>👆</div>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>Selecione um aluno para ver o cárdio</div>
+        </div>
+      )}
+
+      {selectedId && !loading && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+
+          {/* ── PRESCRIÇÃO INTELIGENTE ── */}
+          <div style={GLASS_CARD}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251', marginBottom: 16 }}>🎯 Prescrição Inteligente</div>
+            <div style={{ display: 'grid', gridTemplateColumns: fcmax ? '1fr 1fr' : '1fr', gap: 16 }}>
+
+              {/* Objetivo */}
+              {presc && (
+                <div style={{ background: 'rgba(255,255,255,0.6)', borderRadius: 12, padding: '14px 16px', border: '1px solid rgba(255,255,255,0.8)' }}>
+                  <div style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+                    {GOAL[student.goal]?.icon} Baseado no objetivo: {student.goal}
+                  </div>
+                  <div style={{ fontSize: 13, color: '#334155', lineHeight: 1.6, marginBottom: 10 }}>{presc.desc}</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {presc.tipo.map(t => {
+                      const info = CARDIO_TYPES.find(x => x.id === t)
+                      return <span key={t} style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: `${info?.color}20`, color: info?.color, border: `1px solid ${info?.color}40` }}>{info?.icon} {info?.label}</span>
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Zonas de FC */}
+              {fcmax ? (
+                <div style={{ background: 'rgba(255,255,255,0.6)', borderRadius: 12, padding: '14px 16px', border: '1px solid rgba(255,255,255,0.8)' }}>
+                  <div style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
+                    ❤️ Zonas de FC — FCmáx: {fcmax} bpm {student.age >= 40 ? '(Tanaka)' : '(220-idade)'}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    {zonas.map(z => {
+                      const isRecomendada = presc?.zonas?.includes(z.z)
+                      return (
+                        <div key={z.z} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 8, background: isRecomendada ? `${z.color}20` : 'rgba(255,255,255,0.4)', border: isRecomendada ? `1.5px solid ${z.color}60` : '1px solid transparent' }}>
+                          <div style={{ width: 10, height: 10, borderRadius: '50%', background: z.color, flexShrink: 0, boxShadow: isRecomendada ? `0 0 6px ${z.color}` : 'none' }} />
+                          <span style={{ fontSize: 11, fontWeight: isRecomendada ? 800 : 600, color: '#0C3251', flex: 1 }}>{z.label}</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: z.color }}>{z.min}–{z.max}</span>
+                          {isRecomendada && <span style={{ fontSize: 9, fontWeight: 800, color: z.color, background: `${z.color}15`, padding: '1px 6px', borderRadius: 20 }}>✓ recomendada</span>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ background: 'rgba(255,255,255,0.5)', borderRadius: 12, padding: 16, border: '1px dashed rgba(12,74,110,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8', fontSize: 13, textAlign: 'center' }}>
+                  Cadastre a idade do aluno para calcular as zonas de FC
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── STATS GERAIS ── */}
+          {sessions.length > 0 && (
+            <div style={{ ...GLASS_CARD, marginBottom: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251', marginBottom: 14 }}>📊 Resumo Geral</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+                {[
+                  { label: 'Sessões',      val: totalSessoes,              unit: '',    color: '#155E8E' },
+                  { label: 'Total Tempo',  val: totalMin >= 60 ? `${Math.floor(totalMin/60)}h${totalMin%60}` : totalMin, unit: totalMin < 60 ? 'min' : '', color: '#7C3AED' },
+                  { label: 'Total Km',     val: totalKm.toFixed(1),        unit: 'km',  color: '#059669' },
+                  { label: 'PSE Médio',    val: avgPse,                    unit: '/10', color: '#D97706' },
+                ].map(({ label, val, unit, color }) => (
+                  <div key={label} style={{ background: 'rgba(255,255,255,0.65)', borderRadius: 12, padding: '12px 14px', textAlign: 'center', border: '1px solid rgba(255,255,255,0.8)' }}>
+                    <div style={{ fontSize: 9, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{label}</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color }}>{val}<span style={{ fontSize: 11, color: '#94A3B8' }}>{unit}</span></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── GRÁFICOS ── */}
+          {paceData.length >= 2 && (
+            <div style={GLASS_CARD}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#0C3251', marginBottom: 16 }}>🏃 Evolução do Pace</div>
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={paceData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(12,74,110,0.08)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#64748B' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#64748B' }} unit="'/km" domain={['auto','auto']} reversed />
+                  <Tooltip content={<CustomTooltip unit=" min/km" />} />
+                  <Line type="monotone" dataKey="Pace" stroke="#EF4444" strokeWidth={2.5} dot={{ r: 4, fill: '#EF4444', stroke: '#FFF', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ResponsiveContainer>
+              <div style={{ fontSize: 11, color: '#94A3B8', textAlign: 'center', marginTop: 6 }}>Eixo Y invertido — pace menor = mais rápido ✅</div>
+            </div>
+          )}
+
+          {volumeData.length >= 2 && (
+            <div style={GLASS_CARD}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#0C3251', marginBottom: 16 }}>📅 Volume Semanal (minutos)</div>
+              <ResponsiveContainer width="100%" height={180}>
+                <LineChart data={volumeData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(12,74,110,0.08)" />
+                  <XAxis dataKey="week" tick={{ fontSize: 11, fill: '#64748B' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#64748B' }} unit="min" />
+                  <Tooltip content={<CustomTooltip unit=" min" />} />
+                  <Line type="monotone" dataKey="Min" name="Minutos" stroke="#155E8E" strokeWidth={2.5} dot={{ r: 4, fill: '#155E8E', stroke: '#FFF', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* ── HISTÓRICO ── */}
+          <div style={GLASS_CARD}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251' }}>📋 Histórico de Sessões</div>
+              <button onClick={() => setModal(true)}
+                style={{ padding: '8px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#F5C842,#D97706)', color: '#431C00', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                + Registrar
+              </button>
+            </div>
+
+            {/* Filtro por modalidade */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+              <button onClick={() => setFilterType('todos')}
+                style={{ padding: '5px 13px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: filterType === 'todos' ? 'linear-gradient(135deg,#155E8E,#0C4A6E)' : 'rgba(255,255,255,0.7)', color: filterType === 'todos' ? '#FFF' : '#0C4A6E' }}>
+                Todos
+              </button>
+              {CARDIO_TYPES.filter(t => sessions.some(s => s.type === t.id)).map(t => (
+                <button key={t.id} onClick={() => setFilterType(t.id)}
+                  style={{ padding: '5px 13px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: filterType === t.id ? t.color : 'rgba(255,255,255,0.7)', color: filterType === t.id ? '#FFF' : '#0C4A6E', transition: 'all 0.15s' }}>
+                  {t.icon} {t.label}
+                </button>
+              ))}
+            </div>
+
+            {filtered.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94A3B8' }}>
+                <div style={{ fontSize: 32, marginBottom: 8 }}>❤️</div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Nenhuma sessão registrada ainda</div>
+                <div style={{ fontSize: 12, marginTop: 4 }}>O aluno pode registrar pelo link dele</div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 380, overflowY: 'auto' }}>
+                {[...filtered].reverse().map(s => {
+                  const info = CARDIO_TYPES.find(t => t.id === s.type)
+                  const pace = formatPace(s.distance_km, s.duration_minutes)
+                  return (
+                    <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'rgba(255,255,255,0.65)', borderRadius: 12, border: `1.5px solid ${info?.color}25` }}>
+                      {/* Ícone modalidade */}
+                      <div style={{ width: 38, height: 38, borderRadius: 10, background: `${info?.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{info?.icon}</div>
+                      {/* Info */}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: '#0C3251' }}>{info?.label}</span>
+                          <span style={{ fontSize: 10, color: '#94A3B8' }}>{String(s.date).slice(0,10).split('-').reverse().join('/')}</span>
+                          {s.type === 'hiit' && s.work_seconds && (
+                            <span style={{ fontSize: 10, fontWeight: 700, color: '#F5C842', background: 'rgba(245,200,66,0.12)', padding: '1px 7px', borderRadius: 20 }}>
+                              {s.work_seconds}s/{s.rest_seconds}s × {s.rounds}x
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                          {s.duration_minutes && <span style={{ fontSize: 11, color: '#64748B' }}>⏱ {s.duration_minutes}min</span>}
+                          {s.distance_km      && <span style={{ fontSize: 11, color: '#64748B' }}>📍 {s.distance_km}km</span>}
+                          {pace !== '—'        && <span style={{ fontSize: 11, color: '#EF4444', fontWeight: 700 }}>🏃 {pace}</span>}
+                          {s.avg_hr           && <span style={{ fontSize: 11, color: '#64748B' }}>❤️ {s.avg_hr}bpm</span>}
+                          {s.pse              && <span style={{ fontSize: 11, color: '#64748B' }}>PSE {s.pse}/10</span>}
+                        </div>
+                        {s.notes && <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 3, fontStyle: 'italic' }}>{s.notes}</div>}
+                      </div>
+                      {/* PSE badge */}
+                      <div style={{ width: 34, height: 34, borderRadius: '50%', background: `hsl(${120 - (s.pse||5)*12},70%,50%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#FFF', flexShrink: 0 }}>
+                        {s.pse}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+        </div>
+      )}
+
+      {selectedId && loading && (
+        <div style={{ textAlign: 'center', padding: 40, color: '#0C4A6E', opacity: 0.5, fontWeight: 600 }}>Carregando...</div>
+      )}
+    </div>
+  )
+}
+
 // ── NovoAlunoModal ─────────────────────────────────────────────────────────
 function NovoAlunoModal({ onSave, onClose, teacherId }) {
   const [form, setForm]     = useState({ name: '', age: '', weight: '', height: '', goal: 'Ganho de Massa', level: 'Iniciante', notes: '' })
@@ -1109,8 +1551,11 @@ export default function Dashboard({ navigate, session }) {
         {/* ABA: EVOLUÇÃO */}
         {nav === 'evolucao' && <TabEvolucao students={students} />}
 
+        {/* ABA: CÁRDIO */}
+        {nav === 'cardio' && <TabCardio students={students} />}
+
         {/* OUTRAS ABAS */}
-        {nav !== 'alunos' && nav !== 'treinos' && nav !== 'evolucao' && (
+        {nav !== 'alunos' && nav !== 'treinos' && nav !== 'evolucao' && nav !== 'cardio' && (
           <div style={{ padding: '80px 20px', textAlign: 'center', color: '#0C4A6E', opacity: 0.5 }}>
             <div style={{ fontSize: 48, marginBottom: 14 }}>🚧</div>
             <div style={{ fontSize: 18, fontWeight: 700 }}>Em desenvolvimento</div>
