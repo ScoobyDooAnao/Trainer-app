@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Legend,
+} from 'recharts'
 
 const DAY_COLORS = ['#00C9FF', '#FF6B6B', '#A78BFA', '#FBBF24', '#34D399', '#F97316']
 const TYPE_COLORS = {
@@ -523,11 +527,15 @@ export default function StudentView({ studentId }) {
   const [days, setDays]           = useState([])
   const [activeDay, setActiveDay] = useState(0)
   const [progress, setProgress]   = useState([])
-  const [tab, setTab]             = useState('treino')
-  const [loading, setLoading]     = useState(true)
+  const [tab, setTab]               = useState('treino')
+  const [loading, setLoading]       = useState(true)
   const [cardioSessions, setCardioSessions] = useState([])
-  const [cardioModal, setCardioModal]       = useState(false)
   const [cardioFilter, setCardioFilter]     = useState('todos')
+  const [attendance, setAttendance] = useState([])
+  const [exLogs, setExLogs]         = useState([])
+  const [checkedIn, setCheckedIn]   = useState(false)
+  const [showWeightModal, setShowWeightModal]   = useState(false)
+  const [showMeasureModal, setShowMeasureModal] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -554,8 +562,23 @@ export default function StudentView({ studentId }) {
 
       const { data: pr } = await supabase
         .from('progress_entries').select('*')
-        .eq('student_id', studentId).order('date', { ascending: false }).limit(10)
+        .eq('student_id', studentId).order('date', { ascending: true })
       if (pr) setProgress(pr)
+
+      const { data: att } = await supabase
+        .from('attendance').select('date')
+        .eq('student_id', studentId).order('date', { ascending: false })
+      if (att) {
+        setAttendance(att.map(a => a.date))
+        const todayStr = new Date().toISOString().slice(0,10)
+        setCheckedIn(att.some(a => a.date === todayStr))
+      }
+
+      const { data: logs } = await supabase
+        .from('exercise_logs').select('*, exercises(name)')
+        .eq('student_id', studentId).order('date', { ascending: true })
+      if (logs) setExLogs(logs)
+
       setLoading(false)
     }
     load()
@@ -585,11 +608,62 @@ export default function StudentView({ studentId }) {
           <div style={{ fontSize: 10, color: '#34D399', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 4 }}>Seu Plano de Treino</div>
           <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginBottom: 2 }}>Olá, {student.name.split(' ')[0]}! 💪</div>
           <div style={{ fontSize: 13, color: '#475569' }}>{student.goal} · {student.level}</div>
-          {activePlan && (
-            <div style={{ marginTop: 12, background: 'rgba(52,211,153,0.08)', borderRadius: 8, padding: '8px 14px', display: 'inline-block' }}>
-              <span style={{ fontSize: 12, color: '#34D399', fontWeight: 600 }}>📋 {activePlan.title}</span>
+
+          {/* Linha inferior: plano + streak + check-in */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              {activePlan && (
+                <div style={{ background: 'rgba(52,211,153,0.08)', borderRadius: 8, padding: '7px 13px' }}>
+                  <span style={{ fontSize: 12, color: '#34D399', fontWeight: 600 }}>📋 {activePlan.title}</span>
+                </div>
+              )}
+              {/* Streak */}
+              {(() => {
+                let streak = 0
+                const today = new Date(); today.setHours(0,0,0,0)
+                for (let i = 0; i < 730; i++) {
+                  const d = new Date(today); d.setDate(today.getDate() - i)
+                  const ds = d.toISOString().slice(0,10)
+                  if (attendance.includes(ds)) { streak++ }
+                  else if (i > 0) break
+                }
+                // Mesma escala de cores do Dashboard (professor)
+                let color = '#94A3B8', glow = false
+                if      (streak < 1)   { color = '#94A3B8' }
+                else if (streak < 7)   { color = '#FDE68A' }
+                else if (streak < 14)  { color = '#FCD34D' }
+                else if (streak < 30)  { color = '#F5C842' }
+                else if (streak < 90)  { color = '#F59E0B'; glow = true }
+                else if (streak < 180) { color = '#EA580C'; glow = true }
+                else if (streak < 365) { color = '#DC2626'; glow = true }
+                else                   { color = '#D97706'; glow = true }
+                const emoji = streak >= 365 ? '👑' : streak >= 180 ? '💎' : streak >= 90 ? '⚡' : streak >= 7 ? '🔥' : '✨'
+                if (streak === 0) return null
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: `${color}18`, borderRadius: 8, padding: '7px 13px', border: `1px solid ${color}40`, boxShadow: glow ? `0 0 12px ${color}55` : 'none', transition: 'all 0.3s' }}>
+                    <span style={{ fontSize: 15 }}>{emoji}</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color }}>{streak} dia{streak !== 1 ? 's' : ''} seguidos</span>
+                  </div>
+                )
+              })()}
             </div>
-          )}
+
+            {/* Botão check-in */}
+            <button
+              disabled={checkedIn}
+              onClick={async () => {
+                const todayStr = new Date().toISOString().slice(0,10)
+                await supabase.from('attendance').insert([{ student_id: studentId, date: todayStr, status: 'present' }])
+                setAttendance(prev => [todayStr, ...prev])
+                setCheckedIn(true)
+              }}
+              style={{ padding: '9px 18px', borderRadius: 10, border: 'none', cursor: checkedIn ? 'default' : 'pointer', fontWeight: 800, fontSize: 13, transition: 'all 0.2s',
+                background: checkedIn ? 'rgba(52,211,153,0.15)' : 'linear-gradient(135deg,#34D399,#059669)',
+                color: checkedIn ? '#34D399' : '#FFF',
+                boxShadow: checkedIn ? 'none' : '0 4px 15px rgba(52,211,153,0.35)' }}>
+              {checkedIn ? '✅ Presença marcada!' : '📍 Marcar presença hoje'}
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -673,33 +747,234 @@ export default function StudentView({ studentId }) {
         )}
 
         {/* ── ABA EVOLUÇÃO ── */}
-        {tab === 'evolucao' && (
-          <div>
-            {progress.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: 60, color: '#334155' }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>📈</div>
-                <div>Nenhum registro de evolução ainda.</div>
-              </div>
-            ) : (
-              progress.map((p, i) => (
-                <div key={p.id} style={{ background: '#0D1117', borderRadius: 14, padding: '16px 20px', border: '1px solid rgba(255,255,255,0.07)', marginBottom: 10 }}>
-                  <div style={{ fontSize: 13, color: '#34D399', fontWeight: 700, marginBottom: 8 }}>
-                    {new Date(p.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-                    {i === 0 && <span style={{ marginLeft: 8, fontSize: 10, background: '#34D39920', color: '#34D399', padding: '2px 8px', borderRadius: 20 }}>Mais recente</span>}
-                  </div>
-                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                    {p.weight && <div><span style={{ fontSize: 11, color: '#475569' }}>Peso </span><span style={{ fontWeight: 700 }}>{p.weight} kg</span></div>}
-                    {p.measurements?.waist && <div><span style={{ fontSize: 11, color: '#475569' }}>Cintura </span><span style={{ fontWeight: 700 }}>{p.measurements.waist} cm</span></div>}
-                    {p.measurements?.chest && <div><span style={{ fontSize: 11, color: '#475569' }}>Peito </span><span style={{ fontWeight: 700 }}>{p.measurements.chest} cm</span></div>}
-                    {p.measurements?.hip && <div><span style={{ fontSize: 11, color: '#475569' }}>Quadril </span><span style={{ fontWeight: 700 }}>{p.measurements.hip} cm</span></div>}
-                    {p.measurements?.thigh && <div><span style={{ fontSize: 11, color: '#475569' }}>Coxa </span><span style={{ fontWeight: 700 }}>{p.measurements.thigh} cm</span></div>}
-                  </div>
-                  {p.notes && <div style={{ fontSize: 12, color: '#64748B', marginTop: 8 }}>📝 {p.notes}</div>}
+        {tab === 'evolucao' && (() => {
+          // Modais inline
+          const WeightModal = () => {
+            const [date, setDate]   = useState(new Date().toISOString().slice(0,10))
+            const [peso, setPeso]   = useState('')
+            const [notes, setNotes] = useState('')
+            const [saving, setSaving] = useState(false)
+            const inp = { background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:8, padding:'10px 12px', color:'#E2E8F0', fontSize:13, outline:'none', width:'100%', boxSizing:'border-box' }
+            const lbl = { fontSize:11, color:'#94A3B8', fontWeight:700, letterSpacing:0.8, textTransform:'uppercase', marginBottom:5, display:'block', marginTop:14 }
+            const save = async () => {
+              if (!peso) return
+              setSaving(true)
+              const { data } = await supabase.from('progress_entries').insert([{ student_id: studentId, date, weight: +peso, notes }]).select().single()
+              if (data) setProgress(prev => [...prev, data].sort((a,b) => a.date > b.date ? 1 : -1))
+              setSaving(false)
+              setShowWeightModal(false)
+            }
+            return (
+              <div onClick={() => setShowWeightModal(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:20 }}>
+                <div onClick={e => e.stopPropagation()} style={{ background:'#0D1117', border:'1px solid rgba(255,255,255,0.1)', borderRadius:20, padding:28, width:'100%', maxWidth:360 }}>
+                  <div style={{ fontSize:17, fontWeight:800, color:'#E2E8F0', marginBottom:18 }}>⚖️ Registrar Peso</div>
+                  <label style={lbl}>Data</label>
+                  <input type="date" style={inp} value={date} onChange={e => setDate(e.target.value)} />
+                  <label style={lbl}>Peso (kg)</label>
+                  <input type="number" step="0.1" placeholder="Ex: 68.5" style={inp} value={peso} onChange={e => setPeso(e.target.value)} />
+                  <label style={lbl}>Observações</label>
+                  <input type="text" placeholder="Opcional" style={inp} value={notes} onChange={e => setNotes(e.target.value)} />
+                  <button onClick={save} disabled={saving} style={{ width:'100%', background:'linear-gradient(135deg,#34D399,#059669)', border:'none', borderRadius:10, padding:13, color:'#FFF', fontWeight:800, fontSize:14, cursor:'pointer', marginTop:20 }}>
+                    {saving ? 'Salvando...' : 'Salvar'}
+                  </button>
+                  <button onClick={() => setShowWeightModal(false)} style={{ width:'100%', background:'transparent', border:'1px solid rgba(255,255,255,0.1)', borderRadius:10, padding:12, color:'#64748B', fontWeight:600, fontSize:13, cursor:'pointer', marginTop:8 }}>Cancelar</button>
                 </div>
-              ))
-            )}
-          </div>
-        )}
+              </div>
+            )
+          }
+
+          const MeasureModal = () => {
+            const [date, setDate] = useState(new Date().toISOString().slice(0,10))
+            const [vals, setVals] = useState({ arm:'', waist:'', chest:'', hip:'', thigh:'', calf:'' })
+            const [saving, setSaving] = useState(false)
+            const inp = { background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:8, padding:'10px 12px', color:'#E2E8F0', fontSize:13, outline:'none', width:'100%', boxSizing:'border-box' }
+            const lbl = { fontSize:11, color:'#94A3B8', fontWeight:700, letterSpacing:0.8, textTransform:'uppercase', marginBottom:5, display:'block' }
+            const FIELDS = [
+              { key:'arm',   label:'Braço (cm)',   icon:'💪' },
+              { key:'chest', label:'Peito (cm)',   icon:'🫁' },
+              { key:'waist', label:'Cintura (cm)', icon:'📏' },
+              { key:'hip',   label:'Quadril (cm)', icon:'🍑' },
+              { key:'thigh', label:'Coxa (cm)',    icon:'🦵' },
+              { key:'calf',  label:'Panturrilha (cm)', icon:'🦶' },
+            ]
+            const save = async () => {
+              setSaving(true)
+              const measurements = Object.fromEntries(Object.entries(vals).filter(([,v]) => v !== '').map(([k,v]) => [k, +v]))
+              const { data } = await supabase.from('progress_entries').insert([{ student_id: studentId, date, measurements }]).select().single()
+              if (data) setProgress(prev => [...prev, data].sort((a,b) => a.date > b.date ? 1 : -1))
+              setSaving(false)
+              setShowMeasureModal(false)
+            }
+            return (
+              <div onClick={() => setShowMeasureModal(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:20 }}>
+                <div onClick={e => e.stopPropagation()} style={{ background:'#0D1117', border:'1px solid rgba(255,255,255,0.1)', borderRadius:20, padding:28, width:'100%', maxWidth:400, maxHeight:'90vh', overflowY:'auto' }}>
+                  <div style={{ fontSize:17, fontWeight:800, color:'#E2E8F0', marginBottom:6 }}>📏 Registrar Medidas</div>
+                  <div style={{ fontSize:12, color:'#475569', marginBottom:18 }}>Preencha apenas os campos que mediu hoje.</div>
+                  <div style={{ marginBottom:14 }}>
+                    <label style={lbl}>Data</label>
+                    <input type="date" style={inp} value={date} onChange={e => setDate(e.target.value)} />
+                  </div>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                    {FIELDS.map(f => (
+                      <div key={f.key}>
+                        <label style={lbl}>{f.icon} {f.label}</label>
+                        <input type="number" step="0.1" placeholder="cm" style={inp} value={vals[f.key]} onChange={e => setVals(prev => ({ ...prev, [f.key]: e.target.value }))} />
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={save} disabled={saving} style={{ width:'100%', background:'linear-gradient(135deg,#8B5CF6,#6D28D9)', border:'none', borderRadius:10, padding:13, color:'#FFF', fontWeight:800, fontSize:14, cursor:'pointer', marginTop:20 }}>
+                    {saving ? 'Salvando...' : 'Salvar Medidas'}
+                  </button>
+                  <button onClick={() => setShowMeasureModal(false)} style={{ width:'100%', background:'transparent', border:'1px solid rgba(255,255,255,0.1)', borderRadius:10, padding:12, color:'#64748B', fontWeight:600, fontSize:13, cursor:'pointer', marginTop:8 }}>Cancelar</button>
+                </div>
+              </div>
+            )
+          }
+
+          // Dados para gráficos
+          const pesoData = progress.filter(p => p.weight).map(p => ({
+            x: String(p.date).slice(5,10).split('-').reverse().join('/'),
+            Peso: +p.weight,
+          }))
+
+          const medidasData = progress.filter(p => p.measurements && Object.keys(p.measurements).length > 0).map(p => ({
+            x:          String(p.date).slice(5,10).split('-').reverse().join('/'),
+            Braço:      p.measurements.arm   ? +p.measurements.arm   : undefined,
+            Cintura:    p.measurements.waist ? +p.measurements.waist : undefined,
+            Peito:      p.measurements.chest ? +p.measurements.chest : undefined,
+            Quadril:    p.measurements.hip   ? +p.measurements.hip   : undefined,
+            Coxa:       p.measurements.thigh ? +p.measurements.thigh : undefined,
+            Panturrilha:p.measurements.calf  ? +p.measurements.calf  : undefined,
+          }))
+
+          // Força: máximo por exercício por data
+          const forcaByEx = {}
+          exLogs.forEach(log => {
+            const name = log.exercises?.name || 'Exercício'
+            const maxW = Math.max(...(log.sets || []).map(s => +s.weight || 0))
+            if (!maxW) return
+            if (!forcaByEx[name]) forcaByEx[name] = []
+            forcaByEx[name].push({ x: String(log.date).slice(5,10).split('-').reverse().join('/'), [name]: maxW })
+          })
+          const forcaExs   = Object.keys(forcaByEx).slice(0, 4) // max 4 exercícios
+          const forcaColors = ['#34D399','#F5C842','#F87171','#60A5FA']
+          // Merge por data
+          const forcaData = (() => {
+            const byDate = {}
+            forcaExs.forEach(ex => {
+              forcaByEx[ex].forEach(row => {
+                if (!byDate[row.x]) byDate[row.x] = { x: row.x }
+                byDate[row.x][ex] = row[ex]
+              })
+            })
+            return Object.values(byDate).sort((a,b) => a.x > b.x ? 1 : -1)
+          })()
+
+          const MEDS_COLORS = { Braço:'#34D399', Cintura:'#F5C842', Peito:'#60A5FA', Quadril:'#F87171', Coxa:'#A78BFA', Panturrilha:'#FBBF24' }
+
+          const chartCard = { background:'#0D1117', borderRadius:16, padding:'18px 16px', border:'1px solid rgba(255,255,255,0.07)', marginBottom:14 }
+          const ttStyle   = { background:'#1E293B', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, fontSize:12, color:'#E2E8F0', padding:'8px 12px' }
+
+          return (
+            <div>
+              {showWeightModal  && <WeightModal />}
+              {showMeasureModal && <MeasureModal />}
+
+              {/* Botões de ação */}
+              <div style={{ display:'flex', gap:10, marginBottom:20 }}>
+                <button onClick={() => setShowWeightModal(true)} style={{ flex:1, padding:'13px', borderRadius:12, border:'none', background:'linear-gradient(135deg,#34D399,#059669)', color:'#FFF', fontWeight:800, fontSize:13, cursor:'pointer' }}>
+                  ⚖️ Adicionar Peso
+                </button>
+                <button onClick={() => setShowMeasureModal(true)} style={{ flex:1, padding:'13px', borderRadius:12, border:'none', background:'linear-gradient(135deg,#8B5CF6,#6D28D9)', color:'#FFF', fontWeight:800, fontSize:13, cursor:'pointer' }}>
+                  📏 Adicionar Medidas
+                </button>
+              </div>
+
+              {/* Gráfico: Peso */}
+              {pesoData.length >= 2 ? (
+                <div style={chartCard}>
+                  <div style={{ fontSize:14, fontWeight:800, color:'#E2E8F0', marginBottom:14 }}>⚖️ Evolução do Peso</div>
+                  <ResponsiveContainer width="100%" height={190}>
+                    <LineChart data={pesoData} margin={{ top:5, right:10, left:-10, bottom:5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                      <XAxis dataKey="x" tick={{ fontSize:10, fill:'#475569' }} />
+                      <YAxis tick={{ fontSize:10, fill:'#475569' }} unit="kg" domain={['auto','auto']} />
+                      <Tooltip contentStyle={ttStyle} />
+                      <Line type="monotone" dataKey="Peso" stroke="#34D399" strokeWidth={2.5} dot={{ r:4, fill:'#34D399', stroke:'#080B12', strokeWidth:2 }} activeDot={{ r:6 }} unit=" kg" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : pesoData.length === 1 ? (
+                <div style={{ ...chartCard, textAlign:'center', padding:'20px' }}>
+                  <div style={{ fontSize:13, color:'#34D399', fontWeight:700 }}>⚖️ Peso atual: {pesoData[0].Peso} kg</div>
+                  <div style={{ fontSize:11, color:'#475569', marginTop:6 }}>Registre mais medições para ver o gráfico</div>
+                </div>
+              ) : null}
+
+              {/* Gráfico: Medidas */}
+              {medidasData.length >= 1 && (
+                <div style={chartCard}>
+                  <div style={{ fontSize:14, fontWeight:800, color:'#E2E8F0', marginBottom:14 }}>📏 Evolução das Medidas</div>
+                  {medidasData.length >= 2 ? (
+                    <ResponsiveContainer width="100%" height={210}>
+                      <LineChart data={medidasData} margin={{ top:5, right:10, left:-10, bottom:5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                        <XAxis dataKey="x" tick={{ fontSize:10, fill:'#475569' }} />
+                        <YAxis tick={{ fontSize:10, fill:'#475569' }} unit="cm" domain={['auto','auto']} />
+                        <Tooltip contentStyle={ttStyle} />
+                        <Legend wrapperStyle={{ fontSize:11, color:'#94A3B8' }} />
+                        {Object.keys(MEDS_COLORS).map(key => (
+                          medidasData.some(d => d[key] !== undefined) &&
+                          <Line key={key} type="monotone" dataKey={key} stroke={MEDS_COLORS[key]} strokeWidth={2} dot={{ r:3 }} activeDot={{ r:5 }} unit=" cm" connectNulls />
+                        ))}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div>
+                      <div style={{ fontSize:11, color:'#475569', marginBottom:10 }}>Registre mais medições para ver o gráfico de evolução</div>
+                      <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+                        {Object.entries(medidasData[0]).filter(([k]) => k !== 'x').map(([k,v]) => (
+                          <div key={k} style={{ background:'rgba(255,255,255,0.05)', borderRadius:8, padding:'8px 12px' }}>
+                            <div style={{ fontSize:10, color:'#475569' }}>{k}</div>
+                            <div style={{ fontSize:15, fontWeight:800, color: MEDS_COLORS[k] || '#E2E8F0' }}>{v} cm</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Gráfico: Força */}
+              {forcaData.length >= 2 ? (
+                <div style={chartCard}>
+                  <div style={{ fontSize:14, fontWeight:800, color:'#E2E8F0', marginBottom:14 }}>💪 Evolução da Força (carga máx. por sessão)</div>
+                  <ResponsiveContainer width="100%" height={210}>
+                    <LineChart data={forcaData} margin={{ top:5, right:10, left:-10, bottom:5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                      <XAxis dataKey="x" tick={{ fontSize:10, fill:'#475569' }} />
+                      <YAxis tick={{ fontSize:10, fill:'#475569' }} unit="kg" domain={['auto','auto']} />
+                      <Tooltip contentStyle={ttStyle} />
+                      <Legend wrapperStyle={{ fontSize:11, color:'#94A3B8' }} />
+                      {forcaExs.map((ex, i) => (
+                        <Line key={ex} type="monotone" dataKey={ex} stroke={forcaColors[i]} strokeWidth={2} dot={{ r:3 }} activeDot={{ r:5 }} unit=" kg" connectNulls />
+                      ))}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : null}
+
+              {/* Empty state */}
+              {pesoData.length === 0 && medidasData.length === 0 && forcaData.length === 0 && (
+                <div style={{ textAlign:'center', padding:'50px 20px', color:'#334155' }}>
+                  <div style={{ fontSize:40, marginBottom:12 }}>📈</div>
+                  <div style={{ fontSize:14, marginBottom:6 }}>Nenhum dado ainda.</div>
+                  <div style={{ fontSize:12 }}>Use os botões acima para começar a registrar sua evolução!</div>
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
 
         {/* ── ABA CÁRDIO ── */}
