@@ -76,17 +76,37 @@ function getDayStatus(dia, attendanceDates, logDates) {
   return          { bg: 'rgba(148,163,184,0.12)', color: '#475569', border: 'rgba(148,163,184,0.3)', label: 'Agendado 📅', emoji: '📅' }
 }
 
-function calcStreak(dates) {
-  if (!dates || dates.length === 0) return 0
-  const sorted = [...dates].sort((a, b) => new Date(b) - new Date(a))
+function calcStreak(dates, plannedDays) {
+  // Se não tem dias planejados, retorna 0
+  if (!plannedDays || plannedDays.length === 0) return 0
+
+  const JS_TO_DIA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+  // Conjunto de datas em que o aluno treinou (YYYY-MM-DD)
+  const doneSet = new Set((dates || []).map(d => String(d).slice(0, 10)))
+
   let streak = 0
-  let cur = new Date(); cur.setHours(0, 0, 0, 0)
-  for (const d of sorted) {
-    const date = new Date(d + 'T12:00:00'); date.setHours(0, 0, 0, 0)
-    const diff = Math.round((cur - date) / 86400000)
-    if (diff === 0 || diff === 1) { streak++; cur = date }
-    else break
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const cursor = new Date(today)
+
+  // Percorre dia a dia para trás, ignorando dias que não são de treino
+  for (let i = 0; i < 730; i++) {
+    const dayName = JS_TO_DIA[cursor.getDay()]
+    const isToday = cursor.getTime() === today.getTime()
+
+    if (plannedDays.includes(dayName)) {
+      const dateStr = cursor.toISOString().slice(0, 10)
+      if (doneSet.has(dateStr)) {
+        streak++ // dia de treino cumprido ✅
+      } else if (!isToday) {
+        break    // faltou num dia planejado → sequência quebra 💔
+        // (hoje ainda não conta como falta — pode ainda treinar)
+      }
+    }
+    // dias de descanso são simplesmente pulados
+
+    cursor.setDate(cursor.getDate() - 1)
   }
+
   return streak
 }
 
@@ -409,11 +429,12 @@ export default function Dashboard({ navigate, session }) {
 
     if (studs && studs.length > 0) {
       const ids = studs.map(s => s.id)
-      const [att, prog, logs, feed] = await Promise.all([
+      const [att, prog, logs, feed, plansRes] = await Promise.all([
         supabase.from('attendance').select('student_id,date').in('student_id', ids),
         supabase.from('progress_entries').select('student_id,date').in('student_id', ids),
         supabase.from('exercise_logs').select('student_id,date').in('student_id', ids),
         supabase.from('student_feedbacks').select('student_id,date').in('student_id', ids),
+        supabase.from('workout_plans').select('*, workout_days(*)').in('student_id', ids).eq('status', 'active'),
       ])
 
       const datesByStudent = {}
@@ -422,10 +443,20 @@ export default function Dashboard({ navigate, session }) {
         if (data) data.forEach(r => datesByStudent[r.student_id]?.push(r.date))
       })
 
+      // Monta mapa de dias planejados por aluno (ex: { uuid: ['Seg','Qua','Sex'] })
+      const plannedDaysMap = {}
+      ids.forEach(id => { plannedDaysMap[id] = [] })
+      if (plansRes.data) {
+        plansRes.data.forEach(p => {
+          const days = (p.workout_days || []).map(d => d.day_of_week).filter(Boolean)
+          plannedDaysMap[p.student_id] = [...new Set([...(plannedDaysMap[p.student_id] || []), ...days])]
+        })
+      }
+
       const today = new Date(); today.setHours(0, 0, 0, 0)
       const enriched = studs.map(s => {
-        const dates = datesByStudent[s.id] || []
-        const streak = calcStreak(dates)
+        const dates      = datesByStudent[s.id] || []
+        const streak     = calcStreak(dates, plannedDaysMap[s.id] || [])
         let lastSeenDays = 999
         if (dates.length > 0) {
           const sorted = [...dates].sort((a, b) => new Date(b) - new Date(a))
@@ -436,16 +467,16 @@ export default function Dashboard({ navigate, session }) {
       })
       setStudents(enriched)
 
-      // Planos ativos
-      const { data: plans } = await supabase.from('workout_plans').select('*, workout_days(*)').in('student_id', ids).eq('status', 'active')
-      if (plans) {
+      // Monta workouts para a aba Treinos
+      const plans = plansRes.data || []
+      if (plans.length > 0) {
         const attMap = {}; const logMap = {}
         ids.forEach(id => { attMap[id] = []; logMap[id] = [] })
         if (att.data) att.data.forEach(r => attMap[r.student_id]?.push(r.date))
         if (logs.data) logs.data.forEach(r => logMap[r.student_id]?.push(r.date))
 
         setWorkouts(plans.map(p => {
-          const st  = studs.find(s => s.id === p.student_id)
+          const st   = studs.find(s => s.id === p.student_id)
           const days = (p.workout_days || []).map(d => d.day_of_week).filter(Boolean)
           return { ...p, studentName: st?.name || '—', goal: st?.goal || '', days, workoutDays: p.workout_days || [], attendanceDates: attMap[p.student_id] || [], logDates: logMap[p.student_id] || [] }
         }))
