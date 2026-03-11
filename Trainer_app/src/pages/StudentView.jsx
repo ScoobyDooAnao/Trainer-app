@@ -573,30 +573,52 @@ function TabMetas({ studentId, student, goals, onUpdate }) {
         </button>
       </div>
 
-      {/* Metas ativas */}
-      {ativas.length === 0 && concluidas.length === 0 ? (
-        <div style={{ textAlign:'center',padding:'40px 20px' }}>
-          <div style={{ fontSize:42,marginBottom:12 }}>🎯</div>
-          <div style={{ fontSize:15,fontWeight:700,color:'#E2E8F0',marginBottom:8 }}>Nenhuma meta ainda</div>
-          <div style={{ fontSize:13,color:'#475569',marginBottom:20 }}>Defina metas claras para manter o foco e a motivação nos seus treinos!</div>
-          {/* Sugestões rápidas */}
-          <div style={{ textAlign:'left' }}>
-            <div style={{ fontSize:11,color:'#64748B',fontWeight:700,letterSpacing:1,textTransform:'uppercase',marginBottom:10 }}>Sugestões para {student?.goal}</div>
+      {/* Sugestões rápidas — sempre visíveis */}
+      {(() => {
+        const jaAdicionadas = goals.map(g => g.title)
+        const disponiveis = sugestoes.filter(s => !jaAdicionadas.includes(s.titulo) && s.titulo !== 'Meta personalizada')
+        if (!disponiveis.length) return null
+        return (
+          <div style={{ marginBottom:20 }}>
+            <div style={{ fontSize:11,color:'#64748B',fontWeight:700,letterSpacing:1,textTransform:'uppercase',marginBottom:10 }}>
+              💡 Sugestões para {student?.goal}
+            </div>
             <div style={{ display:'flex',flexDirection:'column',gap:6 }}>
-              {sugestoes.slice(0,3).map((s,i) => {
+              {disponiveis.slice(0,4).map((s,i) => {
                 const cc = CAT_COLORS[s.categoria] || CAT_COLORS.outro
                 return (
-                  <div key={i} style={{ display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,background:cc.bg,border:`1px solid ${cc.border}` }}>
+                  <div key={i} style={{ display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,background:cc.bg,border:`1px solid ${cc.border}`,transition:'all 0.15s' }}>
                     <span style={{ fontSize:18 }}>{s.icon}</span>
-                    <span style={{ fontSize:13,color:'#CBD5E1',fontWeight:600 }}>{s.titulo}</span>
+                    <span style={{ fontSize:13,color:'#CBD5E1',fontWeight:600,flex:1 }}>{s.titulo}</span>
+                    <button
+                      onClick={async () => {
+                        await supabase.from('student_goals').insert([{
+                          student_id: studentId,
+                          title: s.titulo,
+                          description: s.desc,
+                          category: s.categoria,
+                          target_unit: s.unidade || null,
+                          status: 'ativa',
+                        }])
+                        await onUpdate()
+                      }}
+                      style={{ width:28,height:28,borderRadius:'50%',border:`1px solid ${cc.border}`,background:cc.bg,color:cc.text,fontSize:18,fontWeight:800,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,lineHeight:1 }}>
+                      +
+                    </button>
                   </div>
                 )
               })}
             </div>
-            <button onClick={()=>setShowModal(true)} style={{ width:'100%',marginTop:14,padding:'12px',borderRadius:10,border:'1px dashed rgba(52,211,153,0.4)',background:'transparent',color:'#34D399',fontWeight:700,fontSize:13,cursor:'pointer' }}>
-              🎯 Criar minha primeira meta
-            </button>
           </div>
+        )
+      })()}
+
+      {/* Metas ativas */}
+      {ativas.length === 0 && concluidas.length === 0 ? (
+        <div style={{ textAlign:'center',padding:'30px 20px 10px' }}>
+          <div style={{ fontSize:38,marginBottom:10 }}>🎯</div>
+          <div style={{ fontSize:15,fontWeight:700,color:'#E2E8F0',marginBottom:6 }}>Nenhuma meta ainda</div>
+          <div style={{ fontSize:13,color:'#475569' }}>Clique no + de uma sugestão acima ou crie a sua própria!</div>
         </div>
       ) : (
         <>
@@ -918,32 +940,49 @@ export default function StudentView({ studentId }) {
                   <span style={{ fontSize: 12, color: '#34D399', fontWeight: 600 }}>📋 {activePlan.title}</span>
                 </div>
               )}
-              {/* Streak */}
+              {/* Streak — usa mesma lógica do Dashboard: respeita dias planejados */}
               {(() => {
+                const JS_TO_DIA = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
+                const plannedDays = days.map(d => d.day_of_week).filter(Boolean)
+                const doneSet = new Set(attendance.map(d => String(d).slice(0,10)))
                 let streak = 0
-                const today = new Date(); today.setHours(0,0,0,0)
-                for (let i = 0; i < 730; i++) {
-                  const d = new Date(today); d.setDate(today.getDate() - i)
-                  const ds = d.toISOString().slice(0,10)
-                  if (attendance.includes(ds)) { streak++ }
-                  else if (i > 0) break
+                const todayD = new Date(); todayD.setHours(0,0,0,0)
+                const cursor = new Date(todayD)
+                if (plannedDays.length === 0) {
+                  // sem plano: conta dias consecutivos de presença simples
+                  for (let i = 0; i < 730; i++) {
+                    const ds = cursor.toISOString().slice(0,10)
+                    if (doneSet.has(ds)) streak++
+                    else if (i > 0) break
+                    cursor.setDate(cursor.getDate()-1)
+                  }
+                } else {
+                  for (let i = 0; i < 730; i++) {
+                    const dayName = JS_TO_DIA[cursor.getDay()]
+                    const isToday = cursor.getTime() === todayD.getTime()
+                    if (plannedDays.includes(dayName)) {
+                      const ds = cursor.toISOString().slice(0,10)
+                      if (doneSet.has(ds)) streak++
+                      else if (!isToday) break
+                    }
+                    cursor.setDate(cursor.getDate()-1)
+                  }
                 }
-                // Mesma escala de cores do Dashboard (professor)
                 let color = '#94A3B8', glow = false
-                if      (streak < 1)   { color = '#94A3B8' }
-                else if (streak < 7)   { color = '#FDE68A' }
-                else if (streak < 14)  { color = '#FCD34D' }
-                else if (streak < 30)  { color = '#F5C842' }
+                if      (streak < 1)   color = '#94A3B8'
+                else if (streak < 7)   color = '#FDE68A'
+                else if (streak < 14)  color = '#FCD34D'
+                else if (streak < 30)  color = '#F5C842'
                 else if (streak < 90)  { color = '#F59E0B'; glow = true }
                 else if (streak < 180) { color = '#EA580C'; glow = true }
                 else if (streak < 365) { color = '#DC2626'; glow = true }
                 else                   { color = '#D97706'; glow = true }
-                const emoji = streak >= 365 ? '👑' : streak >= 180 ? '💎' : streak >= 90 ? '⚡' : streak >= 7 ? '🔥' : '✨'
+                const emoji = streak>=365?'👑':streak>=180?'💎':streak>=90?'⚡':streak>=7?'🔥':'✨'
                 if (streak === 0) return null
                 return (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: `${color}18`, borderRadius: 8, padding: '7px 13px', border: `1px solid ${color}40`, boxShadow: glow ? `0 0 12px ${color}55` : 'none', transition: 'all 0.3s' }}>
-                    <span style={{ fontSize: 15 }}>{emoji}</span>
-                    <span style={{ fontSize: 12, fontWeight: 800, color }}>{streak} dia{streak !== 1 ? 's' : ''} seguidos</span>
+                  <div style={{ display:'flex', alignItems:'center', gap:6, background:`${color}18`, borderRadius:8, padding:'7px 13px', border:`1px solid ${color}40`, boxShadow:glow?`0 0 12px ${color}55`:'none', transition:'all 0.3s' }}>
+                    <span style={{ fontSize:15 }}>{emoji}</span>
+                    <span style={{ fontSize:12, fontWeight:800, color }}>{streak} dia{streak!==1?'s':''} seguidos</span>
                   </div>
                 )
               })()}
