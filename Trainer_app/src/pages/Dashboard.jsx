@@ -33,7 +33,7 @@ const LEVELS = ['Iniciante', 'Intermediário', 'Avançado']
 // ── Helpers ────────────────────────────────────────────────────────────────
 function imcStyle(w, h) {
   if (!w || !h) return { val: '—', color: '#94A3B8', label: '—' }
-  const v = parseFloat((w / ((h / 100) ** 2)).toFixed(1))
+  const v = precomputed ?? parseFloat((w / ((h / 100) ** 2)).toFixed(1))
   let color, label
   if      (v < 16)   { color = '#BFDBFE'; label = 'Muito baixo' }
   else if (v < 18.5) { color = '#60A5FA'; label = 'Abaixo'      }
@@ -242,7 +242,7 @@ function StudentCard({ st, onClick }) {
       {/* Stats */}
       <div style={{ padding: '14px 18px', display: 'flex', gap: 8 }}>
         {[
-          { label: 'Peso',     val: st.weight ? `${st.weight}` : '—', unit: st.weight ? 'kg' : '', color: '#431C00', sub: null },
+          { label: 'Peso',     val: st.weight ? `${st.weight}` : '—', unit: st.weight ? 'kg' : '', color: '#431C00', sub: null }, // weight já é o mais recente de progress_entries
           { label: 'IMC',      val: imc.val, unit: '',                  color: imc.color,            sub: imc.label },
           { label: 'Ofensiva', val: streak.display, unit: '',           color: streak.color,         sub: (st.streak || 0) > 0 ? 'dias' : null, glow: streak.glow },
         ].map(({ label, val, unit, color, sub, glow }) => (
@@ -1405,7 +1405,7 @@ export default function Dashboard({ navigate, session }) {
       const ids = studs.map(s => s.id)
       const [att, prog, logs, feed, plansRes] = await Promise.all([
         supabase.from('attendance').select('student_id,date').in('student_id', ids),
-        supabase.from('progress_entries').select('student_id,date').in('student_id', ids),
+        supabase.from('progress_entries').select('student_id,date,weight').in('student_id', ids).order('date', { ascending: false }),
         supabase.from('exercise_logs').select('student_id,date').in('student_id', ids),
         supabase.from('student_feedbacks').select('student_id,date').in('student_id', ids),
         supabase.from('workout_plans').select('*, workout_days(*)').in('student_id', ids).eq('status', 'active'),
@@ -1416,6 +1416,16 @@ export default function Dashboard({ navigate, session }) {
       ;[att, prog, logs, feed].forEach(({ data }) => {
         if (data) data.forEach(r => datesByStudent[r.student_id]?.push(r.date))
       })
+
+      // Peso mais recente por aluno (de progress_entries — fonte da verdade)
+      const latestWeightMap = {}
+      if (prog.data) {
+        prog.data.forEach(r => {
+          if (r.weight && !latestWeightMap[r.student_id]) {
+            latestWeightMap[r.student_id] = +r.weight
+          }
+        })
+      }
 
       // Monta mapa de dias planejados por aluno (ex: { uuid: ['Seg','Qua','Sex'] })
       const plannedDaysMap = {}
@@ -1437,7 +1447,11 @@ export default function Dashboard({ navigate, session }) {
           const last = new Date(sorted[0] + 'T12:00:00')
           lastSeenDays = Math.floor((today - last) / 86400000)
         }
-        return { ...s, streak, lastSeenDays }
+        const latestW = latestWeightMap[s.id]
+        const weight  = latestW ?? s.weight  // progress_entries tem prioridade
+        const height  = s.height
+        const imc     = (weight && height) ? +(weight / ((height / 100) ** 2)).toFixed(1) : null
+        return { ...s, weight, imc_calc: imc, streak, lastSeenDays }
       })
       setStudents(enriched)
 
