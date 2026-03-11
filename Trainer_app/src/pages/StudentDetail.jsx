@@ -48,10 +48,16 @@ export default function StudentDetail({ navigate, studentId }) {
       supabase.from('progress_entries').select('*').eq('student_id', studentId).order('date', { ascending: false }),
       supabase.from('student_goals').select('*').eq('student_id', studentId).order('created_at', { ascending: false }),
     ])
-    if (st) { setStudent(st); setForm(st) }
     if (pl) setPlans(pl)
     if (pr) setProgress(pr)
     if (gs) setGoals(gs)
+    if (st) {
+      // Usa o peso mais recente de progress_entries como fonte da verdade
+      const latestWeight = pr?.find(e => e.weight)?.weight
+      const merged = latestWeight ? { ...st, weight: latestWeight } : st
+      setStudent(merged)
+      setForm(merged)
+    }
   }
 
   const saveStudent = async () => {
