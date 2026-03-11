@@ -70,7 +70,14 @@ export default function StudentDetail({ navigate, studentId }) {
   const addProgress = async () => {
     setSaving(true)
     const measurements = { waist: newProgress.waist, chest: newProgress.chest, hip: newProgress.hip, thigh: newProgress.thigh }
-    await supabase.from('progress_entries').insert([{ student_id: studentId, date: newProgress.date, weight: +newProgress.weight || null, notes: newProgress.notes, measurements }])
+    const ops = [
+      supabase.from('progress_entries').insert([{ student_id: studentId, date: newProgress.date, weight: +newProgress.weight || null, notes: newProgress.notes, measurements }])
+    ]
+    // Sincroniza peso nos dados pessoais do aluno
+    if (newProgress.weight) {
+      ops.push(supabase.from('students').update({ weight: +newProgress.weight }).eq('id', studentId))
+    }
+    await Promise.all(ops)
     await fetchAll()
     setShowProgressForm(false)
     setNewProgress({ date: new Date().toISOString().slice(0, 10), weight: '', notes: '', waist: '', chest: '', hip: '', thigh: '' })
