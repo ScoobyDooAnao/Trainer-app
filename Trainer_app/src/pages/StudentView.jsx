@@ -1,334 +1,1012 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../supabase'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend,
+  ResponsiveContainer, Legend, ReferenceLine,
 } from 'recharts'
 
-const DAY_COLORS = ['#00C9FF', '#FF6B6B', '#A78BFA', '#FBBF24', '#34D399', '#F97316']
-const TYPE_COLORS = {
-  'Peito': '#FF6B6B', 'Costas': '#00C9FF', 'Bíceps': '#38BDF8', 'Tríceps': '#FF8C42',
-  'Ombro': '#FDE68A', 'Quadríceps': '#A78BFA', 'Posterior': '#C084FC', 'Glúteo': '#F472B6',
-  'Panturrilha': '#FBBF24', 'Core': '#34D399', 'Cardio': '#F87171', 'Full Body': '#6EE7B7',
+const SIDEBAR_BG    = '#155E8E'
+const SIDEBAR_TEXT  = '#E0F2FE'
+const YELLOW        = '#F5C842'
+const YELLOW_BG     = 'rgba(245,200,66,0.15)'
+const YELLOW_BORDER = 'rgba(245,200,66,0.45)'
+
+const GOAL = {
+  'Ganho de Massa':      { bg: '#E0F4FF', accent: '#0284C7', icon: '💪' },
+  'Emagrecimento':       { bg: '#FEF2F2', accent: '#E05252', icon: '🔥' },
+  'Força e Performance': { bg: '#EDE9FE', accent: '#7C3AED', icon: '⚡' },
+  'Condicionamento':     { bg: '#FFFBEB', accent: '#D97706', icon: '🏃' },
 }
 
-const today = () => new Date().toISOString().split('T')[0]
+const DIAS_SEMANA = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+const DIA_JS_MAP  = { Seg: 1, Ter: 2, Qua: 3, Qui: 4, Sex: 5, Sáb: 6, Dom: 0 }
 
-// Gera array de sets baseado no campo sets do exercício (ex: "3" → [{set:1},{set:2},{set:3}])
-const parseSets = (setsField) => {
-  const n = parseInt(setsField) || 3
-  return Array.from({ length: n }, (_, i) => ({ set: i + 1, weight: '', reps: '' }))
+const NAV = [
+  { id: 'alunos',   icon: '👥', label: 'Meus Alunos' },
+  { id: 'treinos',  icon: '🏋️', label: 'Treinos'      },
+  { id: 'evolucao', icon: '📈', label: 'Evolução'     },
+  { id: 'cardio',   icon: '❤️', label: 'Cardio'       },
+]
+const GOALS  = ['Ganho de Massa', 'Emagrecimento', 'Condicionamento', 'Força e Performance']
+const LEVELS = ['Iniciante', 'Intermediário', 'Avançado']
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function imcStyle(w, h) {
+  if (!w || !h) return { val: '—', color: '#94A3B8', label: '—' }
+  const v = parseFloat((w / ((h / 100) ** 2)).toFixed(1))
+  let color, label
+  if      (v < 16)   { color = '#BFDBFE'; label = 'Muito baixo' }
+  else if (v < 18.5) { color = '#60A5FA'; label = 'Abaixo'      }
+  else if (v < 22)   { color = '#34D399'; label = 'Ideal'       }
+  else if (v < 25)   { color = '#10B981'; label = 'Normal'      }
+  else if (v < 27.5) { color = '#F5C842'; label = 'Sobrepeso'   }
+  else if (v < 30)   { color = '#F59E0B'; label = 'Sobrepeso+'  }
+  else if (v < 35)   { color = '#EF4444'; label = 'Obesidade'   }
+  else               { color = '#B91C1C'; label = 'Ob. Severa'  }
+  return { val: v.toFixed(1), color, label }
 }
 
-// Toast simples
-function Toast({ msg, onDone }) {
-  useEffect(() => { const t = setTimeout(onDone, 2500); return () => clearTimeout(t) }, [])
+function streakStyle(days) {
+  if (!days || days === 0) return { color: '#94A3B8', display: '—', glow: false }
+  let color, glow = false
+  if      (days < 7)   color = '#FDE68A'
+  else if (days < 14)  color = '#FCD34D'
+  else if (days < 30)  color = '#F5C842'
+  else if (days < 90)  { color = '#F59E0B'; glow = true }
+  else if (days < 180) { color = '#EA580C'; glow = true }
+  else if (days < 365) { color = '#DC2626'; glow = true }
+  else                 { color = '#D97706'; glow = true }
+  const emoji = days >= 365 ? '👑' : days >= 180 ? '💎' : days >= 90 ? '⚡' : '🔥'
+  return { color, display: `${emoji}${days}`, glow }
+}
+
+function getDayStatus(dia, attendanceDates, logDates) {
+  const todayJS  = new Date().getDay()
+  const diaJS    = DIA_JS_MAP[dia]
+  const jaPassou = diaJS < todayJS
+  const eHoje    = diaJS === todayJS
+  const now      = new Date()
+  const weekStart = new Date(now)
+  weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7))
+  weekStart.setHours(0, 0, 0, 0)
+  const allDates = [...(attendanceDates || []), ...(logDates || [])]
+  const fez = allDates.some(d => {
+    const date = new Date(d + 'T12:00:00')
+    return date.getDay() === diaJS && date >= weekStart
+  })
+  if (fez)      return { bg: 'rgba(52,211,153,0.18)',  color: '#065F46', border: 'rgba(52,211,153,0.45)', label: 'Feito 👍',   emoji: '👍' }
+  if (eHoje)    return { bg: 'rgba(59,130,246,0.15)',  color: '#1E3A8A', border: 'rgba(59,130,246,0.4)',  label: 'Ainda dá ⏳', emoji: '⏳' }
+  if (jaPassou) return { bg: 'rgba(239,68,68,0.12)',   color: '#7F1D1D', border: 'rgba(239,68,68,0.38)',  label: 'Faltou 😓',  emoji: '😓' }
+  return          { bg: 'rgba(148,163,184,0.12)', color: '#475569', border: 'rgba(148,163,184,0.3)', label: 'Agendado 📅', emoji: '📅' }
+}
+
+function calcStreak(dates, plannedDays) {
+  const JS_TO_DIA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+  const doneSet = new Set((dates || []).map(d => String(d).slice(0, 10)))
+  let streak = 0
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const cursor = new Date(today)
+
+  // Sem dias planejados: conta presença em dias consecutivos quaisquer
+  if (!plannedDays || plannedDays.length === 0) {
+    for (let i = 0; i < 730; i++) {
+      const ds = cursor.toISOString().slice(0, 10)
+      if (doneSet.has(ds)) streak++
+      else if (i > 0) break
+      cursor.setDate(cursor.getDate() - 1)
+    }
+    return streak
+  }
+
+  // Com dias planejados: ignora dias de descanso, quebra só em dia de treino faltado
+  for (let i = 0; i < 730; i++) {
+    const dayName = JS_TO_DIA[cursor.getDay()]
+    const isToday = cursor.getTime() === today.getTime()
+    if (plannedDays.includes(dayName)) {
+      const ds = cursor.toISOString().slice(0, 10)
+      if (doneSet.has(ds)) {
+        streak++
+      } else if (!isToday) {
+        break // faltou num dia planejado → sequência quebra
+      }
+    }
+    // dias de descanso são pulados sem quebrar a sequência
+    cursor.setDate(cursor.getDate() - 1)
+  }
+  return streak
+}
+
+// ── Clouds background ─────────────────────────────────────────────────────
+const CLOUDS = [
+  { top:'6%',  left:'-10%', scale:1.3,  dur:90,  delay:0,   opacity:0.85 },
+  { top:'18%', left:'-12%', scale:0.8,  dur:120, delay:-35, opacity:0.6  },
+  { top:'38%', left:'-8%',  scale:1.0,  dur:100, delay:-60, opacity:0.7  },
+  { top:'55%', left:'-15%', scale:1.5,  dur:140, delay:-20, opacity:0.5  },
+  { top:'72%', left:'-10%', scale:0.9,  dur:110, delay:-80, opacity:0.65 },
+  { top:'85%', left:'-12%', scale:1.1,  dur:130, delay:-50, opacity:0.55 },
+]
+
+function Cloud({ top, left, scale, dur, delay, opacity }) {
+  const style = {
+    position: 'absolute', top, left,
+    opacity,
+    transform: `scale(${scale})`,
+    animation: `cloudFloat ${dur}s linear ${delay}s infinite`,
+    pointerEvents: 'none',
+    zIndex: 0,
+  }
   return (
-    <div style={{
-      position: 'fixed', bottom: 28, left: '50%', transform: 'translateX(-50%)',
-      background: '#34D399', color: '#052e16', borderRadius: 50, padding: '10px 22px',
-      fontWeight: 800, fontSize: 13, zIndex: 999, whiteSpace: 'nowrap',
-      boxShadow: '0 4px 20px rgba(52,211,153,0.4)',
-    }}>{msg}</div>
+    <div style={style}>
+      <svg width="220" height="70" viewBox="0 0 220 70" fill="none">
+        <ellipse cx="110" cy="50" rx="100" ry="22" fill="white" />
+        <ellipse cx="75"  cy="38" rx="55"  ry="30" fill="white" />
+        <ellipse cx="138" cy="36" rx="48"  ry="26" fill="white" />
+        <ellipse cx="105" cy="28" rx="38"  ry="24" fill="white" />
+      </svg>
+    </div>
   )
 }
 
-// ── Componente de log de carga por exercício ─────────────────────────────────
-function ExerciseLogRow({ ex, studentId, dayColor }) {
-  const [open, setOpen]         = useState(false)
-  const [sets, setSets]         = useState(parseSets(ex.sets))
-  const [saving, setSaving]     = useState(false)
-  const [saved, setSaved]       = useState(false)
-  const [lastLog, setLastLog]   = useState(null)
-  const [toast, setToast]       = useState(null)
-  const typeColor = TYPE_COLORS[ex.type] || '#64748B'
-
-  // Carrega último log ao abrir
-  useEffect(() => {
-    if (!open || lastLog !== null) return
-    const load = async () => {
-      const { data } = await supabase
-        .from('exercise_logs')
-        .select('*')
-        .eq('student_id', studentId)
-        .eq('exercise_id', ex.id)
-        .order('date', { ascending: false })
-        .limit(1)
-        .single()
-      if (data) setLastLog(data)
-      else setLastLog(false)
-    }
-    load()
-  }, [open])
-
-  const updateSet = (idx, field, val) => {
-    setSets(prev => prev.map((s, i) => i === idx ? { ...s, [field]: val } : s))
-  }
-
-  const handleSave = async () => {
-    const filled = sets.filter(s => s.weight !== '' || s.reps !== '')
-    if (filled.length === 0) return
-    setSaving(true)
-    const { error } = await supabase.from('exercise_logs').insert({
-      student_id: studentId,
-      exercise_id: ex.id,
-      date: today(),
-      sets: sets.map(s => ({ set: s.set, weight: s.weight || null, reps: s.reps || null })),
-    })
-    setSaving(false)
-    if (!error) {
-      setSaved(true)
-      setToast('✅ Carga salva!')
-      setOpen(false)
-      // Reseta last log para recarregar na próxima abertura
-      setLastLog(null)
-    }
-  }
-
+function SkyBackground() {
   return (
     <>
-      {toast && <Toast msg={toast} onDone={() => setToast(null)} />}
-
-      {/* Linha principal do exercício */}
-      <div style={{
-        padding: '14px 20px',
-        borderBottom: '1px solid rgba(255,255,255,0.04)',
-        background: open ? 'rgba(255,255,255,0.02)' : 'transparent',
-      }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 0.5fr 0.7fr 0.6fr', gap: 8, alignItems: 'start' }}>
-
-          {/* Coluna exercício */}
-          <div>
-            {ex.type && (
-              <div style={{ marginBottom: 4 }}>
-                <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 20, fontWeight: 700, background: `${typeColor}20`, color: typeColor, border: `1px solid ${typeColor}40` }}>
-                  {ex.type}
-                </span>
-              </div>
-            )}
-            <div style={{ fontWeight: 600, fontSize: 14, color: '#E2E8F0', marginBottom: 3 }}>{ex.name}</div>
-            {ex.tip && <div style={{ fontSize: 11, color: '#475569', marginBottom: 4 }}>💡 {ex.tip}</div>}
-
-            {/* Botão registrar carga */}
-            <button
-              onClick={() => { setOpen(o => !o); setSaved(false) }}
-              style={{
-                marginTop: 4,
-                background: saved ? 'rgba(52,211,153,0.15)' : open ? `${dayColor}20` : 'rgba(255,255,255,0.05)',
-                border: `1px solid ${saved ? '#34D39940' : open ? `${dayColor}40` : 'rgba(255,255,255,0.1)'}`,
-                borderRadius: 8, padding: '5px 12px',
-                color: saved ? '#34D399' : open ? dayColor : '#64748B',
-                fontSize: 11, fontWeight: 700, cursor: 'pointer',
-              }}>
-              {saved ? '✅ Salvo hoje' : open ? '▲ Fechar' : '⚖️ Registrar carga'}
-            </button>
-          </div>
-
-          <div style={{ fontWeight: 700, color: dayColor, fontSize: 15, paddingTop: 20 }}>{ex.sets}x</div>
-          <div style={{ fontWeight: 600, fontSize: 13, color: '#CBD5E1', paddingTop: 20 }}>{ex.reps}</div>
-          <div style={{ fontSize: 12, color: '#64748B', paddingTop: 20 }}>{ex.rest}</div>
-        </div>
-
-        {/* Painel de log inline */}
-        {open && (
-          <div style={{ marginTop: 14, background: '#080B12', borderRadius: 12, border: `1px solid ${dayColor}25`, padding: 16 }}>
-
-            {/* Último registro */}
-            {lastLog && (
-              <div style={{ marginBottom: 12, background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.15)', borderRadius: 8, padding: '8px 12px' }}>
-                <div style={{ fontSize: 10, color: '#34D399', fontWeight: 700, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>
-                  📅 Último registro — {new Date(lastLog.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {lastLog.sets.map((s, i) => (
-                    <span key={i} style={{ fontSize: 11, background: 'rgba(52,211,153,0.1)', borderRadius: 6, padding: '3px 8px', color: '#6EE7B7' }}>
-                      S{s.set}: {s.weight ? `${s.weight}kg` : '—'} × {s.reps || '—'}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {lastLog === false && (
-              <div style={{ fontSize: 11, color: '#334155', marginBottom: 10 }}>Nenhum registro anterior para este exercício.</div>
-            )}
-
-            {/* Header colunas */}
-            <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 1fr', gap: 8, marginBottom: 6 }}>
-              <div style={{ fontSize: 9, color: '#334155', textTransform: 'uppercase', letterSpacing: 1 }}>Série</div>
-              <div style={{ fontSize: 9, color: '#334155', textTransform: 'uppercase', letterSpacing: 1 }}>Carga (kg)</div>
-              <div style={{ fontSize: 9, color: '#334155', textTransform: 'uppercase', letterSpacing: 1 }}>Reps feitas</div>
-            </div>
-
-            {/* Inputs por série */}
-            {sets.map((s, idx) => (
-              <div key={idx} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 1fr', gap: 8, marginBottom: 6, alignItems: 'center' }}>
-                <div style={{ fontSize: 12, color: dayColor, fontWeight: 800, textAlign: 'center' }}>S{s.set}</div>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  placeholder={lastLog && lastLog.sets[idx]?.weight ? `Ant: ${lastLog.sets[idx].weight}` : 'kg'}
-                  value={s.weight}
-                  onChange={e => updateSet(idx, 'weight', e.target.value)}
-                  style={{
-                    background: '#161B27', border: `1px solid ${s.weight ? dayColor + '60' : 'rgba(255,255,255,0.07)'}`,
-                    borderRadius: 8, padding: '9px 12px', color: '#E2E8F0', fontSize: 14,
-                    outline: 'none', width: '100%', textAlign: 'center', fontWeight: 700,
-                  }}
-                />
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  placeholder={lastLog && lastLog.sets[idx]?.reps ? `Ant: ${lastLog.sets[idx].reps}` : 'reps'}
-                  value={s.reps}
-                  onChange={e => updateSet(idx, 'reps', e.target.value)}
-                  style={{
-                    background: '#161B27', border: `1px solid ${s.reps ? dayColor + '60' : 'rgba(255,255,255,0.07)'}`,
-                    borderRadius: 8, padding: '9px 12px', color: '#E2E8F0', fontSize: 14,
-                    outline: 'none', width: '100%', textAlign: 'center', fontWeight: 700,
-                  }}
-                />
-              </div>
-            ))}
-
-            {/* Botão salvar */}
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              style={{
-                width: '100%', marginTop: 8,
-                background: saving ? '#1E293B' : `linear-gradient(135deg, ${dayColor}, ${dayColor}aa)`,
-                border: 'none', borderRadius: 10, padding: '12px',
-                color: '#fff', fontWeight: 800, fontSize: 14, cursor: saving ? 'default' : 'pointer',
-              }}>
-              {saving ? 'Salvando...' : '💾 Salvar registro de hoje'}
-            </button>
-          </div>
-        )}
+      <style>{`
+        @keyframes cloudFloat {
+          0%   { transform: translateX(0)   scale(var(--s,1)); }
+          100% { transform: translateX(110vw) scale(var(--s,1)); }
+        }
+      `}</style>
+      <div style={{ position:'fixed', inset:0, zIndex:0, pointerEvents:'none', overflow:'hidden',
+        background:'linear-gradient(175deg, #4AB8E8 0%, #7DCEEF 30%, #B3E5F7 60%, #D9F1FB 100%)' }}>
+        {CLOUDS.map((c, i) => <Cloud key={i} {...c} />)}
       </div>
     </>
   )
 }
 
-// ── STUDENT VIEW PRINCIPAL ───────────────────────────────────────────────────
-
-// ── Dados de prescrição por objetivo (mesma lógica do Dashboard) ──────────
-const SV_CARDIO_TYPES = [
-  { id: 'corrida',     label: 'Corrida',     icon: '🏃', color: '#EF4444', hasDistance: true,  hasHR: true,  isHIIT: false },
-  { id: 'bike',        label: 'Bike',        icon: '🚴', color: '#F59E0B', hasDistance: true,  hasHR: true,  isHIIT: false },
-  { id: 'esteira',     label: 'Esteira',     icon: '🏃', color: '#8B5CF6', hasDistance: true,  hasHR: true,  isHIIT: false },
-  { id: 'eliptico',    label: 'Elíptico',    icon: '⭕', color: '#06B6D4', hasDistance: false, hasHR: true,  isHIIT: false },
-  { id: 'natacao',     label: 'Natação',     icon: '🏊', color: '#3B82F6', hasDistance: true,  hasHR: false, isHIIT: false },
-  { id: 'pular_corda', label: 'Pular Corda', icon: '🪢', color: '#10B981', hasDistance: false, hasHR: true,  isHIIT: false },
-  { id: 'hiit',        label: 'HIIT',        icon: '⚡', color: '#F5C842', hasDistance: false, hasHR: true,  isHIIT: true  },
-]
-
-const SV_PSE_LABELS = ['','Muito leve','Leve','Moderado leve','Moderado','Moderado intenso','Intenso','Muito intenso','Difícil','Muito difícil','Máximo']
-
-const SV_PRESCRICAO = {
-  'Emagrecimento': {
-    tipo: ['corrida','esteira','eliptico'], sessoes: '3–4x/semana', duracao: '30–50 min',
-    pse: { min: 4, max: 6, label: 'PSE 4–6 — Moderado' },
-    pace: 'Ritmo confortável — você consegue conversar durante o esforço',
-    volume: '120–200 min/semana',
-    obs: 'Esforço contínuo e controlado. Evite intensidade alta demais — aumenta o apetite e dificulta a recuperação.',
-  },
-  'Ganho de Massa': {
-    tipo: ['esteira','bike','eliptico'], sessoes: '2x/semana', duracao: '20–30 min',
-    pse: { min: 3, max: 5, label: 'PSE 3–5 — Leve a moderado' },
-    pace: 'Recuperação ativa — ritmo bem leve, sem gerar fadiga',
-    volume: '40–60 min/semana',
-    obs: 'Cardio leve preserva sua recuperação muscular. Volume alto prejudica o ganho de massa.',
-  },
-  'Condicionamento': {
-    tipo: ['corrida','hiit','bike'], sessoes: '3–4x/semana', duracao: '30–45 min + 1 HIIT',
-    pse: { min: 5, max: 8, label: 'PSE 5–8 — Moderado a intenso' },
-    pace: 'Varie: 2–3 sessões em ritmo estável + 1 HIIT com esforços curtos e máximos',
-    volume: '150–200 min/semana',
-    obs: 'Não faça todo treino no mesmo ritmo. Alternar intensidades é chave para o condicionamento.',
-  },
-  'Força e Performance': {
-    tipo: ['bike','eliptico','natacao'], sessoes: '2x/semana', duracao: '20–30 min',
-    pse: { min: 3, max: 4, label: 'PSE 3–4 — Leve' },
-    pace: 'Low-impact e baixa intensidade — foco em recuperação, não em performance aeróbia',
-    volume: '40–60 min/semana',
-    obs: 'Cardio intenso compete com seus ganhos de força. Mantenha o volume mínimo.',
-  },
+// ── WaveDivider ────────────────────────────────────────────────────────────
+function WaveDivider() {
+  return (
+    <div style={{ lineHeight: 0, padding: '2px 0 8px' }}>
+      <svg viewBox="0 0 220 14" width="220" height="14" style={{ display: 'block' }}>
+        <path d="M0,7 C18,1 36,13 55,7 C73,1 91,13 110,7 C129,1 147,13 165,7 C183,1 201,13 220,7"
+          fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    </div>
+  )
 }
 
-function svFmtDate(d) {
+// ── NavItem ────────────────────────────────────────────────────────────────
+function NavItem({ item, active, onClick }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button onClick={onClick}
+      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+        padding: '10px 12px', borderRadius: 10,
+        border: active ? `1px solid ${YELLOW_BORDER}` : '1px solid transparent',
+        cursor: 'pointer', textAlign: 'left',
+        background: active ? YELLOW_BG : hov ? 'rgba(255,255,255,0.07)' : 'transparent',
+        transition: 'all 0.18s',
+      }}>
+      <span style={{ fontSize: 15, width: 22, textAlign: 'center' }}>{item.icon}</span>
+      <span style={{ fontSize: 13, fontWeight: active ? 700 : 500, color: active ? YELLOW : SIDEBAR_TEXT }}>
+        {item.label}
+      </span>
+      {active && <div style={{ marginLeft: 'auto', width: 6, height: 6, borderRadius: '50%', background: YELLOW, boxShadow: `0 0 8px ${YELLOW}` }} />}
+    </button>
+  )
+}
+
+// ── StudentCard ────────────────────────────────────────────────────────────
+function StudentCard({ st, onClick }) {
+  const [hov, setHov] = useState(false)
+  const g      = GOAL[st.goal] || GOAL['Ganho de Massa']
+  const imc    = imcStyle(st.weight, st.height)
+  const streak = streakStyle(st.streak || 0)
+  const active = (st.lastSeenDays ?? 999) < 5
+
+  return (
+    <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} onClick={onClick}
+      style={{
+        background:   hov ? 'linear-gradient(160deg,#FDE68A,#F5C842)' : 'linear-gradient(160deg,#FEF3C7,#FBBF24CC)',
+        borderRadius: 18, overflow: 'hidden',
+        border:       `1.5px solid ${hov ? '#D97706' : '#F5C84280'}`,
+        boxShadow:    hov ? '0 12px 36px rgba(245,200,66,0.45)' : '0 4px 14px rgba(245,200,66,0.25)',
+        transition:   'all 0.2s', cursor: 'pointer',
+        display: 'flex', flexDirection: 'column',
+      }}>
+      {/* Topo */}
+      <div style={{ padding: '16px 18px 14px', background: `linear-gradient(135deg,${g.bg},#FFFDF0)`, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 7, height: 7, borderRadius: '50%', background: active ? '#34D399' : '#CBD5E1', boxShadow: active ? '0 0 7px #34D399' : 'none' }} />
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: active ? '#065F46' : '#94A3B8' }}>
+              {active ? 'Ativo' : 'Inativo'}
+            </span>
+          </div>
+          {!active && st.lastSeenDays < 999 && (
+            <span style={{ fontSize: 10, color: YELLOW, fontWeight: 600, background: 'rgba(245,200,66,0.1)', padding: '2px 8px', borderRadius: 20, border: `1px solid ${YELLOW_BORDER}` }}>
+              {st.lastSeenDays}d sem interagir
+            </span>
+          )}
+        </div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: '#0D1B2A', letterSpacing: '-0.4px', lineHeight: 1.2, marginBottom: 6 }}>{st.name}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, color: g.accent, fontWeight: 700 }}>{g.icon} {st.goal}</span>
+          <span style={{ fontSize: 10, color: '#CBD5E1' }}>·</span>
+          <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>{st.level}</span>
+        </div>
+      </div>
+      {/* Stats */}
+      <div style={{ padding: '14px 18px', display: 'flex', gap: 8 }}>
+        {[
+          { label: 'Peso',     val: st.weight ? `${st.weight}` : '—', unit: st.weight ? 'kg' : '', color: '#431C00', sub: null },
+          { label: 'IMC',      val: imc.val, unit: '',                  color: imc.color,            sub: imc.label },
+          { label: 'Ofensiva', val: streak.display, unit: '',           color: streak.color,         sub: (st.streak || 0) > 0 ? 'dias' : null, glow: streak.glow },
+        ].map(({ label, val, unit, color, sub, glow }) => (
+          <div key={label} style={{ flex: 1, borderRadius: 10, padding: '10px 6px', textAlign: 'center', background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(255,255,255,0.6)', boxShadow: glow ? `0 0 12px ${color}35` : 'none' }}>
+            <div style={{ fontSize: 9, color: '#7C4A00', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3, fontWeight: 700 }}>{label}</div>
+            <div style={{ fontSize: val.length > 5 ? 11 : 15, fontWeight: 800, color, lineHeight: 1 }}>{val}<span style={{ fontSize: 9, color: '#94A3B8', fontWeight: 500 }}>{unit}</span></div>
+            {sub && <div style={{ fontSize: 8, color: '#431C00', opacity: 0.75, marginTop: 2, fontWeight: 700 }}>{sub}</div>}
+          </div>
+        ))}
+      </div>
+      {/* Footer */}
+      <div style={{ padding: '10px 18px', borderTop: '1px solid rgba(0,0,0,0.09)', background: hov ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, transition: 'background 0.2s' }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#431C00' }}>Ver Perfil Completo</span>
+        <span style={{ fontSize: 13, color: '#431C00', transform: hov ? 'translateX(4px)' : 'translateX(0)', transition: 'transform 0.2s', display: 'inline-block' }}>→</span>
+      </div>
+    </div>
+  )
+}
+
+// ── AddCard ────────────────────────────────────────────────────────────────
+function AddCard({ onClick }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} onClick={onClick}
+      style={{ borderRadius: 18, minHeight: 220, border: `2px dashed ${hov ? YELLOW : 'rgba(245,200,66,0.35)'}`, background: hov ? 'linear-gradient(135deg,rgba(245,200,66,0.12),rgba(245,158,11,0.06))' : 'linear-gradient(135deg,rgba(245,200,66,0.06),rgba(245,158,11,0.02))', boxShadow: hov ? '0 8px 28px rgba(245,200,66,0.15)' : 'none', transition: 'all 0.22s', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+      <div style={{ width: 52, height: 52, borderRadius: '50%', background: hov ? `linear-gradient(135deg,${YELLOW},#F59E0B)` : 'rgba(245,200,66,0.15)', border: `2px solid ${hov ? YELLOW : 'rgba(245,200,66,0.3)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, color: '#431C00', transition: 'all 0.22s', boxShadow: hov ? '0 0 20px rgba(245,200,66,0.35)' : 'none' }}>+</div>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 14, fontWeight: 800, color: hov ? YELLOW : 'rgba(245,200,66,0.6)' }}>Adicionar Aluno</div>
+        <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 3 }}>Clique para cadastrar</div>
+      </div>
+    </div>
+  )
+}
+
+// ── WorkoutModal ───────────────────────────────────────────────────────────
+function WorkoutModal({ workout, onClose, navigate }) {
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#FFF', borderRadius: 20, width: '100%', maxWidth: 480, overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,0.2)' }}>
+        <div style={{ background: 'linear-gradient(135deg,#FEF3C7,#FBBF24)', padding: '22px 24px 18px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <div style={{ fontSize: 11, color: '#7C3700', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Plano de Treino</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#431C00' }}>{workout.title}</div>
+              <div style={{ fontSize: 13, color: '#7C4A00', marginTop: 3, fontWeight: 600 }}>👤 {workout.studentName}</div>
+            </div>
+            <button onClick={onClose} style={{ background: 'rgba(0,0,0,0.1)', border: 'none', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 16, color: '#431C00' }}>✕</button>
+          </div>
+        </div>
+        <div style={{ padding: '20px 24px' }}>
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Status desta semana</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {(workout.days || []).map(dia => {
+                const s = getDayStatus(dia, workout.attendanceDates, workout.logDates)
+                return (
+                  <div key={dia} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '8px 10px', borderRadius: 10, background: s.bg, border: `1px solid ${s.border}`, minWidth: 52 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: s.color }}>{dia}</span>
+                    <span style={{ fontSize: 16 }}>{s.emoji}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+          {workout.workoutDays?.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Divisão</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {workout.workoutDays.map((d, i) => (
+                  <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: '#F8FAFC', borderRadius: 8, border: '1px solid #E2E8F0' }}>
+                    <div style={{ width: 22, height: 22, borderRadius: 6, background: 'linear-gradient(135deg,#F5C842,#D97706)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#431C00', flexShrink: 0 }}>{i + 1}</div>
+                    <span style={{ fontSize: 13, color: '#334155', fontWeight: 600 }}>{d.day_of_week ? `${d.day_of_week} — ` : ''}{d.name}{d.focus ? ` (${d.focus})` : ''}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={() => { onClose(); navigate('workout-editor', { studentId: workout.student_id, planId: workout.id }) }}
+              style={{ flex: 1, padding: 12, borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#F5C842,#D97706)', color: '#431C00', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
+              ✏️ Editar Treino
+            </button>
+            <button onClick={onClose} style={{ flex: 1, padding: 12, borderRadius: 10, border: '1px solid #E2E8F0', background: '#F8FAFC', color: '#64748B', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Fechar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── WorkoutChip ────────────────────────────────────────────────────────────
+function WorkoutChip({ workout, dia, onClick }) {
+  const [hov, setHov] = useState(false)
+  const s        = getDayStatus(dia, workout.attendanceDates, workout.logDates)
+  const initials = workout.studentName.split(' ').map(p => p[0]).slice(0, 2).join('')
+  const g        = GOAL[workout.goal]
+  return (
+    <div onClick={() => onClick(workout)} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      style={{ borderRadius: 12, padding: '9px 10px', cursor: 'pointer', marginBottom: 7, background: hov ? 'linear-gradient(135deg,#FDE68A,#F5C842)' : 'linear-gradient(135deg,#FFFBEB,#FEF3C7)', border: `1.5px solid ${hov ? '#D97706' : '#FBBF2455'}`, boxShadow: hov ? '0 6px 18px rgba(245,200,66,0.35)' : '0 2px 6px rgba(245,200,66,0.15)', transition: 'all 0.18s' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
+        <div style={{ width: 22, height: 22, borderRadius: 6, flexShrink: 0, background: g ? g.accent : SIDEBAR_BG, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff' }}>{initials}</div>
+        <div style={{ fontSize: 11, fontWeight: 800, color: '#431C00' }}>{workout.studentName.split(' ')[0]}</div>
+      </div>
+      <div style={{ fontSize: 10, color: '#7C4A00', fontWeight: 600, marginBottom: 5, lineHeight: 1.3 }}>{workout.title}</div>
+      <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>{s.label}</span>
+    </div>
+  )
+}
+
+// ── TabTreinos ─────────────────────────────────────────────────────────────
+function TabTreinos({ workouts, navigate }) {
+  const [selectedStudent, setSelectedStudent] = useState(null)
+  const [modalWorkout, setModalWorkout]       = useState(null)
+
+  const filtered       = selectedStudent ? workouts.filter(w => w.student_id === selectedStudent) : workouts
+  const uniqueStudents = [...new Map(workouts.map(w => [w.student_id, { id: w.student_id, name: w.studentName }])).values()]
+
+  return (
+    <div>
+      {modalWorkout && <WorkoutModal workout={modalWorkout} onClose={() => setModalWorkout(null)} navigate={navigate} />}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
+        <div>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0C3251', letterSpacing: '-0.5px', marginBottom: 4, textShadow:'0 1px 3px rgba(255,255,255,0.5)' }}>Treinos da Semana</h1>
+          <p style={{ fontSize: 13, color: '#0C4A6E' }}>
+            <span style={{ color: '#059669', fontWeight: 700 }}>{workouts.length} planos ativos</span>
+            {' · '}{uniqueStudents.length} alunos com treino
+          </p>
+        </div>
+      </div>
+
+      {/* Filtro */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18, padding: '12px 16px', background: 'rgba(255,255,255,0.5)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.8)', backdropFilter:'blur(8px)' }}>
+        <span style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, alignSelf: 'center', marginRight: 4 }}>👤 Filtrar:</span>
+        {[{ id: null, name: 'Todos' }, ...uniqueStudents].map(opt => (
+          <button key={opt.id ?? 'all'} onClick={() => setSelectedStudent(opt.id)}
+            style={{ padding: '7px 16px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none', transition: 'all 0.15s', background: selectedStudent === opt.id ? 'linear-gradient(135deg,#F5C842,#D97706)' : 'rgba(255,255,255,0.7)', color: selectedStudent === opt.id ? '#431C00' : '#64748B', boxShadow: selectedStudent === opt.id ? '0 3px 10px rgba(245,200,66,0.4)' : '0 1px 3px rgba(0,0,0,0.07)' }}>
+            {opt.name === 'Todos' ? 'Todos' : opt.name.split(' ')[0]}
+          </button>
+        ))}
+      </div>
+
+      {/* Tabela */}
+      <div style={{ background: '#FFF', borderRadius: 18, overflow: 'hidden', border: '1.5px solid rgba(245,200,66,0.25)', boxShadow: '0 4px 20px rgba(0,0,0,0.07)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', borderBottom: '2px solid #FEF3C7' }}>
+          {DIAS_SEMANA.map((dia, i) => {
+            const count = filtered.filter(w => (w.days || []).includes(dia)).length
+            return (
+              <div key={dia} style={{ padding: '14px 8px 12px', textAlign: 'center', background: i >= 5 ? 'rgba(245,200,66,0.06)' : 'transparent', borderRight: i < 6 ? '1px solid #F1F5F9' : 'none' }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: i >= 5 ? '#D97706' : '#0D1B2A', marginBottom: 4 }}>{dia}</div>
+                {count > 0 && <div style={{ display: 'inline-block', fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: 'linear-gradient(135deg,#F5C842,#D97706)', color: '#431C00' }}>{count} treino{count > 1 ? 's' : ''}</div>}
+              </div>
+            )
+          })}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', minHeight: 260 }}>
+          {DIAS_SEMANA.map((dia, i) => {
+            const dayWorkouts = filtered.filter(w => (w.days || []).includes(dia))
+            return (
+              <div key={dia} style={{ padding: '12px 8px', background: i >= 5 ? 'rgba(245,200,66,0.03)' : 'transparent', borderRight: i < 6 ? '1px solid #F1F5F9' : 'none' }}>
+                {dayWorkouts.length === 0
+                  ? <div style={{ textAlign: 'center', paddingTop: 30, color: '#E2E8F0', fontSize: 20 }}>·</div>
+                  : dayWorkouts.map(w => <WorkoutChip key={w.id + dia} workout={w} dia={dia} onClick={setModalWorkout} />)
+                }
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Legenda */}
+      <div style={{ display: 'flex', gap: 14, marginTop: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+        {[{ emoji: '👍', label: 'Feito' }, { emoji: '⏳', label: 'Ainda dá' }, { emoji: '😓', label: 'Faltou' }, { emoji: '📅', label: 'Agendado' }].map(({ emoji, label }) => (
+          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ fontSize: 13 }}>{emoji}</span>
+            <span style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 600 }}>{label}</span>
+          </div>
+        ))}
+        <span style={{ fontSize: 11, color: '#0C4A6E', opacity: 0.7 }}>· Clique num treino para ver detalhes</span>
+      </div>
+    </div>
+  )
+}
+
+
+// ── TabEvolucao ────────────────────────────────────────────────────────────
+const MEDIDAS_CONFIG = [
+  { key: 'waist', label: 'Cintura',  color: '#6366F1', unit: 'cm' },
+  { key: 'chest', label: 'Peito',    color: '#EC4899', unit: 'cm' },
+  { key: 'hip',   label: 'Quadril',  color: '#F59E0B', unit: 'cm' },
+  { key: 'thigh', label: 'Coxa',     color: '#10B981', unit: 'cm' },
+  { key: 'arm',   label: 'Braço',    color: '#3B82F6', unit: 'cm' },
+  { key: 'calf',  label: 'Panturrilha', color: '#EF4444', unit: 'cm' },
+]
+
+const GLASS_CARD = {
+  background: 'rgba(255,255,255,0.65)',
+  backdropFilter: 'blur(12px)',
+  borderRadius: 18,
+  border: '1.5px solid rgba(255,255,255,0.85)',
+  boxShadow: '0 4px 24px rgba(12,50,81,0.1)',
+  padding: '22px 24px',
+  marginBottom: 20,
+}
+
+function fmtDate(d) {
   if (!d) return ''
-  const [,m,day] = String(d).slice(0,10).split('-')
+  const [y, m, day] = String(d).slice(0,10).split('-')
   return `${day}/${m}`
 }
 
-function svFormatPace(distKm, durMin) {
-  if (!distKm || !durMin || distKm === 0) return null
-  const pm = durMin / distKm
-  const m  = Math.floor(pm)
-  const s  = Math.round((pm - m) * 60).toString().padStart(2,'0')
-  return `${m}:${s}/km`
+function CustomTooltip({ active, payload, label, unit }) {
+  if (!active || !payload?.length) return null
+  return (
+    <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid rgba(255,255,255,0.9)', borderRadius: 10, padding: '10px 14px', boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
+      <div style={{ fontSize: 11, color: '#64748B', marginBottom: 5, fontWeight: 600 }}>{label}</div>
+      {payload.map(p => (
+        <div key={p.dataKey} style={{ fontSize: 13, fontWeight: 700, color: p.color }}>
+          {p.name}: {p.value}{unit || ''}
+        </div>
+      ))}
+    </div>
+  )
 }
 
-// Modal de registro — tema escuro igual ao resto da StudentView
-function SvCardioModal({ studentId, onSave, onClose }) {
+// Modal para registrar nova entrada
+function EvolucaoModal({ studentId, mode, onSave, onClose, exercises }) {
   const today = new Date().toISOString().slice(0,10)
-  const [date,     setDate]     = useState(today)
-  const [type,     setType]     = useState('corrida')
-  const [duration, setDuration] = useState('')
-  const [distance, setDistance] = useState('')
-  const [avgHr,    setAvgHr]    = useState('')
-  const [maxHr,    setMaxHr]    = useState('')
-  const [workSec,  setWorkSec]  = useState('30')
-  const [restSec,  setRestSec]  = useState('15')
-  const [rounds,   setRounds]   = useState('8')
-  const [pse,      setPse]      = useState(5)
-  const [notes,    setNotes]    = useState('')
-  const [saving,   setSaving]   = useState(false)
+  const [date, setDate]       = useState(today)
+  const [saving, setSaving]   = useState(false)
 
-  const typeInfo = SV_CARDIO_TYPES.find(t => t.id === type)
+  // Peso
+  const [weight, setWeight]   = useState('')
+  const [notes, setNotes]     = useState('')
 
-  const inp = { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '10px 12px', color: '#E2E8F0', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }
-  const lbl = { fontSize: 11, color: '#94A3B8', fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 5, display: 'block', marginTop: 14 }
+  // Medidas
+  const [medidas, setMedidas] = useState({})
+
+  // Força
+  const [exId, setExId]       = useState(exercises?.[0]?.id || '')
+  const [sets, setSets]       = useState([{ weight: '', reps: '' }])
+
+  const inp  = { background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.9)', borderRadius: 8, padding: '9px 12px', color: '#0D1B2A', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }
+  const lbl  = { fontSize: 11, color: '#0C4A6E', fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 5, display: 'block', marginTop: 14 }
 
   const save = async () => {
+    if (!studentId) return
     setSaving(true)
-    await supabase.from('cardio_sessions').insert([{
-      student_id:       studentId,
-      date,
-      type,
-      duration_minutes: +duration || null,
-      distance_km:      typeInfo?.hasDistance ? (+distance || null) : null,
-      avg_hr:           typeInfo?.hasHR       ? (+avgHr    || null) : null,
-      max_hr:           typeInfo?.hasHR       ? (+maxHr    || null) : null,
-      work_seconds:     typeInfo?.isHIIT      ? (+workSec  || null) : null,
-      rest_seconds:     typeInfo?.isHIIT      ? (+restSec  || null) : null,
-      rounds:           typeInfo?.isHIIT      ? (+rounds   || null) : null,
-      pse:              +pse,
-      notes,
-    }])
+    if (mode === 'peso') {
+      await supabase.from('progress_entries').insert([{ student_id: studentId, date, weight: +weight || null, notes }])
+    } else if (mode === 'medidas') {
+      const m = {}
+      MEDIDAS_CONFIG.forEach(({ key }) => { if (medidas[key]) m[key] = +medidas[key] })
+      await supabase.from('progress_entries').insert([{ student_id: studentId, date, measurements: m }])
+    } else if (mode === 'forca') {
+      const validSets = sets.filter(s => s.weight && s.reps)
+      if (validSets.length > 0 && exId) {
+        await supabase.from('exercise_logs').insert([{ student_id: studentId, exercise_id: exId, date, sets: validSets.map(s => ({ weight: +s.weight, reps: +s.reps })) }])
+      }
+    }
     setSaving(false)
     onSave()
     onClose()
   }
 
+  const titles = { peso: '⚖️ Registrar Peso', medidas: '📏 Registrar Medidas', forca: '💪 Registrar Carga' }
+
   return (
-    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:20 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background:'#0D1117', border:'1px solid rgba(255,255,255,0.1)', borderRadius:20, padding:28, width:'100%', maxWidth:420, maxHeight:'90vh', overflowY:'auto' }}>
-        <div style={{ fontSize:17, fontWeight:800, color:'#E2E8F0', marginBottom:18 }}>❤️ Registrar Sessão de Cárdio</div>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(16px)', borderRadius: 20, padding: 28, width: '100%', maxWidth: 420, maxHeight: '90vh', overflowY: 'auto', border: '1.5px solid rgba(255,255,255,0.9)', boxShadow: '0 20px 60px rgba(12,50,81,0.2)' }}>
+        <div style={{ fontSize: 17, fontWeight: 800, color: '#0C3251', marginBottom: 18 }}>{titles[mode]}</div>
+
+        <label style={lbl}>Data</label>
+        <input type="date" style={inp} value={date} onChange={e => setDate(e.target.value)} />
+
+        {mode === 'peso' && (
+          <>
+            <label style={lbl}>Peso (kg)</label>
+            <input type="number" step="0.1" placeholder="Ex: 80.5" style={inp} value={weight} onChange={e => setWeight(e.target.value)} />
+            <label style={lbl}>Observações</label>
+            <textarea style={{ ...inp, minHeight: 60, resize: 'vertical' }} placeholder="Opcional..." value={notes} onChange={e => setNotes(e.target.value)} />
+          </>
+        )}
+
+        {mode === 'medidas' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
+            {MEDIDAS_CONFIG.map(({ key, label }) => (
+              <div key={key}>
+                <label style={{ ...lbl, marginTop: 6 }}>{label} (cm)</label>
+                <input type="number" step="0.1" placeholder="—" style={inp} value={medidas[key] || ''} onChange={e => setMedidas(p => ({ ...p, [key]: e.target.value }))} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {mode === 'forca' && (
+          <>
+            <label style={lbl}>Exercício</label>
+            <select style={inp} value={exId} onChange={e => setExId(e.target.value)}>
+              {exercises.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
+            </select>
+            <label style={{ ...lbl, marginTop: 14 }}>Séries</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {sets.map((s, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, color: '#64748B', fontWeight: 700, minWidth: 20 }}>S{i+1}</span>
+                  <input type="number" placeholder="kg" style={{ ...inp, flex: 1 }} value={s.weight} onChange={e => setSets(prev => prev.map((x,j) => j===i ? { ...x, weight: e.target.value } : x))} />
+                  <input type="number" placeholder="reps" style={{ ...inp, flex: 1 }} value={s.reps} onChange={e => setSets(prev => prev.map((x,j) => j===i ? { ...x, reps: e.target.value } : x))} />
+                  {sets.length > 1 && <button onClick={() => setSets(p => p.filter((_,j) => j!==i))} style={{ background: 'rgba(239,68,68,0.1)', border: 'none', borderRadius: 6, padding: '6px 8px', cursor: 'pointer', color: '#EF4444', fontSize: 12 }}>✕</button>}
+                </div>
+              ))}
+              <button onClick={() => setSets(p => [...p, { weight: '', reps: '' }])} style={{ background: 'rgba(12,74,110,0.08)', border: '1px dashed rgba(12,74,110,0.3)', borderRadius: 8, padding: '8px', cursor: 'pointer', color: '#0C4A6E', fontSize: 12, fontWeight: 700 }}>+ Adicionar série</button>
+            </div>
+          </>
+        )}
+
+        <button onClick={save} disabled={saving} style={{ width: '100%', background: 'linear-gradient(135deg,#F5C842,#D97706)', border: 'none', borderRadius: 10, padding: 13, color: '#431C00', fontWeight: 800, fontSize: 14, cursor: 'pointer', marginTop: 20 }}>
+          {saving ? 'Salvando...' : 'Salvar'}
+        </button>
+        <button onClick={onClose} style={{ width: '100%', background: 'transparent', border: '1px solid rgba(12,74,110,0.2)', borderRadius: 10, padding: 12, color: '#0C4A6E', fontWeight: 600, fontSize: 13, cursor: 'pointer', marginTop: 8 }}>Cancelar</button>
+      </div>
+    </div>
+  )
+}
+
+function EmptyChart({ label }) {
+  return (
+    <div style={{ height: 200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94A3B8', gap: 10 }}>
+      <div style={{ fontSize: 36 }}>📊</div>
+      <div style={{ fontSize: 13, fontWeight: 600 }}>Nenhum registro de {label} ainda</div>
+    </div>
+  )
+}
+
+function TabEvolucao({ students }) {
+  const [selectedId, setSelectedId] = useState(null)
+  const [subTab, setSubTab]         = useState('peso')
+  const [entries, setEntries]       = useState([])
+  const [exLogs, setExLogs]         = useState([])
+  const [exercises, setExercises]   = useState([])
+  const [selExId, setSelExId]       = useState(null)
+  const [modal, setModal]           = useState(null) // 'peso' | 'medidas' | 'forca'
+  const [loading, setLoading]       = useState(false)
+
+  const student = students.find(s => s.id === selectedId)
+
+  const fetchData = useCallback(async (sid) => {
+    if (!sid) return
+    setLoading(true)
+    const [progRes, logsRes, exRes] = await Promise.all([
+      supabase.from('progress_entries').select('*').eq('student_id', sid).order('date'),
+      supabase.from('exercise_logs').select('*, exercises(name)').eq('student_id', sid).order('date'),
+      supabase.from('exercises')
+        .select('id, name, workout_days!inner(workout_plans!inner(student_id))')
+        .eq('workout_days.workout_plans.student_id', sid),
+    ])
+    setEntries(progRes.data || [])
+    setExLogs(logsRes.data || [])
+    // Deduplicate exercises by name
+    const seen = new Set()
+    const exList = []
+    ;(exRes.data || []).forEach(e => { if (!seen.has(e.name)) { seen.add(e.name); exList.push(e) } })
+    // Also add exercises from logs in case plan changed
+    ;(logsRes.data || []).forEach(l => {
+      if (l.exercises && !seen.has(l.exercises.name)) {
+        seen.add(l.exercises.name)
+        exList.push({ id: l.exercise_id, name: l.exercises.name })
+      }
+    })
+    setExercises(exList)
+    if (exList.length > 0 && !selExId) setSelExId(exList[0].id)
+    setLoading(false)
+  }, [selExId])
+
+  useEffect(() => { if (selectedId) fetchData(selectedId) }, [selectedId])
+
+  // ── Dados para gráfico de peso ──
+  const pesoData = entries
+    .filter(e => e.weight)
+    .map(e => ({ date: fmtDate(e.date), Peso: +e.weight, full: e.date }))
+
+  // ── Dados para gráfico de medidas ──
+  const medidasData = entries
+    .filter(e => e.measurements && Object.keys(e.measurements).length > 0)
+    .map(e => {
+      const obj = { date: fmtDate(e.date) }
+      MEDIDAS_CONFIG.forEach(({ key, label }) => { if (e.measurements[key]) obj[label] = +e.measurements[key] })
+      return obj
+    })
+  const medidasAtivas = MEDIDAS_CONFIG.filter(m => medidasData.some(d => d[m.label] !== undefined))
+
+  // ── Dados para gráfico de força ──
+  const forcaData = (() => {
+    if (!selExId) return []
+    const filtered = exLogs.filter(l => l.exercise_id === selExId)
+    // Group by date, get max weight of all sets
+    const byDate = {}
+    filtered.forEach(l => {
+      const d = fmtDate(l.date)
+      const maxW = Math.max(...(l.sets || []).map(s => +s.weight || 0))
+      if (!byDate[d] || maxW > byDate[d]) byDate[d] = maxW
+    })
+    return Object.entries(byDate).map(([date, Máx]) => ({ date, Máx }))
+  })()
+
+  const selEx = exercises.find(e => e.id === selExId)
+
+  const subTabs = [
+    { id: 'peso',    icon: '⚖️', label: 'Peso'    },
+    { id: 'medidas', icon: '📏', label: 'Medidas' },
+    { id: 'forca',   icon: '💪', label: 'Força'   },
+  ]
+
+  return (
+    <div>
+      {modal && (
+        <EvolucaoModal
+          studentId={selectedId}
+          mode={modal}
+          exercises={exercises}
+          onSave={() => fetchData(selectedId)}
+          onClose={() => setModal(null)}
+        />
+      )}
+
+      {/* Header */}
+      <div style={{ marginBottom: 22 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0C3251', letterSpacing: '-0.5px', marginBottom: 4, textShadow: '0 1px 3px rgba(255,255,255,0.5)' }}>Evolução</h1>
+        <p style={{ fontSize: 13, color: '#0C4A6E', fontWeight: 600 }}>Acompanhe o progresso dos seus alunos</p>
+      </div>
+
+      {/* Selector de aluno */}
+      <div style={{ ...GLASS_CARD, padding: '16px 20px', marginBottom: 20 }}>
+        <div style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>👤 Selecionar Aluno</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {students.map(s => {
+            const sel = s.id === selectedId
+            const g = GOAL[s.goal]
+            return (
+              <button key={s.id} onClick={() => { setSelectedId(s.id); setSubTab('peso') }}
+                style={{ padding: '8px 16px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: sel ? 'none' : '1px solid rgba(12,74,110,0.15)', transition: 'all 0.15s', background: sel ? `linear-gradient(135deg,${YELLOW},#F59E0B)` : 'rgba(255,255,255,0.7)', color: sel ? '#431C00' : '#0C4A6E', boxShadow: sel ? '0 3px 12px rgba(245,200,66,0.4)' : 'none' }}>
+                {g?.icon} {s.name.split(' ')[0]}
+              </button>
+            )
+          })}
+          {students.length === 0 && <span style={{ fontSize: 13, color: '#94A3B8' }}>Nenhum aluno cadastrado</span>}
+        </div>
+      </div>
+
+      {!selectedId && (
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: '#0C4A6E', opacity: 0.4 }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>👆</div>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>Selecione um aluno para ver a evolução</div>
+        </div>
+      )}
+
+      {selectedId && (
+        <>
+          {/* Sub-tabs */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+            {subTabs.map(t => (
+              <button key={t.id} onClick={() => setSubTab(t.id)}
+                style={{ padding: '10px 22px', borderRadius: 12, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', transition: 'all 0.15s', background: subTab === t.id ? 'linear-gradient(135deg,#0C4A6E,#155E8E)' : 'rgba(255,255,255,0.65)', color: subTab === t.id ? '#FFF' : '#0C4A6E', boxShadow: subTab === t.id ? '0 4px 14px rgba(12,74,110,0.3)' : '0 1px 4px rgba(0,0,0,0.06)', backdropFilter: 'blur(6px)' }}>
+                {t.icon} {t.label}
+              </button>
+            ))}
+            <button onClick={() => setModal(subTab)}
+              style={{ marginLeft: 'auto', padding: '10px 20px', borderRadius: 12, fontSize: 13, fontWeight: 800, cursor: 'pointer', border: 'none', background: 'linear-gradient(135deg,#F5C842,#D97706)', color: '#431C00', boxShadow: '0 4px 14px rgba(245,200,66,0.4)' }}>
+              + Registrar
+            </button>
+          </div>
+
+          {loading && <div style={{ textAlign: 'center', padding: 40, color: '#0C4A6E', opacity: 0.5, fontWeight: 600 }}>Carregando...</div>}
+
+          {!loading && (
+            <>
+              {/* ── PESO ── */}
+              {subTab === 'peso' && (
+                <div style={GLASS_CARD}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251' }}>⚖️ Peso ao longo do tempo</div>
+                      {pesoData.length > 0 && (
+                        <div style={{ fontSize: 12, color: '#0C4A6E', marginTop: 4 }}>
+                          Início: <b>{pesoData[0].Peso}kg</b>
+                          {' · '}Atual: <b>{pesoData[pesoData.length-1].Peso}kg</b>
+                          {' · '}
+                          <span style={{ color: pesoData[pesoData.length-1].Peso < pesoData[0].Peso ? '#10B981' : '#EF4444', fontWeight: 700 }}>
+                            {pesoData[pesoData.length-1].Peso < pesoData[0].Peso ? '▼' : '▲'}
+                            {Math.abs(pesoData[pesoData.length-1].Peso - pesoData[0].Peso).toFixed(1)}kg
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {pesoData.length < 2 ? <EmptyChart label="peso" /> : (
+                    <ResponsiveContainer width="100%" height={240}>
+                      <LineChart data={pesoData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(12,74,110,0.08)" />
+                        <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#64748B' }} />
+                        <YAxis tick={{ fontSize: 11, fill: '#64748B' }} unit="kg" domain={['auto','auto']} />
+                        <Tooltip content={<CustomTooltip unit="kg" />} />
+                        <Line type="monotone" dataKey="Peso" stroke="#155E8E" strokeWidth={2.5} dot={{ r: 4, fill: '#155E8E', stroke: '#FFF', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                        {pesoData.length > 0 && <ReferenceLine y={pesoData[pesoData.length-1].Peso} stroke="#F5C842" strokeDasharray="4 4" />}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
+                  {/* Histórico */}
+                  {pesoData.length > 0 && (
+                    <div style={{ marginTop: 20, borderTop: '1px solid rgba(12,74,110,0.08)', paddingTop: 16 }}>
+                      <div style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Histórico</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 200, overflowY: 'auto' }}>
+                        {[...entries].filter(e => e.weight).reverse().map(e => (
+                          <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'rgba(12,74,110,0.04)', borderRadius: 8 }}>
+                            <span style={{ fontSize: 12, color: '#64748B', fontWeight: 600 }}>{String(e.date).slice(0,10).split('-').reverse().join('/')}</span>
+                            <span style={{ fontSize: 14, fontWeight: 800, color: '#0C3251' }}>{e.weight} kg</span>
+                            {e.notes && <span style={{ fontSize: 11, color: '#94A3B8', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.notes}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── MEDIDAS ── */}
+              {subTab === 'medidas' && (
+                <div style={GLASS_CARD}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251', marginBottom: 20 }}>📏 Medidas corporais</div>
+                  {medidasData.length < 2 ? <EmptyChart label="medidas" /> : (
+                    <ResponsiveContainer width="100%" height={280}>
+                      <LineChart data={medidasData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(12,74,110,0.08)" />
+                        <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#64748B' }} />
+                        <YAxis tick={{ fontSize: 11, fill: '#64748B' }} unit="cm" domain={['auto','auto']} />
+                        <Tooltip content={<CustomTooltip unit="cm" />} />
+                        <Legend wrapperStyle={{ fontSize: 12 }} />
+                        {medidasAtivas.map(m => (
+                          <Line key={m.key} type="monotone" dataKey={m.label} stroke={m.color} strokeWidth={2} dot={{ r: 3, fill: m.color, stroke: '#FFF', strokeWidth: 2 }} activeDot={{ r: 5 }} />
+                        ))}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
+                  {/* Último registro */}
+                  {medidasData.length > 0 && (
+                    <div style={{ marginTop: 20, borderTop: '1px solid rgba(12,74,110,0.08)', paddingTop: 16 }}>
+                      <div style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Último Registro</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                        {MEDIDAS_CONFIG.map(({ key, label, color }) => {
+                          const last = [...entries].filter(e => e.measurements?.[key]).pop()
+                          if (!last) return null
+                          const prev = [...entries].filter(e => e.measurements?.[key] && e.id !== last.id).pop()
+                          const diff = prev ? (+last.measurements[key] - +prev.measurements[key]).toFixed(1) : null
+                          return (
+                            <div key={key} style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 12, padding: '12px 16px', border: `2px solid ${color}30`, minWidth: 110, textAlign: 'center' }}>
+                              <div style={{ fontSize: 10, fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>{label}</div>
+                              <div style={{ fontSize: 20, fontWeight: 800, color: '#0C3251' }}>{last.measurements[key]}<span style={{ fontSize: 11 }}>cm</span></div>
+                              {diff !== null && (
+                                <div style={{ fontSize: 10, fontWeight: 700, color: +diff < 0 ? '#10B981' : '#EF4444', marginTop: 3 }}>
+                                  {+diff < 0 ? '▼' : '▲'}{Math.abs(diff)}cm
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── FORÇA ── */}
+              {subTab === 'forca' && (
+                <div style={GLASS_CARD}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251' }}>💪 Força por exercício</div>
+                  </div>
+                  {exercises.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: 40, color: '#94A3B8' }}>
+                      <div style={{ fontSize: 32, marginBottom: 8 }}>🏋️</div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>Nenhum exercício encontrado para este aluno</div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Selector de exercício */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 20 }}>
+                        {exercises.map(ex => (
+                          <button key={ex.id} onClick={() => setSelExId(ex.id)}
+                            style={{ padding: '6px 14px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: selExId === ex.id ? 'none' : '1px solid rgba(12,74,110,0.15)', background: selExId === ex.id ? 'linear-gradient(135deg,#155E8E,#0C4A6E)' : 'rgba(255,255,255,0.7)', color: selExId === ex.id ? '#FFF' : '#0C4A6E', transition: 'all 0.15s' }}>
+                            {ex.name}
+                          </button>
+                        ))}
+                      </div>
+
+                      {forcaData.length < 2 ? <EmptyChart label={`carga em ${selEx?.name || 'exercício'}`} /> : (
+                        <ResponsiveContainer width="100%" height={240}>
+                          <LineChart data={forcaData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(12,74,110,0.08)" />
+                            <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#64748B' }} />
+                            <YAxis tick={{ fontSize: 11, fill: '#64748B' }} unit="kg" domain={['auto','auto']} />
+                            <Tooltip content={<CustomTooltip unit="kg" />} />
+                            <Line type="monotone" dataKey="Máx" name="Carga máx." stroke="#7C3AED" strokeWidth={2.5} dot={{ r: 4, fill: '#7C3AED', stroke: '#FFF', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      )}
+
+                      {/* PR — maior carga registrada */}
+                      {forcaData.length > 0 && (
+                        <div style={{ marginTop: 20, borderTop: '1px solid rgba(12,74,110,0.08)', paddingTop: 14, display: 'flex', gap: 16 }}>
+                          {[
+                            { label: 'Carga Inicial', val: forcaData[0].Máx, color: '#64748B' },
+                            { label: 'Carga Atual',   val: forcaData[forcaData.length-1].Máx, color: '#155E8E' },
+                            { label: '🏆 PR',          val: Math.max(...forcaData.map(d => d.Máx)), color: '#7C3AED' },
+                          ].map(({ label, val, color }) => (
+                            <div key={label} style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 12, padding: '12px 18px', border: `1px solid rgba(255,255,255,0.9)`, textAlign: 'center', flex: 1 }}>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>{label}</div>
+                              <div style={{ fontSize: 22, fontWeight: 800, color }}>{val}<span style={{ fontSize: 11 }}>kg</span></div>
+                            </div>
+                          ))}
+                          <div style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 12, padding: '12px 18px', border: `1px solid rgba(255,255,255,0.9)`, textAlign: 'center', flex: 1 }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Evolução</div>
+                            <div style={{ fontSize: 22, fontWeight: 800, color: forcaData[forcaData.length-1].Máx >= forcaData[0].Máx ? '#10B981' : '#EF4444' }}>
+                              {forcaData[forcaData.length-1].Máx >= forcaData[0].Máx ? '▲' : '▼'}
+                              {Math.abs(forcaData[forcaData.length-1].Máx - forcaData[0].Máx).toFixed(1)}<span style={{ fontSize: 11 }}>kg</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+
+// ── TabCardio ──────────────────────────────────────────────────────────────
+const CARDIO_TYPES = [
+  { id: 'corrida',     label: 'Corrida',       icon: '🏃', color: '#EF4444', hasDistance: true,  hasHR: true,  isHIIT: false },
+  { id: 'bike',        label: 'Bike',          icon: '🚴', color: '#F59E0B', hasDistance: true,  hasHR: true,  isHIIT: false },
+  { id: 'esteira',     label: 'Esteira',       icon: '🏃', color: '#8B5CF6', hasDistance: true,  hasHR: true,  isHIIT: false },
+  { id: 'eliptico',    label: 'Elíptico',      icon: '⭕', color: '#06B6D4', hasDistance: false, hasHR: true,  isHIIT: false },
+  { id: 'natacao',     label: 'Natação',       icon: '🏊', color: '#3B82F6', hasDistance: true,  hasHR: false, isHIIT: false },
+  { id: 'pular_corda', label: 'Pular Corda',   icon: '🪢', color: '#10B981', hasDistance: false, hasHR: true,  isHIIT: false },
+  { id: 'hiit',        label: 'HIIT',          icon: '⚡', color: '#F5C842', hasDistance: false, hasHR: true,  isHIIT: true  },
+]
+
+const PSE_LABELS = ['', 'Muito leve', 'Leve', 'Moderado leve', 'Moderado', 'Moderado intenso', 'Intenso', 'Muito intenso', 'Difícil', 'Muito difícil', 'Máximo']
+
+const PRESCRICAO = {
+  'Emagrecimento': {
+    tipo: ['corrida','esteira','eliptico'],
+    sessoes: '3–4x/semana',
+    duracao: '30–50 min',
+    pse: { min: 4, max: 6, label: 'PSE 4–6 — Moderado' },
+    pace: 'Pace confortável — consegue conversar durante o esforço',
+    volume: '120–200 min/semana',
+    obs: 'Priorize esforço contínuo e controlado. Evite intensidade alta demais — compromete a recuperação e aumenta o apetite.',
+  },
+  'Ganho de Massa': {
+    tipo: ['esteira','bike','eliptico'],
+    sessoes: '2x/semana',
+    duracao: '20–30 min',
+    pse: { min: 3, max: 5, label: 'PSE 3–5 — Leve a moderado' },
+    pace: 'Recuperação ativa — ritmo bem leve, sem gerar fadiga',
+    volume: '40–60 min/semana',
+    obs: 'Cardio deve preservar a recuperação muscular. Volume alto prejudica o ganho de massa.',
+  },
+  'Condicionamento': {
+    tipo: ['corrida','hiit','bike'],
+    sessoes: '3–4x/semana',
+    duracao: '30–45 min (base) + 1 sessão HIIT',
+    pse: { min: 5, max: 8, label: 'PSE 5–8 — Moderado a intenso' },
+    pace: 'Varie: 2–3 sessões em ritmo estável + 1 HIIT com esforços curtos e máximos',
+    volume: '150–200 min/semana',
+    obs: 'Periodize a intensidade — não faça todo treino no mesmo ritmo.',
+  },
+  'Força e Performance': {
+    tipo: ['bike','eliptico','natacao'],
+    sessoes: '2x/semana',
+    duracao: '20–30 min',
+    pse: { min: 3, max: 4, label: 'PSE 3–4 — Leve' },
+    pace: 'Low-impact e baixa intensidade — foco em recuperação, não em performance aeróbia',
+    volume: '40–60 min/semana',
+    obs: 'Cardio intenso compete com os ganhos de força. Mantenha volume mínimo.',
+  },
+}
+
+
+
+function formatPace(distKm, durMin) {
+  if (!distKm || !durMin || distKm === 0) return '—'
+  const paceMin = durMin / distKm
+  const m = Math.floor(paceMin)
+  const s = Math.round((paceMin - m) * 60).toString().padStart(2, '0')
+  return `${m}:${s}/km`
+}
+
+// Modal de registro de sessão de cardio (pelo aluno)
+function CardioSessionModal({ studentId, onSave, onClose }) {
+  const today = new Date().toISOString().slice(0, 10)
+  const [date, setDate]           = useState(today)
+  const [type, setType]           = useState('corrida')
+  const [duration, setDuration]   = useState('')
+  const [distance, setDistance]   = useState('')
+  const [avgHr, setAvgHr]         = useState('')
+  const [maxHr, setMaxHr]         = useState('')
+  const [workSec, setWorkSec]     = useState('30')
+  const [restSec, setRestSec]     = useState('15')
+  const [rounds, setRounds]       = useState('8')
+  const [pse, setPse]             = useState(5)
+  const [notes, setNotes]         = useState('')
+  const [saving, setSaving]       = useState(false)
+
+  const typeInfo = CARDIO_TYPES.find(t => t.id === type)
+
+  const save = async () => {
+    setSaving(true)
+    const payload = {
+      student_id: studentId,
+      date,
+      type,
+      duration_minutes: +duration || null,
+      distance_km:      typeInfo?.hasDistance ? (+distance || null) : null,
+      avg_hr:           typeInfo?.hasHR       ? (+avgHr   || null) : null,
+      max_hr:           typeInfo?.hasHR       ? (+maxHr   || null) : null,
+      work_seconds:     typeInfo?.isHIIT      ? (+workSec || null) : null,
+      rest_seconds:     typeInfo?.isHIIT      ? (+restSec || null) : null,
+      rounds:           typeInfo?.isHIIT      ? (+rounds  || null) : null,
+      pse:              +pse,
+      notes,
+    }
+    await supabase.from('cardio_sessions').insert([payload])
+    setSaving(false)
+    onSave()
+    onClose()
+  }
+
+  const inp = { background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.9)', borderRadius: 8, padding: '9px 12px', color: '#0D1B2A', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }
+  const lbl = { fontSize: 11, color: '#0C4A6E', fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 5, display: 'block', marginTop: 14 }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'rgba(255,255,255,0.93)', backdropFilter: 'blur(16px)', borderRadius: 20, padding: 28, width: '100%', maxWidth: 440, maxHeight: '90vh', overflowY: 'auto', border: '1.5px solid rgba(255,255,255,0.9)', boxShadow: '0 20px 60px rgba(12,50,81,0.2)' }}>
+        <div style={{ fontSize: 17, fontWeight: 800, color: '#0C3251', marginBottom: 18 }}>❤️ Registrar Sessão de Cárdio</div>
 
         <label style={lbl}>Data</label>
         <input type="date" style={inp} value={date} onChange={e => setDate(e.target.value)} />
 
         <label style={lbl}>Modalidade</label>
-        <div style={{ display:'flex', flexWrap:'wrap', gap:7, marginTop:4 }}>
-          {SV_CARDIO_TYPES.map(t => (
-            <button key={t.id} onClick={() => setType(t.id)} style={{ padding:'7px 13px', borderRadius:20, fontSize:12, fontWeight:700, cursor:'pointer', border:'none', background: type === t.id ? t.color : 'rgba(255,255,255,0.08)', color: type === t.id ? '#FFF' : '#94A3B8', transition:'all 0.15s' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 2 }}>
+          {CARDIO_TYPES.map(t => (
+            <button key={t.id} onClick={() => setType(t.id)}
+              style={{ padding: '7px 13px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none', background: type === t.id ? t.color : 'rgba(255,255,255,0.7)', color: type === t.id ? '#FFF' : '#0C4A6E', transition: 'all 0.15s', boxShadow: type === t.id ? `0 3px 10px ${t.color}55` : 'none' }}>
               {t.icon} {t.label}
             </button>
           ))}
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginTop:4 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 4 }}>
           <div>
             <label style={lbl}>Duração (min)</label>
             <input type="number" placeholder="Ex: 30" style={inp} value={duration} onChange={e => setDuration(e.target.value)} />
@@ -339,1008 +1017,577 @@ function SvCardioModal({ studentId, onSave, onClose }) {
               <input type="number" step="0.1" placeholder="Ex: 5.2" style={inp} value={distance} onChange={e => setDistance(e.target.value)} />
             </div>
           )}
-          {typeInfo?.hasHR && (<>
-            <div>
-              <label style={lbl}>FC Média (bpm)</label>
-              <input type="number" placeholder="Ex: 145" style={inp} value={avgHr} onChange={e => setAvgHr(e.target.value)} />
-            </div>
-            <div>
-              <label style={lbl}>FC Máx (bpm)</label>
-              <input type="number" placeholder="Ex: 172" style={inp} value={maxHr} onChange={e => setMaxHr(e.target.value)} />
-            </div>
-          </>)}
-          {typeInfo?.isHIIT && (<>
-            <div><label style={lbl}>Esforço (seg)</label><input type="number" placeholder="30" style={inp} value={workSec} onChange={e => setWorkSec(e.target.value)} /></div>
-            <div><label style={lbl}>Descanso (seg)</label><input type="number" placeholder="15" style={inp} value={restSec} onChange={e => setRestSec(e.target.value)} /></div>
-            <div><label style={lbl}>Rodadas</label><input type="number" placeholder="8" style={inp} value={rounds} onChange={e => setRounds(e.target.value)} /></div>
-          </>)}
+          {typeInfo?.hasHR && (
+            <>
+              <div>
+                <label style={lbl}>FC Média (bpm)</label>
+                <input type="number" placeholder="Ex: 145" style={inp} value={avgHr} onChange={e => setAvgHr(e.target.value)} />
+              </div>
+              <div>
+                <label style={lbl}>FC Máx (bpm)</label>
+                <input type="number" placeholder="Ex: 172" style={inp} value={maxHr} onChange={e => setMaxHr(e.target.value)} />
+              </div>
+            </>
+          )}
+          {typeInfo?.isHIIT && (
+            <>
+              <div>
+                <label style={lbl}>Esforço (seg)</label>
+                <input type="number" placeholder="30" style={inp} value={workSec} onChange={e => setWorkSec(e.target.value)} />
+              </div>
+              <div>
+                <label style={lbl}>Descanso (seg)</label>
+                <input type="number" placeholder="15" style={inp} value={restSec} onChange={e => setRestSec(e.target.value)} />
+              </div>
+              <div>
+                <label style={lbl}>Rodadas</label>
+                <input type="number" placeholder="8" style={inp} value={rounds} onChange={e => setRounds(e.target.value)} />
+              </div>
+            </>
+          )}
         </div>
 
-        <label style={{ ...lbl, marginTop:18 }}>PSE — Esforço Percebido: <span style={{ color:'#F87171', fontWeight:800 }}>{pse} — {SV_PSE_LABELS[pse]}</span></label>
-        <input type="range" min="1" max="10" value={pse} onChange={e => setPse(+e.target.value)} style={{ width:'100%', accentColor:'#34D399', marginBottom:4 }} />
-        <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:'#475569', fontWeight:600 }}>
+        {/* PSE */}
+        <label style={{ ...lbl, marginTop: 18 }}>PSE — Esforço Percebido: <span style={{ color: '#EF4444', fontWeight: 800 }}>{pse} — {PSE_LABELS[pse]}</span></label>
+        <input type="range" min="1" max="10" value={pse} onChange={e => setPse(+e.target.value)}
+          style={{ width: '100%', accentColor: '#155E8E', marginBottom: 4 }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#94A3B8', fontWeight: 600 }}>
           <span>1 Leve</span><span>5 Moderado</span><span>10 Máximo</span>
         </div>
 
         <label style={lbl}>Observações</label>
-        <textarea style={{ ...inp, minHeight:55, resize:'vertical' }} placeholder="Como foi o treino?" value={notes} onChange={e => setNotes(e.target.value)} />
+        <textarea style={{ ...inp, minHeight: 55, resize: 'vertical' }} placeholder="Como foi o treino?" value={notes} onChange={e => setNotes(e.target.value)} />
 
-        <button onClick={save} disabled={saving} style={{ width:'100%', background:'linear-gradient(135deg,#34D399,#059669)', border:'none', borderRadius:10, padding:13, color:'#FFF', fontWeight:800, fontSize:14, cursor:'pointer', marginTop:20 }}>
+        <button onClick={save} disabled={saving} style={{ width: '100%', background: 'linear-gradient(135deg,#F5C842,#D97706)', border: 'none', borderRadius: 10, padding: 13, color: '#431C00', fontWeight: 800, fontSize: 14, cursor: 'pointer', marginTop: 20 }}>
           {saving ? 'Salvando...' : 'Salvar Sessão'}
         </button>
-        <button onClick={onClose} style={{ width:'100%', background:'transparent', border:'1px solid rgba(255,255,255,0.1)', borderRadius:10, padding:12, color:'#64748B', fontWeight:600, fontSize:13, cursor:'pointer', marginTop:8 }}>Cancelar</button>
+        <button onClick={onClose} style={{ width: '100%', background: 'transparent', border: '1px solid rgba(12,74,110,0.2)', borderRadius: 10, padding: 12, color: '#0C4A6E', fontWeight: 600, fontSize: 13, cursor: 'pointer', marginTop: 8 }}>Cancelar</button>
       </div>
     </div>
   )
 }
 
-// ── METAS SUGERIDAS POR OBJETIVO ────────────────────────────────────────────
-const METAS_SUGERIDAS = {
-  'Emagrecimento': [
-    { icon: '⚖️', titulo: 'Perder peso',           categoria: 'peso',    unidade: 'kg',     placeholder: 'Ex: 5',    desc: 'Reduzir meu peso corporal em' },
-    { icon: '📉', titulo: 'Abaixar meu IMC',        categoria: 'imc',     unidade: 'pontos', placeholder: 'Ex: 2',    desc: 'Reduzir meu IMC em' },
-    { icon: '📏', titulo: 'Diminuir cintura',        categoria: 'medida',  unidade: 'cm',     placeholder: 'Ex: 8',    desc: 'Diminuir minha cintura em' },
-    { icon: '📏', titulo: 'Diminuir quadril',        categoria: 'medida',  unidade: 'cm',     placeholder: 'Ex: 6',    desc: 'Diminuir meu quadril em' },
-    { icon: '🏃', titulo: 'Correr sem parar',        categoria: 'cardio',  unidade: 'km',     placeholder: 'Ex: 5',    desc: 'Conseguir correr' },
-    { icon: '🔥', titulo: 'Sequência de treinos',    categoria: 'habito',  unidade: 'dias',   placeholder: 'Ex: 30',   desc: 'Manter sequência de treinos por' },
-    { icon: '🥗', titulo: 'Meta personalizada',      categoria: 'outro',   unidade: '',       placeholder: '',         desc: '' },
-  ],
-  'Ganho de Massa': [
-    { icon: '⚖️', titulo: 'Ganhar massa',            categoria: 'peso',    unidade: 'kg',     placeholder: 'Ex: 4',    desc: 'Ganhar' },
-    { icon: '💪', titulo: 'Aumentar braço',           categoria: 'medida',  unidade: 'cm',     placeholder: 'Ex: 3',    desc: 'Aumentar o braço em' },
-    { icon: '🫁', titulo: 'Aumentar peito',           categoria: 'medida',  unidade: 'cm',     placeholder: 'Ex: 5',    desc: 'Aumentar o peito em' },
-    { icon: '🏋️', titulo: 'PR no Supino',            categoria: 'forca',   unidade: 'kg',     placeholder: 'Ex: 80',   desc: 'Supino com' },
-    { icon: '🏋️', titulo: 'PR no Agachamento',       categoria: 'forca',   unidade: 'kg',     placeholder: 'Ex: 100',  desc: 'Agachamento com' },
-    { icon: '🔥', titulo: 'Sequência de treinos',    categoria: 'habito',  unidade: 'dias',   placeholder: 'Ex: 30',   desc: 'Manter sequência de treinos por' },
-    { icon: '⭐', titulo: 'Meta personalizada',      categoria: 'outro',   unidade: '',       placeholder: '',         desc: '' },
-  ],
-  'Condicionamento': [
-    { icon: '🏃', titulo: 'Correr X km',             categoria: 'cardio',  unidade: 'km',     placeholder: 'Ex: 10',   desc: 'Correr' },
-    { icon: '⏱️', titulo: 'Pace alvo',               categoria: 'cardio',  unidade: 'min/km', placeholder: 'Ex: 5:30', desc: 'Atingir pace de' },
-    { icon: '🚴', titulo: 'Volume semanal',          categoria: 'cardio',  unidade: 'min',    placeholder: 'Ex: 180',  desc: 'Cardio semanal de' },
-    { icon: '⚡', titulo: 'Completar HIIT seguidos', categoria: 'cardio',  unidade: 'sessões',placeholder: 'Ex: 8',    desc: 'Completar' },
-    { icon: '🔥', titulo: 'Sequência de treinos',    categoria: 'habito',  unidade: 'dias',   placeholder: 'Ex: 60',   desc: 'Manter sequência de treinos por' },
-    { icon: '💪', titulo: 'Aumentar carga base',     categoria: 'forca',   unidade: 'kg',     placeholder: 'Ex: 10',   desc: 'Aumentar carga base em' },
-    { icon: '🎯', titulo: 'Meta personalizada',      categoria: 'outro',   unidade: '',       placeholder: '',         desc: '' },
-  ],
-  'Força e Performance': [
-    { icon: '🏋️', titulo: '1RM Supino',             categoria: 'forca',   unidade: 'kg',     placeholder: 'Ex: 100',  desc: '1RM Supino de' },
-    { icon: '🏋️', titulo: '1RM Agachamento',        categoria: 'forca',   unidade: 'kg',     placeholder: 'Ex: 120',  desc: '1RM Agachamento de' },
-    { icon: '🏋️', titulo: '1RM Terra',              categoria: 'forca',   unidade: 'kg',     placeholder: 'Ex: 140',  desc: '1RM Levantamento Terra de' },
-    { icon: '📈', titulo: 'PR em exercício livre',  categoria: 'forca',   unidade: 'kg',     placeholder: 'Ex: 60',   desc: 'Bater PR de' },
-    { icon: '⚖️', titulo: 'Manter peso',            categoria: 'peso',    unidade: 'kg',     placeholder: 'Ex: 80',   desc: 'Manter peso em' },
-    { icon: '🔥', titulo: 'Sequência de treinos',   categoria: 'habito',  unidade: 'dias',   placeholder: 'Ex: 30',   desc: 'Manter sequência de treinos por' },
-    { icon: '🏆', titulo: 'Meta personalizada',     categoria: 'outro',   unidade: '',       placeholder: '',         desc: '' },
-  ],
+function TabCardio({ students }) {
+  const [selectedId, setSelectedId] = useState(null)
+  const [sessions, setSessions]     = useState([])
+  const [modal, setModal]           = useState(false)
+  const [loading, setLoading]       = useState(false)
+  const [filterType, setFilterType] = useState('todos')
+
+  const student = students.find(s => s.id === selectedId)
+  const presc   = PRESCRICAO[student?.goal]
+
+  const fetchSessions = useCallback(async (sid) => {
+    if (!sid) return
+    setLoading(true)
+    const { data } = await supabase
+      .from('cardio_sessions')
+      .select('*')
+      .eq('student_id', sid)
+      .order('date', { ascending: true })
+    setSessions(data || [])
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { if (selectedId) fetchSessions(selectedId) }, [selectedId])
+
+  const filtered = filterType === 'todos' ? sessions : sessions.filter(s => s.type === filterType)
+
+  // Dados gráfico pace (corrida/esteira/bike com distância)
+  const paceData = sessions
+    .filter(s => s.distance_km && s.duration_minutes && ['corrida','esteira','bike'].includes(s.type))
+    .map(s => ({
+      date:   fmtDate(s.date),
+      Pace:   parseFloat((s.duration_minutes / s.distance_km).toFixed(2)),
+      type:   s.type,
+    }))
+
+  // Dados gráfico volume semanal (minutos por semana)
+  const volumeData = (() => {
+    const byWeek = {}
+    sessions.forEach(s => {
+      const d   = new Date(s.date + 'T12:00:00')
+      const mon = new Date(d); mon.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+      const key = mon.toISOString().slice(5, 10) // MM-DD
+      byWeek[key] = (byWeek[key] || 0) + (s.duration_minutes || 0)
+    })
+    return Object.entries(byWeek).sort().map(([week, min]) => ({ week, Min: min }))
+  })()
+
+  // Stats gerais
+  const totalSessoes = sessions.length
+  const totalMin     = sessions.reduce((a, s) => a + (s.duration_minutes || 0), 0)
+  const totalKm      = sessions.reduce((a, s) => a + (s.distance_km || 0), 0)
+  const avgPse       = sessions.length ? (sessions.reduce((a, s) => a + (s.pse || 0), 0) / sessions.length).toFixed(1) : '—'
+
+  return (
+    <div>
+      {modal && <CardioSessionModal studentId={selectedId} onSave={() => fetchSessions(selectedId)} onClose={() => setModal(false)} />}
+
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
+        <div>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0C3251', letterSpacing: '-0.5px', marginBottom: 4, textShadow: '0 1px 3px rgba(255,255,255,0.5)' }}>Cárdio</h1>
+          <p style={{ fontSize: 13, color: '#0C4A6E', fontWeight: 600 }}>Monitoramento e prescrição cardiovascular</p>
+        </div>
+      </div>
+
+      {/* Seletor de aluno */}
+      <div style={{ ...GLASS_CARD, padding: '16px 20px', marginBottom: 20 }}>
+        <div style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>👤 Selecionar Aluno</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {students.map(s => {
+            const sel = s.id === selectedId
+            const g   = GOAL[s.goal]
+            return (
+              <button key={s.id} onClick={() => setSelectedId(s.id)}
+                style={{ padding: '8px 16px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: sel ? 'none' : '1px solid rgba(12,74,110,0.15)', background: sel ? `linear-gradient(135deg,${YELLOW},#F59E0B)` : 'rgba(255,255,255,0.7)', color: sel ? '#431C00' : '#0C4A6E', boxShadow: sel ? '0 3px 12px rgba(245,200,66,0.4)' : 'none', transition: 'all 0.15s' }}>
+                {g?.icon} {s.name.split(' ')[0]}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {!selectedId && (
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: '#0C4A6E', opacity: 0.4 }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>👆</div>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>Selecione um aluno para ver o cárdio</div>
+        </div>
+      )}
+
+      {selectedId && !loading && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+
+          {/* ── PRESCRIÇÃO INTELIGENTE ── */}
+          {presc && (
+            <div style={GLASS_CARD}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251' }}>🎯 Prescrição Inteligente</div>
+                <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: `${GOAL[student.goal]?.accent}20`, color: GOAL[student.goal]?.accent, border: `1px solid ${GOAL[student.goal]?.accent}40` }}>
+                  {GOAL[student.goal]?.icon} {student.goal}
+                </span>
+              </div>
+
+              {/* Cards de prescrição */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 14 }}>
+                {[
+                  { icon: '📅', label: 'Frequência',  val: presc.sessoes  },
+                  { icon: '⏱',  label: 'Duração',     val: presc.duracao  },
+                  { icon: '📊', label: 'Volume/semana',val: presc.volume   },
+                ].map(({ icon, label, val }) => (
+                  <div key={label} style={{ background: 'rgba(255,255,255,0.65)', borderRadius: 12, padding: '12px 14px', border: '1px solid rgba(255,255,255,0.85)', textAlign: 'center' }}>
+                    <div style={{ fontSize: 18, marginBottom: 4 }}>{icon}</div>
+                    <div style={{ fontSize: 9, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{label}</div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: '#0C3251', lineHeight: 1.3 }}>{val}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* PSE alvo */}
+              <div style={{ background: 'rgba(255,255,255,0.65)', borderRadius: 12, padding: '12px 16px', border: '1px solid rgba(255,255,255,0.85)', marginBottom: 10 }}>
+                <div style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>🎯 PSE Alvo — Esforço Percebido</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ flex: 1, height: 10, borderRadius: 10, background: 'linear-gradient(90deg,#60A5FA,#34D399,#F5C842,#F59E0B,#EF4444)', position: 'relative' }}>
+                    <div style={{ position: 'absolute', left: `${(presc.pse.min - 1) / 9 * 100}%`, width: `${(presc.pse.max - presc.pse.min) / 9 * 100}%`, height: '100%', background: 'rgba(12,50,81,0.35)', borderRadius: 10, border: '2px solid #0C3251' }} />
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: '#0C3251', whiteSpace: 'nowrap' }}>{presc.pse.label}</span>
+                </div>
+                <div style={{ fontSize: 11, color: '#64748B', marginTop: 6 }}>🏃 {presc.pace}</div>
+              </div>
+
+              {/* Modalidades recomendadas */}
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Modalidades recomendadas</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                  {presc.tipo.map(t => {
+                    const info = CARDIO_TYPES.find(x => x.id === t)
+                    return <span key={t} style={{ fontSize: 12, fontWeight: 700, padding: '5px 13px', borderRadius: 20, background: `${info?.color}18`, color: info?.color, border: `1px solid ${info?.color}40` }}>{info?.icon} {info?.label}</span>
+                  })}
+                </div>
+              </div>
+
+              {/* Observação clínica */}
+              <div style={{ background: 'rgba(12,74,110,0.06)', borderRadius: 10, padding: '10px 14px', borderLeft: '3px solid #155E8E' }}>
+                <span style={{ fontSize: 12, color: '#334155', lineHeight: 1.6 }}>💡 {presc.obs}</span>
+              </div>
+            </div>
+          )}
+
+          {/* ── STATS GERAIS ── */}
+          {sessions.length > 0 && (
+            <div style={{ ...GLASS_CARD, marginBottom: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251', marginBottom: 14 }}>📊 Resumo Geral</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+                {[
+                  { label: 'Sessões',      val: totalSessoes,              unit: '',    color: '#155E8E' },
+                  { label: 'Total Tempo',  val: totalMin >= 60 ? `${Math.floor(totalMin/60)}h${totalMin%60}` : totalMin, unit: totalMin < 60 ? 'min' : '', color: '#7C3AED' },
+                  { label: 'Total Km',     val: totalKm.toFixed(1),        unit: 'km',  color: '#059669' },
+                  { label: 'PSE Médio',    val: avgPse,                    unit: '/10', color: '#D97706' },
+                ].map(({ label, val, unit, color }) => (
+                  <div key={label} style={{ background: 'rgba(255,255,255,0.65)', borderRadius: 12, padding: '12px 14px', textAlign: 'center', border: '1px solid rgba(255,255,255,0.8)' }}>
+                    <div style={{ fontSize: 9, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{label}</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color }}>{val}<span style={{ fontSize: 11, color: '#94A3B8' }}>{unit}</span></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── GRÁFICOS ── */}
+          {paceData.length >= 2 && (
+            <div style={GLASS_CARD}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#0C3251', marginBottom: 16 }}>🏃 Evolução do Pace</div>
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={paceData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(12,74,110,0.08)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#64748B' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#64748B' }} unit="'/km" domain={['auto','auto']} reversed />
+                  <Tooltip content={<CustomTooltip unit=" min/km" />} />
+                  <Line type="monotone" dataKey="Pace" stroke="#EF4444" strokeWidth={2.5} dot={{ r: 4, fill: '#EF4444', stroke: '#FFF', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ResponsiveContainer>
+              <div style={{ fontSize: 11, color: '#94A3B8', textAlign: 'center', marginTop: 6 }}>Eixo Y invertido — pace menor = mais rápido ✅</div>
+            </div>
+          )}
+
+          {volumeData.length >= 2 && (
+            <div style={GLASS_CARD}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#0C3251', marginBottom: 16 }}>📅 Volume Semanal (minutos)</div>
+              <ResponsiveContainer width="100%" height={180}>
+                <LineChart data={volumeData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(12,74,110,0.08)" />
+                  <XAxis dataKey="week" tick={{ fontSize: 11, fill: '#64748B' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#64748B' }} unit="min" />
+                  <Tooltip content={<CustomTooltip unit=" min" />} />
+                  <Line type="monotone" dataKey="Min" name="Minutos" stroke="#155E8E" strokeWidth={2.5} dot={{ r: 4, fill: '#155E8E', stroke: '#FFF', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* ── HISTÓRICO ── */}
+          <div style={GLASS_CARD}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251' }}>📋 Histórico de Sessões</div>
+              <button onClick={() => setModal(true)}
+                style={{ padding: '8px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#F5C842,#D97706)', color: '#431C00', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                + Registrar
+              </button>
+            </div>
+
+            {/* Filtro por modalidade */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+              <button onClick={() => setFilterType('todos')}
+                style={{ padding: '5px 13px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: filterType === 'todos' ? 'linear-gradient(135deg,#155E8E,#0C4A6E)' : 'rgba(255,255,255,0.7)', color: filterType === 'todos' ? '#FFF' : '#0C4A6E' }}>
+                Todos
+              </button>
+              {CARDIO_TYPES.filter(t => sessions.some(s => s.type === t.id)).map(t => (
+                <button key={t.id} onClick={() => setFilterType(t.id)}
+                  style={{ padding: '5px 13px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: filterType === t.id ? t.color : 'rgba(255,255,255,0.7)', color: filterType === t.id ? '#FFF' : '#0C4A6E', transition: 'all 0.15s' }}>
+                  {t.icon} {t.label}
+                </button>
+              ))}
+            </div>
+
+            {filtered.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94A3B8' }}>
+                <div style={{ fontSize: 32, marginBottom: 8 }}>❤️</div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Nenhuma sessão registrada ainda</div>
+                <div style={{ fontSize: 12, marginTop: 4 }}>O aluno pode registrar pelo link dele</div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 380, overflowY: 'auto' }}>
+                {[...filtered].reverse().map(s => {
+                  const info = CARDIO_TYPES.find(t => t.id === s.type)
+                  const pace = formatPace(s.distance_km, s.duration_minutes)
+                  return (
+                    <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'rgba(255,255,255,0.65)', borderRadius: 12, border: `1.5px solid ${info?.color}25` }}>
+                      {/* Ícone modalidade */}
+                      <div style={{ width: 38, height: 38, borderRadius: 10, background: `${info?.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{info?.icon}</div>
+                      {/* Info */}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: '#0C3251' }}>{info?.label}</span>
+                          <span style={{ fontSize: 10, color: '#94A3B8' }}>{String(s.date).slice(0,10).split('-').reverse().join('/')}</span>
+                          {s.type === 'hiit' && s.work_seconds && (
+                            <span style={{ fontSize: 10, fontWeight: 700, color: '#F5C842', background: 'rgba(245,200,66,0.12)', padding: '1px 7px', borderRadius: 20 }}>
+                              {s.work_seconds}s/{s.rest_seconds}s × {s.rounds}x
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                          {s.duration_minutes && <span style={{ fontSize: 11, color: '#64748B' }}>⏱ {s.duration_minutes}min</span>}
+                          {s.distance_km      && <span style={{ fontSize: 11, color: '#64748B' }}>📍 {s.distance_km}km</span>}
+                          {pace !== '—'        && <span style={{ fontSize: 11, color: '#EF4444', fontWeight: 700 }}>🏃 {pace}</span>}
+                          {s.avg_hr           && <span style={{ fontSize: 11, color: '#64748B' }}>❤️ {s.avg_hr}bpm</span>}
+                          {s.pse              && <span style={{ fontSize: 11, color: '#64748B' }}>PSE {s.pse}/10</span>}
+                        </div>
+                        {s.notes && <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 3, fontStyle: 'italic' }}>{s.notes}</div>}
+                      </div>
+                      {/* PSE badge */}
+                      <div style={{ width: 34, height: 34, borderRadius: '50%', background: `hsl(${120 - (s.pse||5)*12},70%,50%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#FFF', flexShrink: 0 }}>
+                        {s.pse}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+        </div>
+      )}
+
+      {selectedId && loading && (
+        <div style={{ textAlign: 'center', padding: 40, color: '#0C4A6E', opacity: 0.5, fontWeight: 600 }}>Carregando...</div>
+      )}
+    </div>
+  )
 }
 
-const CAT_COLORS = {
-  peso:   { bg: 'rgba(52,211,153,0.12)',  border: 'rgba(52,211,153,0.3)',  text: '#34D399' },
-  imc:    { bg: 'rgba(96,165,250,0.12)',  border: 'rgba(96,165,250,0.3)',  text: '#60A5FA' },
-  medida: { bg: 'rgba(167,139,250,0.12)', border: 'rgba(167,139,250,0.3)', text: '#A78BFA' },
-  forca:  { bg: 'rgba(251,191,36,0.12)',  border: 'rgba(251,191,36,0.3)',  text: '#FBBF24' },
-  cardio: { bg: 'rgba(239,68,68,0.12)',   border: 'rgba(239,68,68,0.3)',   text: '#F87171' },
-  habito: { bg: 'rgba(245,200,66,0.12)',  border: 'rgba(245,200,66,0.3)',  text: '#F5C842' },
-  outro:  { bg: 'rgba(148,163,184,0.12)', border: 'rgba(148,163,184,0.3)', text: '#94A3B8' },
-}
-
-const STATUS_CONFIG = {
-  ativa:      { label: 'Em andamento', color: '#60A5FA', bg: 'rgba(96,165,250,0.12)'  },
-  concluida:  { label: '✅ Concluída',  color: '#34D399', bg: 'rgba(52,211,153,0.12)'  },
-  abandonada: { label: 'Abandonada',   color: '#64748B', bg: 'rgba(100,116,139,0.12)' },
-}
-
-function NovaMetaModal({ studentId, goal, onSave, onClose }) {
-  const sugestoes = METAS_SUGERIDAS[goal] || METAS_SUGERIDAS['Ganho de Massa']
-  const [step, setStep]         = useState('escolher') // 'escolher' | 'detalhar'
-  const [selecionada, setSel]   = useState(null)
-  const [titulo, setTitulo]     = useState('')
-  const [descricao, setDescricao] = useState('')
-  const [valor, setValor]       = useState('')
-  const [unidade, setUnidade]   = useState('')
-  const [prazo, setPrazo]       = useState('')
-  const [saving, setSaving]     = useState(false)
-
-  const escolher = (s) => {
-    setSel(s)
-    setTitulo(s.titulo === 'Meta personalizada' ? '' : s.titulo)
-    setDescricao(s.desc)
-    setUnidade(s.unidade)
-    setStep('detalhar')
-  }
-
-  const salvar = async () => {
-    if (!titulo.trim()) return
+// ── NovoAlunoModal ─────────────────────────────────────────────────────────
+function NovoAlunoModal({ onSave, onClose, teacherId }) {
+  const [form, setForm]     = useState({ name: '', age: '', weight: '', height: '', goal: 'Ganho de Massa', level: 'Iniciante', notes: '' })
+  const [saving, setSaving] = useState(false)
+  const f = (field, val) => setForm(prev => ({ ...prev, [field]: val }))
+  const inp = { width: '100%', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '10px 12px', color: '#0D1B2A', fontSize: 14, outline: 'none', boxSizing: 'border-box' }
+  const lbl = { fontSize: 11, color: '#64748B', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6, display: 'block', marginTop: 14 }
+  const save = async () => {
+    if (!form.name.trim()) return
     setSaving(true)
-    await supabase.from('student_goals').insert([{
-      student_id: studentId,
-      title:      titulo,
-      description: descricao,
-      category:   selecionada?.categoria || 'outro',
-      target_value: valor ? parseFloat(valor) : null,
-      target_unit:  unidade,
-      deadline:   prazo || null,
-      status:     'ativa',
-    }])
+    await supabase.from('students').insert([{ ...form, age: +form.age || null, weight: +form.weight || null, height: +form.height || null, teacher_id: teacherId }])
     setSaving(false)
     onSave()
     onClose()
   }
-
-  const inp = { background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'10px 12px', color:'#E2E8F0', fontSize:13, outline:'none', width:'100%', boxSizing:'border-box' }
-  const lbl = { fontSize:11, color:'#94A3B8', fontWeight:700, letterSpacing:0.8, textTransform:'uppercase', marginBottom:5, display:'block', marginTop:14 }
-
   return (
-    <div onClick={onClose} style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.8)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:300,padding:16 }}>
-      <div onClick={e=>e.stopPropagation()} style={{ background:'#0D1117',border:'1px solid rgba(255,255,255,0.1)',borderRadius:20,padding:24,width:'100%',maxWidth:420,maxHeight:'90vh',overflowY:'auto' }}>
-
-        {step === 'escolher' && (
-          <>
-            <div style={{ fontSize:17,fontWeight:800,color:'#E2E8F0',marginBottom:4 }}>🎯 Nova Meta</div>
-            <div style={{ fontSize:12,color:'#475569',marginBottom:18 }}>Escolha uma sugestão baseada no seu objetivo ou crie a sua própria</div>
-            <div style={{ display:'flex',flexDirection:'column',gap:8 }}>
-              {sugestoes.map((s,i) => {
-                const cc = CAT_COLORS[s.categoria] || CAT_COLORS.outro
-                return (
-                  <button key={i} onClick={()=>escolher(s)} style={{ display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderRadius:12,border:`1px solid ${cc.border}`,background:cc.bg,cursor:'pointer',textAlign:'left',transition:'all 0.15s' }}>
-                    <span style={{ fontSize:22 }}>{s.icon}</span>
-                    <div>
-                      <div style={{ fontSize:13,fontWeight:800,color:'#E2E8F0' }}>{s.titulo}</div>
-                      {s.desc && <div style={{ fontSize:11,color:'#64748B',marginTop:1 }}>{s.desc} {s.placeholder}</div>}
-                    </div>
-                    <span style={{ marginLeft:'auto',color:cc.text,fontSize:16 }}>→</span>
-                  </button>
-                )
-              })}
-            </div>
-          </>
-        )}
-
-        {step === 'detalhar' && (
-          <>
-            <button onClick={()=>setStep('escolher')} style={{ background:'none',border:'none',color:'#475569',fontSize:13,cursor:'pointer',marginBottom:16,display:'flex',alignItems:'center',gap:6 }}>← Voltar</button>
-            <div style={{ fontSize:17,fontWeight:800,color:'#E2E8F0',marginBottom:4 }}>{selecionada?.icon} Definir Meta</div>
-            <div style={{ fontSize:12,color:'#475569',marginBottom:18 }}>Quanto mais específico, mais fácil de acompanhar!</div>
-
-            <label style={lbl}>Título da meta</label>
-            <input style={inp} placeholder="Ex: Perder 5kg até o verão" value={titulo} onChange={e=>setTitulo(e.target.value)} />
-
-            {selecionada?.categoria !== 'outro' && (
-              <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10 }}>
-                <div>
-                  <label style={lbl}>Valor alvo</label>
-                  <input type="number" step="0.1" style={inp} placeholder={selecionada?.placeholder} value={valor} onChange={e=>setValor(e.target.value)} />
-                </div>
-                <div>
-                  <label style={lbl}>Unidade</label>
-                  <input style={inp} placeholder="kg, cm, dias..." value={unidade} onChange={e=>setUnidade(e.target.value)} />
-                </div>
-              </div>
-            )}
-
-            <label style={lbl}>Prazo (opcional)</label>
-            <input type="date" style={inp} value={prazo} onChange={e=>setPrazo(e.target.value)} />
-
-            <label style={lbl}>Descrição / motivação (opcional)</label>
-            <textarea style={{ ...inp,minHeight:60,resize:'vertical' }} placeholder="Por que essa meta é importante para você?" value={descricao} onChange={e=>setDescricao(e.target.value)} />
-
-            <button onClick={salvar} disabled={saving||!titulo.trim()} style={{ width:'100%',background:'linear-gradient(135deg,#34D399,#059669)',border:'none',borderRadius:10,padding:13,color:'#FFF',fontWeight:800,fontSize:14,cursor:'pointer',marginTop:20,opacity:titulo.trim()?1:0.5 }}>
-              {saving ? 'Salvando...' : '🎯 Criar Meta'}
-            </button>
-          </>
-        )}
-
-        <button onClick={onClose} style={{ width:'100%',background:'transparent',border:'1px solid rgba(255,255,255,0.08)',borderRadius:10,padding:11,color:'#475569',fontWeight:600,fontSize:13,cursor:'pointer',marginTop:8 }}>Cancelar</button>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 20, padding: 32, width: '100%', maxWidth: 460, maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: '#0D1B2A', marginBottom: 4 }}>Novo Aluno</div>
+        <div style={{ fontSize: 13, color: '#64748B', marginBottom: 20 }}>Preencha os dados do aluno</div>
+        {[['Nome completo', 'name', 'text', 'Ex: João Silva'], ['Idade', 'age', 'number', 'Ex: 25'], ['Peso (kg)', 'weight', 'number', 'Ex: 80'], ['Altura (cm)', 'height', 'number', 'Ex: 175']].map(([label, field, type, ph]) => (
+          <div key={field}><label style={lbl}>{label}</label><input style={inp} type={type} placeholder={ph} value={form[field]} onChange={e => f(field, e.target.value)} /></div>
+        ))}
+        <label style={lbl}>Objetivo</label>
+        <select style={inp} value={form.goal} onChange={e => f('goal', e.target.value)}>{GOALS.map(g => <option key={g}>{g}</option>)}</select>
+        <label style={lbl}>Nível</label>
+        <select style={inp} value={form.level} onChange={e => f('level', e.target.value)}>{LEVELS.map(l => <option key={l}>{l}</option>)}</select>
+        <label style={lbl}>Observações</label>
+        <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} placeholder="Lesões, restrições..." value={form.notes} onChange={e => f('notes', e.target.value)} />
+        <button onClick={save} disabled={saving} style={{ width: '100%', background: 'linear-gradient(135deg,#F5C842,#D97706)', border: 'none', borderRadius: 10, padding: 13, color: '#431C00', fontWeight: 800, fontSize: 14, cursor: 'pointer', marginTop: 20 }}>
+          {saving ? 'Salvando...' : 'Cadastrar Aluno'}
+        </button>
+        <button onClick={onClose} style={{ width: '100%', background: 'rgba(0,0,0,0.04)', border: '1px solid #E2E8F0', borderRadius: 10, padding: 13, color: '#64748B', fontWeight: 600, fontSize: 14, cursor: 'pointer', marginTop: 8 }}>Cancelar</button>
       </div>
     </div>
   )
 }
 
-function TabMetas({ studentId, student, goals, onUpdate }) {
+// ── DASHBOARD ──────────────────────────────────────────────────────────────
+export default function Dashboard({ navigate, session }) {
+  const [nav, setNav]             = useState('alunos')
+  const [students, setStudents]   = useState([])
+  const [workouts, setWorkouts]   = useState([])
   const [showModal, setShowModal] = useState(false)
-  const [updating, setUpdating]  = useState(null)
+  const [search, setSearch]       = useState('')
+  const [filter, setFilter]       = useState('Todos')
+  const [loading, setLoading]     = useState(true)
 
-  const updateStatus = async (goalId, status) => {
-    setUpdating(goalId)
-    await supabase.from('student_goals').update({ status }).eq('id', goalId)
-    await onUpdate()
-    setUpdating(null)
+  useEffect(() => { fetchAll() }, [])
+
+  const fetchAll = async () => {
+    setLoading(true)
+    const uid = session.user.id
+    const { data: studs } = await supabase.from('students').select('*').eq('teacher_id', uid).order('created_at', { ascending: false })
+
+    if (studs && studs.length > 0) {
+      const ids = studs.map(s => s.id)
+      const [att, prog, logs, feed, plansRes] = await Promise.all([
+        supabase.from('attendance').select('student_id,date').in('student_id', ids),
+        supabase.from('progress_entries').select('student_id,date').in('student_id', ids),
+        supabase.from('exercise_logs').select('student_id,date').in('student_id', ids),
+        supabase.from('student_feedbacks').select('student_id,date').in('student_id', ids),
+        supabase.from('workout_plans').select('*, workout_days(*)').in('student_id', ids).eq('status', 'active'),
+      ])
+
+      const datesByStudent = {}
+      ids.forEach(id => { datesByStudent[id] = [] })
+      ;[att, prog, logs, feed].forEach(({ data }) => {
+        if (data) data.forEach(r => datesByStudent[r.student_id]?.push(r.date))
+      })
+
+      // Monta mapa de dias planejados por aluno (ex: { uuid: ['Seg','Qua','Sex'] })
+      const plannedDaysMap = {}
+      ids.forEach(id => { plannedDaysMap[id] = [] })
+      if (plansRes.data) {
+        plansRes.data.forEach(p => {
+          const days = (p.workout_days || []).map(d => d.day_of_week).filter(Boolean)
+          plannedDaysMap[p.student_id] = [...new Set([...(plannedDaysMap[p.student_id] || []), ...days])]
+        })
+      }
+
+      const today = new Date(); today.setHours(0, 0, 0, 0)
+      const enriched = studs.map(s => {
+        const dates      = datesByStudent[s.id] || []
+        const streak     = calcStreak(dates, plannedDaysMap[s.id] || [])
+        let lastSeenDays = 999
+        if (dates.length > 0) {
+          const sorted = [...dates].sort((a, b) => new Date(b) - new Date(a))
+          const last = new Date(sorted[0] + 'T12:00:00')
+          lastSeenDays = Math.floor((today - last) / 86400000)
+        }
+        return { ...s, streak, lastSeenDays }
+      })
+      setStudents(enriched)
+
+      // Monta workouts para a aba Treinos
+      const plans = plansRes.data || []
+      if (plans.length > 0) {
+        const attMap = {}; const logMap = {}
+        ids.forEach(id => { attMap[id] = []; logMap[id] = [] })
+        if (att.data) att.data.forEach(r => attMap[r.student_id]?.push(r.date))
+        if (logs.data) logs.data.forEach(r => logMap[r.student_id]?.push(r.date))
+
+        setWorkouts(plans.map(p => {
+          const st   = studs.find(s => s.id === p.student_id)
+          const days = (p.workout_days || []).map(d => d.day_of_week).filter(Boolean)
+          return { ...p, studentName: st?.name || '—', goal: st?.goal || '', days, workoutDays: p.workout_days || [], attendanceDates: attMap[p.student_id] || [], logDates: logMap[p.student_id] || [] }
+        }))
+      }
+    } else {
+      setStudents([])
+    }
+    setLoading(false)
   }
 
-  const deleteGoal = async (goalId) => {
-    await supabase.from('student_goals').delete().eq('id', goalId)
-    await onUpdate()
-  }
+  const logout = async () => { await supabase.auth.signOut(); window.location.reload() }
 
-  const ativas     = goals.filter(g => g.status === 'ativa')
-  const concluidas = goals.filter(g => g.status === 'concluida')
-  const sugestoes  = METAS_SUGERIDAS[student?.goal] || []
+  const filtered = students.filter(s => {
+    const ms = s.name.toLowerCase().includes(search.toLowerCase())
+    const mf = filter === 'Todos' ? true : filter === 'Ativos' ? s.lastSeenDays < 5 : filter === 'Inativos' ? s.lastSeenDays >= 5 : s.goal === filter
+    return ms && mf
+  })
 
-  const cardStyle = { background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:14, padding:'16px 18px', marginBottom:10 }
+  const ativos   = students.filter(s => s.lastSeenDays < 5).length
+  const inativos = students.length - ativos
+
+  if (loading) return <div style={{ minHeight: '100vh', background: 'linear-gradient(175deg,#4AB8E8,#B3E5F7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFF', fontSize: 16, fontWeight: 700, fontFamily: "'DM Sans',sans-serif", textShadow: '0 1px 4px rgba(0,0,0,0.2)' }}>☀️ Carregando...</div>
 
   return (
-    <div>
-      {showModal && <NovaMetaModal studentId={studentId} goal={student?.goal} onSave={onUpdate} onClose={()=>setShowModal(false)} />}
+    <div style={{ display: 'flex', minHeight: '100vh', fontFamily: "'DM Sans','Segoe UI',sans-serif", position: 'relative' }}>
+      <SkyBackground />
 
-      {/* Header */}
-      <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:18 }}>
-        <div>
-          <div style={{ fontSize:18,fontWeight:800,color:'#E2E8F0' }}>🎯 Minhas Metas</div>
-          <div style={{ fontSize:12,color:'#475569',marginTop:2 }}>{ativas.length} ativa{ativas.length!==1?'s':''} · {concluidas.length} concluída{concluidas.length!==1?'s':''}</div>
-        </div>
-        <button onClick={()=>setShowModal(true)} style={{ padding:'10px 18px',borderRadius:10,border:'none',background:'linear-gradient(135deg,#34D399,#059669)',color:'#FFF',fontWeight:800,fontSize:13,cursor:'pointer',boxShadow:'0 4px 15px rgba(52,211,153,0.3)' }}>
-          + Nova Meta
-        </button>
-      </div>
-
-      {/* Sugestões rápidas — sempre visíveis */}
-      {(() => {
-        const jaAdicionadas = goals.map(g => g.title)
-        const disponiveis = sugestoes.filter(s => !jaAdicionadas.includes(s.titulo) && s.titulo !== 'Meta personalizada')
-        if (!disponiveis.length) return null
-        return (
-          <div style={{ marginBottom:20 }}>
-            <div style={{ fontSize:11,color:'#64748B',fontWeight:700,letterSpacing:1,textTransform:'uppercase',marginBottom:10 }}>
-              💡 Sugestões para {student?.goal}
-            </div>
-            <div style={{ display:'flex',flexDirection:'column',gap:6 }}>
-              {disponiveis.slice(0,4).map((s,i) => {
-                const cc = CAT_COLORS[s.categoria] || CAT_COLORS.outro
-                return (
-                  <div key={i} style={{ display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,background:cc.bg,border:`1px solid ${cc.border}`,transition:'all 0.15s' }}>
-                    <span style={{ fontSize:18 }}>{s.icon}</span>
-                    <span style={{ fontSize:13,color:'#CBD5E1',fontWeight:600,flex:1 }}>{s.titulo}</span>
-                    <button
-                      onClick={async () => {
-                        await supabase.from('student_goals').insert([{
-                          student_id: studentId,
-                          title: s.titulo,
-                          description: s.desc,
-                          category: s.categoria,
-                          target_unit: s.unidade || null,
-                          status: 'ativa',
-                        }])
-                        await onUpdate()
-                      }}
-                      style={{ width:28,height:28,borderRadius:'50%',border:`1px solid ${cc.border}`,background:cc.bg,color:cc.text,fontSize:18,fontWeight:800,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,lineHeight:1 }}>
-                      +
-                    </button>
-                  </div>
-                )
-              })}
+      {/* SIDEBAR */}
+      <div style={{ position: 'relative', flexShrink: 0, width: 220, zIndex: 2 }}>
+        <aside style={{ width: 220, background: SIDEBAR_BG, display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh' }}>
+          <div style={{ padding: '26px 18px 12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 11, background: 'linear-gradient(135deg,#34D399,#059669)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, boxShadow: '0 3px 12px rgba(52,211,153,0.35)' }}>💪</div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#FFF', letterSpacing: '-0.3px' }}>TrainerApp</div>
+                <div style={{ fontSize: 10, color: '#BEE3F8', fontWeight: 500 }}>Gestão de Alunos</div>
+              </div>
             </div>
           </div>
-        )
-      })()}
+          <WaveDivider />
+          <nav style={{ flex: 1, padding: '0 10px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {NAV.map(item => <NavItem key={item.id} item={item} active={nav === item.id} onClick={() => setNav(item.id)} />)}
+          </nav>
+          <WaveDivider />
+          <div style={{ padding: '4px 10px 26px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <NavItem item={{ id: 'perfil', icon: '👤', label: 'Meu Perfil' }}   active={false} onClick={() => navigate('teacher-profile')} />
+            <NavItem item={{ id: 'sair',   icon: '🚪', label: 'Sair' }}         active={false} onClick={logout} />
+          </div>
+        </aside>
+        {/* Onda lateral */}
+        <svg viewBox="0 0 20 900" preserveAspectRatio="none" style={{ position: 'absolute', top: 0, right: -18, height: '100vh', width: 20, zIndex: 10, pointerEvents: 'none' }}>
+          <path d="M0,0 C10,50 10,50 0,100 C10,150 10,150 0,200 C10,250 10,250 0,300 C10,350 10,350 0,400 C10,450 10,450 0,500 C10,550 10,550 0,600 C10,650 10,650 0,700 C10,750 10,750 0,800 C10,850 10,850 0,900" fill={SIDEBAR_BG} />
+        </svg>
+      </div>
 
-      {/* Metas ativas */}
-      {ativas.length === 0 && concluidas.length === 0 ? (
-        <div style={{ textAlign:'center',padding:'30px 20px 10px' }}>
-          <div style={{ fontSize:38,marginBottom:10 }}>🎯</div>
-          <div style={{ fontSize:15,fontWeight:700,color:'#E2E8F0',marginBottom:6 }}>Nenhuma meta ainda</div>
-          <div style={{ fontSize:13,color:'#475569' }}>Clique no + de uma sugestão acima ou crie a sua própria!</div>
-        </div>
-      ) : (
-        <>
-          {ativas.length > 0 && (
-            <div style={{ marginBottom:22 }}>
-              <div style={{ fontSize:11,color:'#64748B',fontWeight:700,letterSpacing:1,textTransform:'uppercase',marginBottom:10 }}>Em andamento</div>
-              {ativas.map(g => {
-                const cc = CAT_COLORS[g.category] || CAT_COLORS.outro
-                const isUpdating = updating === g.id
-                const daysLeft = g.deadline ? Math.ceil((new Date(g.deadline) - new Date()) / 86400000) : null
-                return (
-                  <div key={g.id} style={{ ...cardStyle, borderLeft:`3px solid ${cc.text}` }}>
-                    <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:10 }}>
-                      <div style={{ flex:1 }}>
-                        <div style={{ display:'flex',alignItems:'center',gap:8,marginBottom:4,flexWrap:'wrap' }}>
-                          <span style={{ fontSize:14,fontWeight:800,color:'#E2E8F0' }}>{g.title}</span>
-                          <span style={{ fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:20,background:cc.bg,color:cc.text,border:`1px solid ${cc.border}` }}>{g.category}</span>
-                        </div>
-                        {g.target_value && (
-                          <div style={{ fontSize:13,color:'#94A3B8',marginBottom:4 }}>
-                            🎯 Alvo: <strong style={{ color:cc.text }}>{g.target_value} {g.target_unit}</strong>
-                          </div>
-                        )}
-                        {g.description && g.description !== g.title && (
-                          <div style={{ fontSize:12,color:'#475569',marginBottom:4,fontStyle:'italic' }}>{g.description}</div>
-                        )}
-                        {daysLeft !== null && (
-                          <div style={{ fontSize:11,color: daysLeft < 7 ? '#F87171' : daysLeft < 30 ? '#FBBF24' : '#64748B',fontWeight:600 }}>
-                            {daysLeft > 0 ? `⏳ ${daysLeft} dias restantes` : daysLeft === 0 ? '🔔 Prazo hoje!' : `⚠️ ${Math.abs(daysLeft)} dias em atraso`}
-                          </div>
-                        )}
-                      </div>
-                      <button onClick={()=>updateStatus(g.id,'concluida')} disabled={isUpdating}
-                        style={{ padding:'8px 14px',borderRadius:8,border:'none',background:'rgba(52,211,153,0.15)',color:'#34D399',fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap',flexShrink:0 }}>
-                        {isUpdating ? '...' : '✅ Concluir'}
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
+      {/* MAIN */}
+      <main style={{ flex: 1, padding: '32px 28px', background: 'transparent', overflowY: 'auto', position: 'relative', zIndex: 1 }}>
+
+        {/* ABA: MEUS ALUNOS */}
+        {nav === 'alunos' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <div>
+                <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0C3251', letterSpacing: '-0.5px', marginBottom: 3, textShadow:'0 1px 3px rgba(255,255,255,0.5)' }}>Meus Alunos</h1>
+                <p style={{ fontSize: 13, color: '#0C4A6E', fontWeight:600 }}>
+                  <span style={{ color: '#34D399', fontWeight: 700 }}>{ativos} ativos</span>{' · '}
+                  <span style={{ color: YELLOW, fontWeight: 700 }}>{inativos} inativos</span>{' · '}
+                  {students.length} cadastrados
+                </p>
+              </div>
+              <button onClick={() => setShowModal(true)} style={{ background: 'linear-gradient(135deg,#F5C842,#D97706)', border: 'none', borderRadius: 10, padding: '11px 22px', color: '#431C00', fontWeight: 800, fontSize: 13, cursor: 'pointer', boxShadow: '0 4px 14px rgba(245,200,66,0.45)' }}>
+                + Novo Aluno
+              </button>
             </div>
-          )}
 
-          {concluidas.length > 0 && (
-            <div>
-              <div style={{ fontSize:11,color:'#64748B',fontWeight:700,letterSpacing:1,textTransform:'uppercase',marginBottom:10 }}>Concluídas 🏆</div>
-              {concluidas.map(g => (
-                <div key={g.id} style={{ ...cardStyle, opacity:0.7 }}>
-                  <div style={{ display:'flex',alignItems:'center',gap:10 }}>
-                    <span style={{ fontSize:20 }}>✅</span>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontSize:13,fontWeight:700,color:'#94A3B8',textDecoration:'line-through' }}>{g.title}</div>
-                      {g.target_value && <div style={{ fontSize:11,color:'#475569' }}>{g.target_value} {g.target_unit}</div>}
-                    </div>
-                    <button onClick={()=>deleteGoal(g.id)} style={{ background:'transparent',border:'none',color:'#334155',cursor:'pointer',fontSize:14 }}>🗑</button>
-                  </div>
+            {/* Busca + Filtros */}
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+                <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: '#94A3B8' }}>🔍</span>
+                <input placeholder="Buscar aluno..." value={search} onChange={e => setSearch(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px 10px 36px', background: 'rgba(255,255,255,0.75)', border: '1.5px solid rgba(255,255,255,0.9)', borderRadius: 10, fontSize: 13, color: '#0D1B2A', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', backdropFilter:'blur(6px)' }} />
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {['Todos', 'Ativos', 'Inativos', 'Ganho de Massa', 'Emagrecimento', 'Força e Performance', 'Condicionamento'].map(f => (
+                  <button key={f} onClick={() => setFilter(f)}
+                    style={{ padding: '8px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none', transition: 'all 0.15s', background: filter === f ? `linear-gradient(135deg,${YELLOW},#F59E0B)` : 'rgba(255,255,255,0.7)', color: filter === f ? '#7C3700' : '#64748B', boxShadow: filter === f ? '0 3px 10px rgba(245,200,66,0.4)' : '0 1px 3px rgba(0,0,0,0.07)' }}>
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Legenda ofensiva */}
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 20, padding: '10px 16px', background: 'rgba(255,255,255,0.45)', borderRadius: 10, border: `1px solid rgba(255,255,255,0.7)`, backdropFilter:'blur(6px)' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#0C4A6E' }}>🔥 Ofensiva:</span>
+              {[{ label: '1–6d', c: '#FDE68A' }, { label: '1 sem+', c: '#FCD34D' }, { label: '2 sem+', c: '#F5C842' }, { label: '1 mês+', c: '#F59E0B' }, { label: '3 mes+', c: '#EA580C' }, { label: '6 mes+', c: '#DC2626' }, { label: '1 ano 👑', c: '#D97706' }].map(({ label, c }) => (
+                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: c, boxShadow: `0 0 5px ${c}80` }} />
+                  <span style={{ fontSize: 10, color: '#0C4A6E', fontWeight: 600 }}>{label}</span>
                 </div>
               ))}
             </div>
-          )}
-        </>
-      )}
 
-      <div style={{ marginTop:20,padding:'12px 16px',background:'rgba(52,211,153,0.05)',borderRadius:10,border:'1px solid rgba(52,211,153,0.1)' }}>
-        <div style={{ fontSize:11,color:'#34D399',fontWeight:700,marginBottom:3 }}>💡 Suas metas são visíveis para o seu professor</div>
-        <div style={{ fontSize:11,color:'#475569' }}>Ele acompanha sua evolução mas não pode editar suas metas — elas são suas!</div>
-      </div>
-    </div>
-  )
-}
-
-
-function StudentCardioTab({ studentId, student, sessions, onNewSession }) {
-  const [showModal,    setShowModal]    = useState(false)
-  const [filterType,   setFilterType]   = useState('todos')
-
-  const presc    = SV_PRESCRICAO[student?.goal]
-  const filtered = filterType === 'todos' ? sessions : sessions.filter(s => s.type === filterType)
-
-  const totalMin = sessions.reduce((a,s) => a + (s.duration_minutes||0), 0)
-  const totalKm  = sessions.reduce((a,s) => a + (s.distance_km||0), 0)
-  const avgPse   = sessions.length ? (sessions.reduce((a,s) => a+(s.pse||0),0)/sessions.length).toFixed(1) : '—'
-
-  const card  = { background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:14, padding:'18px 18px', marginBottom:14 }
-  const lbl11 = { fontSize:11, color:'#64748B', fontWeight:700, textTransform:'uppercase', letterSpacing:1 }
-
-  return (
-    <div>
-      {showModal && <SvCardioModal studentId={studentId} onSave={() => { onNewSession(); setShowModal(false) }} onClose={() => setShowModal(false)} />}
-
-      {/* ── PRESCRIÇÃO ── */}
-      {presc && (
-        <div style={card}>
-          <div style={{ fontSize:14, fontWeight:800, color:'#E2E8F0', marginBottom:14 }}>🎯 Prescrição do seu Professor</div>
-
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:14 }}>
-            {[
-              { icon:'📅', label:'Frequência', val:presc.sessoes  },
-              { icon:'⏱',  label:'Duração',    val:presc.duracao  },
-              { icon:'📊', label:'Volume/sem',  val:presc.volume   },
-            ].map(({ icon, label, val }) => (
-              <div key={label} style={{ background:'rgba(255,255,255,0.05)', borderRadius:10, padding:'10px 8px', textAlign:'center' }}>
-                <div style={{ fontSize:16, marginBottom:3 }}>{icon}</div>
-                <div style={{ ...lbl11, marginBottom:3 }}>{label}</div>
-                <div style={{ fontSize:11, fontWeight:800, color:'#E2E8F0', lineHeight:1.3 }}>{val}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* PSE alvo */}
-          <div style={{ marginBottom:12 }}>
-            <div style={{ ...lbl11, marginBottom:8 }}>🎯 Esforço alvo — {presc.pse.label}</div>
-            <div style={{ height:8, borderRadius:8, background:'linear-gradient(90deg,#60A5FA,#34D399,#F5C842,#F59E0B,#EF4444)', position:'relative', marginBottom:6 }}>
-              <div style={{ position:'absolute', left:`${(presc.pse.min-1)/9*100}%`, width:`${(presc.pse.max-presc.pse.min)/9*100}%`, height:'100%', background:'rgba(255,255,255,0.25)', borderRadius:8, border:'2px solid #FFF' }} />
-            </div>
-            <div style={{ fontSize:12, color:'#94A3B8' }}>🏃 {presc.pace}</div>
-          </div>
-
-          {/* Modalidades */}
-          <div style={{ marginBottom:12 }}>
-            <div style={{ ...lbl11, marginBottom:8 }}>Modalidades recomendadas</div>
-            <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-              {presc.tipo.map(t => {
-                const info = SV_CARDIO_TYPES.find(x => x.id === t)
-                return <span key={t} style={{ fontSize:11, fontWeight:700, padding:'4px 12px', borderRadius:20, background:`${info?.color}20`, color:info?.color, border:`1px solid ${info?.color}40` }}>{info?.icon} {info?.label}</span>
-              })}
-            </div>
-          </div>
-
-          {/* Dica */}
-          <div style={{ background:'rgba(52,211,153,0.08)', borderRadius:8, padding:'10px 14px', borderLeft:'3px solid #34D399' }}>
-            <span style={{ fontSize:12, color:'#94A3B8', lineHeight:1.6 }}>💡 {presc.obs}</span>
-          </div>
-        </div>
-      )}
-
-      {/* ── RESUMO ── */}
-      {sessions.length > 0 && (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:14 }}>
-          {[
-            { label:'Sessões',     val:sessions.length,         unit:'',    color:'#34D399' },
-            { label:'Total Tempo', val:totalMin>=60 ? `${Math.floor(totalMin/60)}h${String(totalMin%60).padStart(2,'0')}` : totalMin, unit:totalMin<60?'min':'', color:'#8B5CF6' },
-            { label:'Total Km',    val:totalKm.toFixed(1),      unit:'km',  color:'#3B82F6' },
-          ].map(({ label, val, unit, color }) => (
-            <div key={label} style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:12, padding:'12px', textAlign:'center' }}>
-              <div style={{ ...lbl11, marginBottom:4 }}>{label}</div>
-              <div style={{ fontSize:20, fontWeight:800, color }}>{val}<span style={{ fontSize:10, color:'#475569' }}>{unit}</span></div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* ── HISTÓRICO ── */}
-      <div style={card}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
-          <div style={{ fontSize:14, fontWeight:800, color:'#E2E8F0' }}>📋 Minhas Sessões</div>
-          <button onClick={() => setShowModal(true)} style={{ padding:'8px 16px', borderRadius:10, border:'none', background:'linear-gradient(135deg,#34D399,#059669)', color:'#FFF', fontWeight:800, fontSize:12, cursor:'pointer' }}>
-            + Registrar
-          </button>
-        </div>
-
-        {/* Filtros */}
-        <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:14 }}>
-          <button onClick={() => setFilterType('todos')} style={{ padding:'5px 12px', borderRadius:20, fontSize:11, fontWeight:700, cursor:'pointer', border:'none', background: filterType==='todos' ? '#34D399' : 'rgba(255,255,255,0.07)', color: filterType==='todos' ? '#FFF' : '#94A3B8' }}>
-            Todos
-          </button>
-          {SV_CARDIO_TYPES.filter(t => sessions.some(s => s.type === t.id)).map(t => (
-            <button key={t.id} onClick={() => setFilterType(t.id)} style={{ padding:'5px 12px', borderRadius:20, fontSize:11, fontWeight:700, cursor:'pointer', border:'none', background: filterType===t.id ? t.color : 'rgba(255,255,255,0.07)', color: filterType===t.id ? '#FFF' : '#94A3B8', transition:'all 0.15s' }}>
-              {t.icon} {t.label}
-            </button>
-          ))}
-        </div>
-
-        {filtered.length === 0 ? (
-          <div style={{ textAlign:'center', padding:'40px 20px', color:'#334155' }}>
-            <div style={{ fontSize:32, marginBottom:8 }}>❤️</div>
-            <div style={{ fontSize:13 }}>Nenhuma sessão registrada ainda</div>
-            <div style={{ fontSize:12, marginTop:4, color:'#1E293B' }}>Clique em "+ Registrar" para começar</div>
-          </div>
-        ) : (
-          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-            {filtered.map(s => {
-              const info = SV_CARDIO_TYPES.find(t => t.id === s.type)
-              const pace = svFormatPace(s.distance_km, s.duration_minutes)
-              return (
-                <div key={s.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'12px 14px', background:'rgba(255,255,255,0.04)', borderRadius:12, border:`1px solid ${info?.color}25` }}>
-                  <div style={{ width:36, height:36, borderRadius:10, background:`${info?.color}20`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, flexShrink:0 }}>{info?.icon}</div>
-                  <div style={{ flex:1 }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:3 }}>
-                      <span style={{ fontSize:13, fontWeight:800, color:'#E2E8F0' }}>{info?.label}</span>
-                      <span style={{ fontSize:10, color:'#475569' }}>{String(s.date).slice(0,10).split('-').reverse().join('/')}</span>
-                      {s.type==='hiit' && s.work_seconds && (
-                        <span style={{ fontSize:10, fontWeight:700, color:'#F5C842', background:'rgba(245,200,66,0.1)', padding:'1px 7px', borderRadius:20 }}>
-                          {s.work_seconds}s/{s.rest_seconds}s × {s.rounds}x
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ display:'flex', flexWrap:'wrap', gap:10 }}>
-                      {s.duration_minutes && <span style={{ fontSize:11, color:'#64748B' }}>⏱ {s.duration_minutes}min</span>}
-                      {s.distance_km      && <span style={{ fontSize:11, color:'#64748B' }}>📍 {s.distance_km}km</span>}
-                      {pace               && <span style={{ fontSize:11, color:'#EF4444', fontWeight:700 }}>🏃 {pace}</span>}
-                      {s.avg_hr           && <span style={{ fontSize:11, color:'#64748B' }}>❤️ {s.avg_hr}bpm</span>}
-                      {s.pse              && <span style={{ fontSize:11, color:'#64748B' }}>PSE {s.pse}/10</span>}
-                    </div>
-                    {s.notes && <div style={{ fontSize:11, color:'#475569', marginTop:3, fontStyle:'italic' }}>{s.notes}</div>}
-                  </div>
-                  <div style={{ width:32, height:32, borderRadius:'50%', background:`hsl(${120-(s.pse||5)*12},60%,45%)`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:800, color:'#FFF', flexShrink:0 }}>
-                    {s.pse}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-export default function StudentView({ studentId }) {
-  const [student, setStudent]     = useState(null)
-  const [activePlan, setActivePlan] = useState(null)
-  const [days, setDays]           = useState([])
-  const [activeDay, setActiveDay] = useState(0)
-  const [progress, setProgress]   = useState([])
-  const [tab, setTab]               = useState('treino')
-  const [loading, setLoading]       = useState(true)
-  const [cardioSessions, setCardioSessions] = useState([])
-  const [cardioFilter, setCardioFilter]     = useState('todos')
-  const [attendance, setAttendance] = useState([])
-  const [exLogs, setExLogs]         = useState([])
-  const [checkedIn, setCheckedIn]   = useState(false)
-  const [showWeightModal, setShowWeightModal]   = useState(false)
-  const [showMeasureModal, setShowMeasureModal] = useState(false)
-  const [goals, setGoals]                       = useState([])
-
-  useEffect(() => {
-    const load = async () => {
-      const { data: st } = await supabase.from('students').select('*').eq('id', studentId).single()
-      if (st) setStudent(st)
-
-      const { data: cardio } = await supabase
-        .from('cardio_sessions').select('*')
-        .eq('student_id', studentId).order('date', { ascending: false })
-      if (cardio) setCardioSessions(cardio)
-
-      const { data: plans } = await supabase
-        .from('workout_plans').select('*')
-        .eq('student_id', studentId).eq('status', 'active')
-        .order('updated_at', { ascending: false }).limit(1)
-
-      if (plans && plans[0]) {
-        setActivePlan(plans[0])
-        const { data: daysData } = await supabase
-          .from('workout_days').select('*, exercises(*)')
-          .eq('plan_id', plans[0].id).order('order_index')
-        if (daysData) setDays(daysData.map(d => ({ ...d, exercises: (d.exercises || []).sort((a, b) => a.order_index - b.order_index) })))
-      }
-
-      const { data: pr } = await supabase
-        .from('progress_entries').select('*')
-        .eq('student_id', studentId).order('date', { ascending: true })
-      if (pr) setProgress(pr)
-
-      const { data: att } = await supabase
-        .from('attendance').select('date')
-        .eq('student_id', studentId).order('date', { ascending: false })
-      if (att) {
-        setAttendance(att.map(a => a.date))
-        const todayStr = new Date().toISOString().slice(0,10)
-        setCheckedIn(att.some(a => a.date === todayStr))
-      }
-
-      const { data: logs } = await supabase
-        .from('exercise_logs').select('*, exercises(name)')
-        .eq('student_id', studentId).order('date', { ascending: true })
-      if (logs) setExLogs(logs)
-
-      const { data: gs } = await supabase
-        .from('student_goals').select('*')
-        .eq('student_id', studentId).order('created_at', { ascending: false })
-      if (gs) setGoals(gs)
-
-      setLoading(false)
-    }
-    load()
-  }, [studentId])
-
-  if (loading) return (
-    <div style={{ minHeight: '100vh', background: '#080B12', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#34D399', fontSize: 18 }}>
-      Carregando seu treino...
-    </div>
-  )
-
-  if (!student) return (
-    <div style={{ minHeight: '100vh', background: '#080B12', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}>
-      Aluno não encontrado.
-    </div>
-  )
-
-  const day = days[activeDay]
-  const color = DAY_COLORS[activeDay % DAY_COLORS.length]
-
-  return (
-    <div style={{ minHeight: '100vh', background: '#080B12', padding: '24px 16px', fontFamily: "'Segoe UI', system-ui, sans-serif", color: '#E2E8F0' }}>
-      <div style={{ maxWidth: 680, margin: '0 auto' }}>
-
-        {/* Header */}
-        <div style={{ background: 'linear-gradient(135deg,#0f2027,#203a43)', borderRadius: 20, padding: 24, marginBottom: 20, border: '1px solid rgba(52,211,153,0.15)' }}>
-          <div style={{ fontSize: 10, color: '#34D399', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 4 }}>Seu Plano de Treino</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginBottom: 2 }}>Olá, {student.name.split(' ')[0]}! 💪</div>
-          <div style={{ fontSize: 13, color: '#475569' }}>{student.goal} · {student.level}</div>
-
-          {/* Linha inferior: plano + streak + check-in */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, gap: 10, flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              {activePlan && (
-                <div style={{ background: 'rgba(52,211,153,0.08)', borderRadius: 8, padding: '7px 13px' }}>
-                  <span style={{ fontSize: 12, color: '#34D399', fontWeight: 600 }}>📋 {activePlan.title}</span>
-                </div>
-              )}
-              {/* Streak — usa mesma lógica do Dashboard: respeita dias planejados */}
-              {(() => {
-                const JS_TO_DIA = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
-                const plannedDays = days.map(d => d.day_of_week).filter(Boolean)
-                const doneSet = new Set(attendance.map(d => String(d).slice(0,10)))
-                let streak = 0
-                const todayD = new Date(); todayD.setHours(0,0,0,0)
-                const cursor = new Date(todayD)
-                if (plannedDays.length === 0) {
-                  // sem plano: conta dias consecutivos de presença simples
-                  for (let i = 0; i < 730; i++) {
-                    const ds = cursor.toISOString().slice(0,10)
-                    if (doneSet.has(ds)) streak++
-                    else if (i > 0) break
-                    cursor.setDate(cursor.getDate()-1)
-                  }
-                } else {
-                  for (let i = 0; i < 730; i++) {
-                    const dayName = JS_TO_DIA[cursor.getDay()]
-                    const isToday = cursor.getTime() === todayD.getTime()
-                    if (plannedDays.includes(dayName)) {
-                      const ds = cursor.toISOString().slice(0,10)
-                      if (doneSet.has(ds)) streak++
-                      else if (!isToday) break
-                    }
-                    cursor.setDate(cursor.getDate()-1)
-                  }
-                }
-                let color = '#94A3B8', glow = false
-                if      (streak < 1)   color = '#94A3B8'
-                else if (streak < 7)   color = '#FDE68A'
-                else if (streak < 14)  color = '#FCD34D'
-                else if (streak < 30)  color = '#F5C842'
-                else if (streak < 90)  { color = '#F59E0B'; glow = true }
-                else if (streak < 180) { color = '#EA580C'; glow = true }
-                else if (streak < 365) { color = '#DC2626'; glow = true }
-                else                   { color = '#D97706'; glow = true }
-                const emoji = streak>=365?'👑':streak>=180?'💎':streak>=90?'⚡':streak>=7?'🔥':'✨'
-                if (streak === 0) return null
-                return (
-                  <div style={{ display:'flex', alignItems:'center', gap:6, background:`${color}18`, borderRadius:8, padding:'7px 13px', border:`1px solid ${color}40`, boxShadow:glow?`0 0 12px ${color}55`:'none', transition:'all 0.3s' }}>
-                    <span style={{ fontSize:15 }}>{emoji}</span>
-                    <span style={{ fontSize:12, fontWeight:800, color }}>{streak} dia{streak!==1?'s':''} seguidos</span>
-                  </div>
-                )
-              })()}
-            </div>
-
-            {/* Botão check-in */}
-            <button
-              disabled={checkedIn}
-              onClick={async () => {
-                const todayStr = new Date().toISOString().slice(0,10)
-                await supabase.from('attendance').insert([{ student_id: studentId, date: todayStr, status: 'present' }])
-                setAttendance(prev => [todayStr, ...prev])
-                setCheckedIn(true)
-              }}
-              style={{ padding: '9px 18px', borderRadius: 10, border: 'none', cursor: checkedIn ? 'default' : 'pointer', fontWeight: 800, fontSize: 13, transition: 'all 0.2s',
-                background: checkedIn ? 'rgba(52,211,153,0.15)' : 'linear-gradient(135deg,#34D399,#059669)',
-                color: checkedIn ? '#34D399' : '#FFF',
-                boxShadow: checkedIn ? 'none' : '0 4px 15px rgba(52,211,153,0.35)' }}>
-              {checkedIn ? '✅ Presença marcada!' : '📍 Marcar presença hoje'}
-            </button>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-          {[['treino', '🏋️ Treino'], ['metas', '🎯 Metas'], ['evolucao', '📈 Evolução'], ['cardio', '❤️ Cárdio']].map(([id, label]) => (
-            <button key={id} onClick={() => setTab(id)} style={{
-              flex: 1, padding: '12px', borderRadius: 10, border: 'none',
-              background: tab === id ? 'linear-gradient(135deg,#34D399,#059669)' : 'rgba(255,255,255,0.05)',
-              color: tab === id ? '#fff' : '#64748B', fontWeight: 700, fontSize: 14, cursor: 'pointer',
-            }}>{label}</button>
-          ))}
-        </div>
-
-        {/* ── ABA TREINO ── */}
-        {tab === 'treino' && (
-          <>
-            {!activePlan || days.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: 60, color: '#334155' }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>🏋️</div>
-                <div>Nenhum treino ativo. Aguarde seu professor configurar seu plano.</div>
+            {students.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '80px 20px', color: '#0C4A6E', opacity: 0.5 }}>
+                <div style={{ fontSize: 48, marginBottom: 14 }}>🏋️</div>
+                <div style={{ fontSize: 18, fontWeight: 700 }}>Nenhum aluno cadastrado</div>
+                <div style={{ fontSize: 13, marginTop: 6 }}>Clique em "+ Novo Aluno" para começar</div>
               </div>
             ) : (
-              <>
-                {/* Day selector */}
-                <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-                  {days.map((d, i) => {
-                    const c = DAY_COLORS[i % DAY_COLORS.length]
-                    return (
-                      <button key={d.id} onClick={() => setActiveDay(i)} style={{
-                        flex: 1, minWidth: 70, padding: '12px 8px', borderRadius: 12,
-                        border: activeDay === i ? `2px solid ${c}` : '1px solid rgba(255,255,255,0.08)',
-                        background: activeDay === i ? `${c}18` : 'rgba(255,255,255,0.03)',
-                        color: activeDay === i ? c : '#475569', fontWeight: 800, fontSize: 13, cursor: 'pointer',
-                      }}>
-                        {d.name}
-                        {d.day_of_week && <div style={{ fontSize: 9, marginTop: 2, fontWeight: 500 }}>{d.day_of_week}</div>}
-                      </button>
-                    )
-                  })}
-                </div>
-
-                {day && (
-                  <div style={{ background: '#0D1117', borderRadius: 16, overflow: 'hidden', border: `1px solid ${color}30` }}>
-                    {/* Day header */}
-                    <div style={{ background: `${color}12`, padding: '16px 20px', borderBottom: `1px solid ${color}25` }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, boxShadow: `0 0 8px ${color}` }} />
-                        <span style={{ fontWeight: 700, color, fontSize: 16 }}>{day.name}</span>
-                        {day.focus && <span style={{ fontSize: 13, color: '#475569' }}>— {day.focus}</span>}
-                      </div>
-                      <div style={{ fontSize: 11, color: '#334155', marginTop: 6 }}>
-                        ⚖️ Toque em <strong style={{ color: '#64748B' }}>Registrar carga</strong> em cada exercício para anotar o peso usado
-                      </div>
-                    </div>
-
-                    {/* Coluna headers */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 0.5fr 0.7fr 0.6fr', gap: 8, padding: '10px 20px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                      {['Exercício', 'Séries', 'Reps', 'Descanso'].map(h => (
-                        <div key={h} style={{ fontSize: 9, color: '#334155', textTransform: 'uppercase', letterSpacing: 1 }}>{h}</div>
-                      ))}
-                    </div>
-
-                    {/* Exercícios com log de carga */}
-                    {day.exercises.length === 0 ? (
-                      <div style={{ padding: 30, textAlign: 'center', color: '#334155', fontSize: 13 }}>Nenhum exercício neste dia ainda.</div>
-                    ) : (
-                      day.exercises.map(ex => (
-                        <ExerciseLogRow
-                          key={ex.id}
-                          ex={ex}
-                          studentId={studentId}
-                          dayColor={color}
-                        />
-                      ))
-                    )}
-                  </div>
-                )}
-              </>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
+                {filtered.map(st => <StudentCard key={st.id} st={st} onClick={() => navigate('student-detail', { id: st.id })} />)}
+                {Array.from({ length: (3 - (filtered.length % 3)) % 3 }).map((_, i) => <AddCard key={'add' + i} onClick={() => setShowModal(true)} />)}
+              </div>
             )}
-          </>
+          </div>
         )}
 
-        {/* ── ABA EVOLUÇÃO ── */}
-        {tab === 'evolucao' && (() => {
-          // Modais inline
-          const WeightModal = () => {
-            const [date, setDate]   = useState(new Date().toISOString().slice(0,10))
-            const [peso, setPeso]   = useState('')
-            const [notes, setNotes] = useState('')
-            const [saving, setSaving] = useState(false)
-            const inp = { background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:8, padding:'10px 12px', color:'#E2E8F0', fontSize:13, outline:'none', width:'100%', boxSizing:'border-box' }
-            const lbl = { fontSize:11, color:'#94A3B8', fontWeight:700, letterSpacing:0.8, textTransform:'uppercase', marginBottom:5, display:'block', marginTop:14 }
-            const save = async () => {
-              if (!peso) return
-              setSaving(true)
-              const { data } = await supabase.from('progress_entries').insert([{ student_id: studentId, date, weight: +peso, notes }]).select().single()
-              if (data) setProgress(prev => [...prev, data].sort((a,b) => a.date > b.date ? 1 : -1))
-              setSaving(false)
-              setShowWeightModal(false)
-            }
-            return (
-              <div onClick={() => setShowWeightModal(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:20 }}>
-                <div onClick={e => e.stopPropagation()} style={{ background:'#0D1117', border:'1px solid rgba(255,255,255,0.1)', borderRadius:20, padding:28, width:'100%', maxWidth:360 }}>
-                  <div style={{ fontSize:17, fontWeight:800, color:'#E2E8F0', marginBottom:18 }}>⚖️ Registrar Peso</div>
-                  <label style={lbl}>Data</label>
-                  <input type="date" style={inp} value={date} onChange={e => setDate(e.target.value)} />
-                  <label style={lbl}>Peso (kg)</label>
-                  <input type="number" step="0.1" placeholder="Ex: 68.5" style={inp} value={peso} onChange={e => setPeso(e.target.value)} />
-                  <label style={lbl}>Observações</label>
-                  <input type="text" placeholder="Opcional" style={inp} value={notes} onChange={e => setNotes(e.target.value)} />
-                  <button onClick={save} disabled={saving} style={{ width:'100%', background:'linear-gradient(135deg,#34D399,#059669)', border:'none', borderRadius:10, padding:13, color:'#FFF', fontWeight:800, fontSize:14, cursor:'pointer', marginTop:20 }}>
-                    {saving ? 'Salvando...' : 'Salvar'}
-                  </button>
-                  <button onClick={() => setShowWeightModal(false)} style={{ width:'100%', background:'transparent', border:'1px solid rgba(255,255,255,0.1)', borderRadius:10, padding:12, color:'#64748B', fontWeight:600, fontSize:13, cursor:'pointer', marginTop:8 }}>Cancelar</button>
-                </div>
-              </div>
-            )
-          }
+        {/* ABA: TREINOS */}
+        {nav === 'treinos' && <TabTreinos workouts={workouts} navigate={navigate} />}
 
-          const MeasureModal = () => {
-            const [date, setDate] = useState(new Date().toISOString().slice(0,10))
-            const [vals, setVals] = useState({ arm:'', waist:'', chest:'', hip:'', thigh:'', calf:'' })
-            const [saving, setSaving] = useState(false)
-            const inp = { background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:8, padding:'10px 12px', color:'#E2E8F0', fontSize:13, outline:'none', width:'100%', boxSizing:'border-box' }
-            const lbl = { fontSize:11, color:'#94A3B8', fontWeight:700, letterSpacing:0.8, textTransform:'uppercase', marginBottom:5, display:'block' }
-            const FIELDS = [
-              { key:'arm',   label:'Braço (cm)',   icon:'💪' },
-              { key:'chest', label:'Peito (cm)',   icon:'🫁' },
-              { key:'waist', label:'Cintura (cm)', icon:'📏' },
-              { key:'hip',   label:'Quadril (cm)', icon:'🍑' },
-              { key:'thigh', label:'Coxa (cm)',    icon:'🦵' },
-              { key:'calf',  label:'Panturrilha (cm)', icon:'🦶' },
-            ]
-            const save = async () => {
-              setSaving(true)
-              const measurements = Object.fromEntries(Object.entries(vals).filter(([,v]) => v !== '').map(([k,v]) => [k, +v]))
-              const { data } = await supabase.from('progress_entries').insert([{ student_id: studentId, date, measurements }]).select().single()
-              if (data) setProgress(prev => [...prev, data].sort((a,b) => a.date > b.date ? 1 : -1))
-              setSaving(false)
-              setShowMeasureModal(false)
-            }
-            return (
-              <div onClick={() => setShowMeasureModal(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:20 }}>
-                <div onClick={e => e.stopPropagation()} style={{ background:'#0D1117', border:'1px solid rgba(255,255,255,0.1)', borderRadius:20, padding:28, width:'100%', maxWidth:400, maxHeight:'90vh', overflowY:'auto' }}>
-                  <div style={{ fontSize:17, fontWeight:800, color:'#E2E8F0', marginBottom:6 }}>📏 Registrar Medidas</div>
-                  <div style={{ fontSize:12, color:'#475569', marginBottom:18 }}>Preencha apenas os campos que mediu hoje.</div>
-                  <div style={{ marginBottom:14 }}>
-                    <label style={lbl}>Data</label>
-                    <input type="date" style={inp} value={date} onChange={e => setDate(e.target.value)} />
-                  </div>
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-                    {FIELDS.map(f => (
-                      <div key={f.key}>
-                        <label style={lbl}>{f.icon} {f.label}</label>
-                        <input type="number" step="0.1" placeholder="cm" style={inp} value={vals[f.key]} onChange={e => setVals(prev => ({ ...prev, [f.key]: e.target.value }))} />
-                      </div>
-                    ))}
-                  </div>
-                  <button onClick={save} disabled={saving} style={{ width:'100%', background:'linear-gradient(135deg,#8B5CF6,#6D28D9)', border:'none', borderRadius:10, padding:13, color:'#FFF', fontWeight:800, fontSize:14, cursor:'pointer', marginTop:20 }}>
-                    {saving ? 'Salvando...' : 'Salvar Medidas'}
-                  </button>
-                  <button onClick={() => setShowMeasureModal(false)} style={{ width:'100%', background:'transparent', border:'1px solid rgba(255,255,255,0.1)', borderRadius:10, padding:12, color:'#64748B', fontWeight:600, fontSize:13, cursor:'pointer', marginTop:8 }}>Cancelar</button>
-                </div>
-              </div>
-            )
-          }
+        {/* ABA: EVOLUÇÃO */}
+        {nav === 'evolucao' && <TabEvolucao students={students} />}
 
-          // Dados para gráficos
-          const pesoData = progress.filter(p => p.weight).map(p => ({
-            x: String(p.date).slice(5,10).split('-').reverse().join('/'),
-            Peso: +p.weight,
-          }))
+        {/* ABA: CÁRDIO */}
+        {nav === 'cardio' && <TabCardio students={students} />}
 
-          const medidasData = progress.filter(p => p.measurements && Object.keys(p.measurements).length > 0).map(p => ({
-            x:          String(p.date).slice(5,10).split('-').reverse().join('/'),
-            Braço:      p.measurements.arm   ? +p.measurements.arm   : undefined,
-            Cintura:    p.measurements.waist ? +p.measurements.waist : undefined,
-            Peito:      p.measurements.chest ? +p.measurements.chest : undefined,
-            Quadril:    p.measurements.hip   ? +p.measurements.hip   : undefined,
-            Coxa:       p.measurements.thigh ? +p.measurements.thigh : undefined,
-            Panturrilha:p.measurements.calf  ? +p.measurements.calf  : undefined,
-          }))
-
-          // Força: máximo por exercício por data
-          const forcaByEx = {}
-          exLogs.forEach(log => {
-            const name = log.exercises?.name || 'Exercício'
-            const maxW = Math.max(...(log.sets || []).map(s => +s.weight || 0))
-            if (!maxW) return
-            if (!forcaByEx[name]) forcaByEx[name] = []
-            forcaByEx[name].push({ x: String(log.date).slice(5,10).split('-').reverse().join('/'), [name]: maxW })
-          })
-          const forcaExs   = Object.keys(forcaByEx).slice(0, 4) // max 4 exercícios
-          const forcaColors = ['#34D399','#F5C842','#F87171','#60A5FA']
-          // Merge por data
-          const forcaData = (() => {
-            const byDate = {}
-            forcaExs.forEach(ex => {
-              forcaByEx[ex].forEach(row => {
-                if (!byDate[row.x]) byDate[row.x] = { x: row.x }
-                byDate[row.x][ex] = row[ex]
-              })
-            })
-            return Object.values(byDate).sort((a,b) => a.x > b.x ? 1 : -1)
-          })()
-
-          const MEDS_COLORS = { Braço:'#34D399', Cintura:'#F5C842', Peito:'#60A5FA', Quadril:'#F87171', Coxa:'#A78BFA', Panturrilha:'#FBBF24' }
-
-          const chartCard = { background:'#0D1117', borderRadius:16, padding:'18px 16px', border:'1px solid rgba(255,255,255,0.07)', marginBottom:14 }
-          const ttStyle   = { background:'#1E293B', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, fontSize:12, color:'#E2E8F0', padding:'8px 12px' }
-
-          return (
-            <div>
-              {showWeightModal  && <WeightModal />}
-              {showMeasureModal && <MeasureModal />}
-
-              {/* Botões de ação */}
-              <div style={{ display:'flex', gap:10, marginBottom:20 }}>
-                <button onClick={() => setShowWeightModal(true)} style={{ flex:1, padding:'13px', borderRadius:12, border:'none', background:'linear-gradient(135deg,#34D399,#059669)', color:'#FFF', fontWeight:800, fontSize:13, cursor:'pointer' }}>
-                  ⚖️ Adicionar Peso
-                </button>
-                <button onClick={() => setShowMeasureModal(true)} style={{ flex:1, padding:'13px', borderRadius:12, border:'none', background:'linear-gradient(135deg,#8B5CF6,#6D28D9)', color:'#FFF', fontWeight:800, fontSize:13, cursor:'pointer' }}>
-                  📏 Adicionar Medidas
-                </button>
-              </div>
-
-              {/* Gráfico: Peso */}
-              {pesoData.length >= 2 ? (
-                <div style={chartCard}>
-                  <div style={{ fontSize:14, fontWeight:800, color:'#E2E8F0', marginBottom:14 }}>⚖️ Evolução do Peso</div>
-                  <ResponsiveContainer width="100%" height={190}>
-                    <LineChart data={pesoData} margin={{ top:5, right:10, left:-10, bottom:5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                      <XAxis dataKey="x" tick={{ fontSize:10, fill:'#475569' }} />
-                      <YAxis tick={{ fontSize:10, fill:'#475569' }} unit="kg" domain={['auto','auto']} />
-                      <Tooltip contentStyle={ttStyle} />
-                      <Line type="monotone" dataKey="Peso" stroke="#34D399" strokeWidth={2.5} dot={{ r:4, fill:'#34D399', stroke:'#080B12', strokeWidth:2 }} activeDot={{ r:6 }} unit=" kg" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : pesoData.length === 1 ? (
-                <div style={{ ...chartCard, textAlign:'center', padding:'20px' }}>
-                  <div style={{ fontSize:13, color:'#34D399', fontWeight:700 }}>⚖️ Peso atual: {pesoData[0].Peso} kg</div>
-                  <div style={{ fontSize:11, color:'#475569', marginTop:6 }}>Registre mais medições para ver o gráfico</div>
-                </div>
-              ) : null}
-
-              {/* Gráfico: Medidas */}
-              {medidasData.length >= 1 && (
-                <div style={chartCard}>
-                  <div style={{ fontSize:14, fontWeight:800, color:'#E2E8F0', marginBottom:14 }}>📏 Evolução das Medidas</div>
-                  {medidasData.length >= 2 ? (
-                    <ResponsiveContainer width="100%" height={210}>
-                      <LineChart data={medidasData} margin={{ top:5, right:10, left:-10, bottom:5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                        <XAxis dataKey="x" tick={{ fontSize:10, fill:'#475569' }} />
-                        <YAxis tick={{ fontSize:10, fill:'#475569' }} unit="cm" domain={['auto','auto']} />
-                        <Tooltip contentStyle={ttStyle} />
-                        <Legend wrapperStyle={{ fontSize:11, color:'#94A3B8' }} />
-                        {Object.keys(MEDS_COLORS).map(key => (
-                          medidasData.some(d => d[key] !== undefined) &&
-                          <Line key={key} type="monotone" dataKey={key} stroke={MEDS_COLORS[key]} strokeWidth={2} dot={{ r:3 }} activeDot={{ r:5 }} unit=" cm" connectNulls />
-                        ))}
-                      </LineChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div>
-                      <div style={{ fontSize:11, color:'#475569', marginBottom:10 }}>Registre mais medições para ver o gráfico de evolução</div>
-                      <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
-                        {Object.entries(medidasData[0]).filter(([k]) => k !== 'x').map(([k,v]) => (
-                          <div key={k} style={{ background:'rgba(255,255,255,0.05)', borderRadius:8, padding:'8px 12px' }}>
-                            <div style={{ fontSize:10, color:'#475569' }}>{k}</div>
-                            <div style={{ fontSize:15, fontWeight:800, color: MEDS_COLORS[k] || '#E2E8F0' }}>{v} cm</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Gráfico: Força */}
-              {forcaData.length >= 2 ? (
-                <div style={chartCard}>
-                  <div style={{ fontSize:14, fontWeight:800, color:'#E2E8F0', marginBottom:14 }}>💪 Evolução da Força (carga máx. por sessão)</div>
-                  <ResponsiveContainer width="100%" height={210}>
-                    <LineChart data={forcaData} margin={{ top:5, right:10, left:-10, bottom:5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                      <XAxis dataKey="x" tick={{ fontSize:10, fill:'#475569' }} />
-                      <YAxis tick={{ fontSize:10, fill:'#475569' }} unit="kg" domain={['auto','auto']} />
-                      <Tooltip contentStyle={ttStyle} />
-                      <Legend wrapperStyle={{ fontSize:11, color:'#94A3B8' }} />
-                      {forcaExs.map((ex, i) => (
-                        <Line key={ex} type="monotone" dataKey={ex} stroke={forcaColors[i]} strokeWidth={2} dot={{ r:3 }} activeDot={{ r:5 }} unit=" kg" connectNulls />
-                      ))}
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : null}
-
-              {/* Empty state */}
-              {pesoData.length === 0 && medidasData.length === 0 && forcaData.length === 0 && (
-                <div style={{ textAlign:'center', padding:'50px 20px', color:'#334155' }}>
-                  <div style={{ fontSize:40, marginBottom:12 }}>📈</div>
-                  <div style={{ fontSize:14, marginBottom:6 }}>Nenhum dado ainda.</div>
-                  <div style={{ fontSize:12 }}>Use os botões acima para começar a registrar sua evolução!</div>
-                </div>
-              )}
-            </div>
-          )
-        })()}
-
-
-        {/* ── ABA METAS ── */}
-        {tab === 'metas' && (
-          <TabMetas studentId={studentId} student={student} goals={goals} onUpdate={async () => {
-            const { data: gs } = await supabase.from('student_goals').select('*').eq('student_id', studentId).order('created_at', { ascending: false })
-            if (gs) setGoals(gs)
-          }} />
+        {/* OUTRAS ABAS */}
+        {nav !== 'alunos' && nav !== 'treinos' && nav !== 'evolucao' && nav !== 'cardio' && (
+          <div style={{ padding: '80px 20px', textAlign: 'center', color: '#0C4A6E', opacity: 0.5 }}>
+            <div style={{ fontSize: 48, marginBottom: 14 }}>🚧</div>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>Em desenvolvimento</div>
+          </div>
         )}
+      </main>
 
-        {/* ── ABA CÁRDIO ── */}
-        {tab === 'cardio' && (
-          <StudentCardioTab
-            studentId={studentId}
-            student={student}
-            sessions={cardioSessions}
-            onNewSession={() => {
-              supabase.from('cardio_sessions').select('*')
-                .eq('student_id', studentId).order('date', { ascending: false })
-                .then(({ data }) => { if (data) setCardioSessions(data) })
-            }}
-          />
-        )}
-
-                <div style={{ marginTop: 30, textAlign: 'center', fontSize: 11, color: '#1E293B' }}>Trainer App · Plano gerenciado pelo seu professor</div>
-      </div>
+      {showModal && <NovoAlunoModal teacherId={session.user.id} onSave={fetchAll} onClose={() => setShowModal(false)} />}
     </div>
   )
 }
