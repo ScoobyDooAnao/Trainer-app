@@ -896,42 +896,56 @@ const CARDIO_TYPES = [
 
 const PSE_LABELS = ['', 'Muito leve', 'Leve', 'Moderado leve', 'Moderado', 'Moderado intenso', 'Intenso', 'Muito intenso', 'Difícil', 'Muito difícil', 'Máximo']
 
+// Proporção cardio/musculação por objetivo (soma = 100)
+// Baseado em: Willis et al. (2012), Pontzer et al. (2016), Hickson (1980), Seiler (2010)
 const PRESCRICAO = {
   'Emagrecimento': {
-    tipo: ['corrida','esteira','eliptico'],
+    tipo: ['corrida','esteira','eliptico','bike'],
+    destaque: 'corrida', // modalidade mais eficaz para o objetivo
     sessoes: '3–4x/semana',
     duracao: '30–50 min',
     pse: { min: 4, max: 6, label: 'PSE 4–6 — Moderado' },
-    pace: 'Pace confortável — consegue conversar durante o esforço',
+    pace: 'Pace confortável — consegue conversar durante o esforço (zona aeróbica)',
     volume: '120–200 min/semana',
+    mixCardio: 60, // % de cardio vs musculação na semana
     obs: 'Priorize esforço contínuo e controlado. Evite intensidade alta demais — compromete a recuperação e aumenta o apetite.',
+    dicaCientifica: '⚠️ Sem controle alimentar, o cardio isolado tem eficácia limitada. Estudos mostram que o corpo compensa o gasto do exercício reduzindo o metabolismo basal (Pontzer et al., 2016). Combine com treino de força para melhores resultados.',
   },
   'Ganho de Massa': {
-    tipo: ['esteira','bike','eliptico'],
+    tipo: ['esteira','bike','eliptico','natacao'],
+    destaque: 'bike', // baixo impacto, não interfere na recuperação muscular
     sessoes: '2x/semana',
     duracao: '20–30 min',
     pse: { min: 3, max: 5, label: 'PSE 3–5 — Leve a moderado' },
-    pace: 'Recuperação ativa — ritmo bem leve, sem gerar fadiga',
+    pace: 'Recuperação ativa — ritmo leve, sem gerar fadiga muscular',
     volume: '40–60 min/semana',
+    mixCardio: 20, // % de cardio — dominância de musculação
     obs: 'Cardio deve preservar a recuperação muscular. Volume alto prejudica o ganho de massa.',
+    dicaCientifica: '💪 Cardio excessivo ativa o "efeito interferência" — compete com a síntese proteica e reduz os ganhos de força (Hickson, 1980; Wilson et al., 2012). Mantenha volume mínimo e priorize a musculação.',
   },
   'Condicionamento': {
-    tipo: ['corrida','hiit','bike'],
+    tipo: ['corrida','hiit','bike','eliptico'],
+    destaque: 'corrida', // maior impacto no VO₂máx
     sessoes: '3–4x/semana',
     duracao: '30–45 min (base) + 1 sessão HIIT',
     pse: { min: 5, max: 8, label: 'PSE 5–8 — Moderado a intenso' },
-    pace: 'Varie: 2–3 sessões em ritmo estável + 1 HIIT com esforços curtos e máximos',
+    pace: '80% em ritmo estável (PSE 5–6) + 20% em alta intensidade — modelo polarizado',
     volume: '150–200 min/semana',
-    obs: 'Periodize a intensidade — não faça todo treino no mesmo ritmo.',
+    mixCardio: 70, // % de cardio — foco aeróbico
+    obs: 'Periodize a intensidade — não faça todo treino no mesmo ritmo. Modelo 80/20 comprovado em atletas.',
+    dicaCientifica: '📊 O modelo polarizado (80% moderado / 20% intenso) superou o treinamento contínuo em melhora de VO₂máx (Seiler & Tønnessen, 2009; Stöggl & Sperlich, 2014). Evite fazer todos os treinos na mesma intensidade.',
   },
   'Força e Performance': {
-    tipo: ['bike','eliptico','natacao'],
-    sessoes: '2x/semana',
+    tipo: ['bike','eliptico','natacao','esteira'],
+    destaque: 'bike', // menor impacto articular e menor interferência neural
+    sessoes: '1–2x/semana',
     duracao: '20–30 min',
     pse: { min: 3, max: 4, label: 'PSE 3–4 — Leve' },
-    pace: 'Low-impact e baixa intensidade — foco em recuperação, não em performance aeróbia',
-    volume: '40–60 min/semana',
-    obs: 'Cardio intenso compete com os ganhos de força. Mantenha volume mínimo.',
+    pace: 'Baixa intensidade, baixo impacto — foco em recuperação ativa, não em performance aeróbia',
+    volume: '30–50 min/semana',
+    mixCardio: 15, // % mínimo de cardio — dominância absoluta de força
+    obs: 'Cardio intenso compete diretamente com adaptações neuromusculares. Mantenha volume mínimo.',
+    dicaCientifica: '⚡ Cardio de alta intensidade inibe a via mTOR e reduz ganhos de 1RM (Hawley, 2009). Para atletas de força, o cardio serve apenas para saúde cardiovascular mínima e recuperação — não como ferramenta de performance.',
   },
 }
 
@@ -1196,15 +1210,61 @@ function TabCardio({ students }) {
                 <div style={{ fontSize: 11, color: '#64748B', marginTop: 6 }}>🏃 {presc.pace}</div>
               </div>
 
-              {/* Modalidades recomendadas */}
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Modalidades recomendadas</div>
+              {/* Modalidades + barra de proporção */}
+              <div style={{ background: 'rgba(255,255,255,0.65)', borderRadius: 12, padding: '14px 16px', border: '1px solid rgba(255,255,255,0.85)', marginBottom: 10 }}>
+                <div style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Modalidades Recomendadas</div>
+
+                {/* Barra cardio vs musculação */}
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: '#0C4A6E' }}>❤️ Cárdio — {presc.mixCardio}%</span>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: '#7C3AED' }}>💪 Musculação — {100 - presc.mixCardio}%</span>
+                  </div>
+                  <div style={{ height: 14, borderRadius: 99, overflow: 'hidden', background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(0,0,0,0.06)' }}>
+                    <div style={{
+                      height: '100%', width: `${presc.mixCardio}%`,
+                      background: presc.mixCardio >= 60
+                        ? 'linear-gradient(90deg,#F5C842,#F59E0B,#EF4444)'
+                        : presc.mixCardio >= 40
+                        ? 'linear-gradient(90deg,#34D399,#F5C842,#F59E0B)'
+                        : 'linear-gradient(90deg,#60A5FA,#34D399,#F5C842)',
+                      borderRadius: 99, transition: 'width 0.6s ease',
+                      boxShadow: '0 0 8px rgba(245,200,66,0.4)',
+                    }} />
+                  </div>
+                  <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 4, fontStyle: 'italic' }}>
+                    Distribuição ideal de estímulos na semana para este objetivo
+                  </div>
+                </div>
+
+                {/* Lista de modalidades com destaque */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
                   {presc.tipo.map(t => {
                     const info = CARDIO_TYPES.find(x => x.id === t)
-                    return <span key={t} style={{ fontSize: 12, fontWeight: 700, padding: '5px 13px', borderRadius: 20, background: `${info?.color}18`, color: info?.color, border: `1px solid ${info?.color}40` }}>{info?.icon} {info?.label}</span>
+                    const isDestaque = t === presc.destaque
+                    return (
+                      <span key={t} style={{
+                        fontSize: isDestaque ? 13 : 12,
+                        fontWeight: 800,
+                        padding: isDestaque ? '7px 16px' : '5px 13px',
+                        borderRadius: 20,
+                        background: isDestaque ? `${info?.color}` : `${info?.color}18`,
+                        color: isDestaque ? '#FFF' : info?.color,
+                        border: `1.5px solid ${info?.color}`,
+                        boxShadow: isDestaque ? `0 3px 14px ${info?.color}55` : 'none',
+                        position: 'relative',
+                      }}>
+                        {info?.icon} {info?.label}
+                        {isDestaque && <span style={{ fontSize: 9, marginLeft: 5, background: 'rgba(255,255,255,0.25)', padding: '1px 5px', borderRadius: 10 }}>★ recomendado</span>}
+                      </span>
+                    )
                   })}
                 </div>
+              </div>
+
+              {/* Dica científica */}
+              <div style={{ background: 'rgba(245,200,66,0.08)', borderRadius: 10, padding: '12px 14px', borderLeft: '3px solid #F5C842', marginBottom: 10 }}>
+                <span style={{ fontSize: 12, color: '#431C00', lineHeight: 1.7 }}>{presc.dicaCientifica}</span>
               </div>
 
               {/* Observação clínica */}
