@@ -374,6 +374,301 @@ function SvCardioModal({ studentId, onSave, onClose }) {
   )
 }
 
+// ── METAS SUGERIDAS POR OBJETIVO ────────────────────────────────────────────
+const METAS_SUGERIDAS = {
+  'Emagrecimento': [
+    { icon: '⚖️', titulo: 'Perder peso',           categoria: 'peso',    unidade: 'kg',     placeholder: 'Ex: 5',    desc: 'Reduzir meu peso corporal em' },
+    { icon: '📉', titulo: 'Abaixar meu IMC',        categoria: 'imc',     unidade: 'pontos', placeholder: 'Ex: 2',    desc: 'Reduzir meu IMC em' },
+    { icon: '📏', titulo: 'Diminuir cintura',        categoria: 'medida',  unidade: 'cm',     placeholder: 'Ex: 8',    desc: 'Diminuir minha cintura em' },
+    { icon: '📏', titulo: 'Diminuir quadril',        categoria: 'medida',  unidade: 'cm',     placeholder: 'Ex: 6',    desc: 'Diminuir meu quadril em' },
+    { icon: '🏃', titulo: 'Correr sem parar',        categoria: 'cardio',  unidade: 'km',     placeholder: 'Ex: 5',    desc: 'Conseguir correr' },
+    { icon: '🔥', titulo: 'Sequência de treinos',    categoria: 'habito',  unidade: 'dias',   placeholder: 'Ex: 30',   desc: 'Manter sequência de treinos por' },
+    { icon: '🥗', titulo: 'Meta personalizada',      categoria: 'outro',   unidade: '',       placeholder: '',         desc: '' },
+  ],
+  'Ganho de Massa': [
+    { icon: '⚖️', titulo: 'Ganhar massa',            categoria: 'peso',    unidade: 'kg',     placeholder: 'Ex: 4',    desc: 'Ganhar' },
+    { icon: '💪', titulo: 'Aumentar braço',           categoria: 'medida',  unidade: 'cm',     placeholder: 'Ex: 3',    desc: 'Aumentar o braço em' },
+    { icon: '🫁', titulo: 'Aumentar peito',           categoria: 'medida',  unidade: 'cm',     placeholder: 'Ex: 5',    desc: 'Aumentar o peito em' },
+    { icon: '🏋️', titulo: 'PR no Supino',            categoria: 'forca',   unidade: 'kg',     placeholder: 'Ex: 80',   desc: 'Supino com' },
+    { icon: '🏋️', titulo: 'PR no Agachamento',       categoria: 'forca',   unidade: 'kg',     placeholder: 'Ex: 100',  desc: 'Agachamento com' },
+    { icon: '🔥', titulo: 'Sequência de treinos',    categoria: 'habito',  unidade: 'dias',   placeholder: 'Ex: 30',   desc: 'Manter sequência de treinos por' },
+    { icon: '⭐', titulo: 'Meta personalizada',      categoria: 'outro',   unidade: '',       placeholder: '',         desc: '' },
+  ],
+  'Condicionamento': [
+    { icon: '🏃', titulo: 'Correr X km',             categoria: 'cardio',  unidade: 'km',     placeholder: 'Ex: 10',   desc: 'Correr' },
+    { icon: '⏱️', titulo: 'Pace alvo',               categoria: 'cardio',  unidade: 'min/km', placeholder: 'Ex: 5:30', desc: 'Atingir pace de' },
+    { icon: '🚴', titulo: 'Volume semanal',          categoria: 'cardio',  unidade: 'min',    placeholder: 'Ex: 180',  desc: 'Cardio semanal de' },
+    { icon: '⚡', titulo: 'Completar HIIT seguidos', categoria: 'cardio',  unidade: 'sessões',placeholder: 'Ex: 8',    desc: 'Completar' },
+    { icon: '🔥', titulo: 'Sequência de treinos',    categoria: 'habito',  unidade: 'dias',   placeholder: 'Ex: 60',   desc: 'Manter sequência de treinos por' },
+    { icon: '💪', titulo: 'Aumentar carga base',     categoria: 'forca',   unidade: 'kg',     placeholder: 'Ex: 10',   desc: 'Aumentar carga base em' },
+    { icon: '🎯', titulo: 'Meta personalizada',      categoria: 'outro',   unidade: '',       placeholder: '',         desc: '' },
+  ],
+  'Força e Performance': [
+    { icon: '🏋️', titulo: '1RM Supino',             categoria: 'forca',   unidade: 'kg',     placeholder: 'Ex: 100',  desc: '1RM Supino de' },
+    { icon: '🏋️', titulo: '1RM Agachamento',        categoria: 'forca',   unidade: 'kg',     placeholder: 'Ex: 120',  desc: '1RM Agachamento de' },
+    { icon: '🏋️', titulo: '1RM Terra',              categoria: 'forca',   unidade: 'kg',     placeholder: 'Ex: 140',  desc: '1RM Levantamento Terra de' },
+    { icon: '📈', titulo: 'PR em exercício livre',  categoria: 'forca',   unidade: 'kg',     placeholder: 'Ex: 60',   desc: 'Bater PR de' },
+    { icon: '⚖️', titulo: 'Manter peso',            categoria: 'peso',    unidade: 'kg',     placeholder: 'Ex: 80',   desc: 'Manter peso em' },
+    { icon: '🔥', titulo: 'Sequência de treinos',   categoria: 'habito',  unidade: 'dias',   placeholder: 'Ex: 30',   desc: 'Manter sequência de treinos por' },
+    { icon: '🏆', titulo: 'Meta personalizada',     categoria: 'outro',   unidade: '',       placeholder: '',         desc: '' },
+  ],
+}
+
+const CAT_COLORS = {
+  peso:   { bg: 'rgba(52,211,153,0.12)',  border: 'rgba(52,211,153,0.3)',  text: '#34D399' },
+  imc:    { bg: 'rgba(96,165,250,0.12)',  border: 'rgba(96,165,250,0.3)',  text: '#60A5FA' },
+  medida: { bg: 'rgba(167,139,250,0.12)', border: 'rgba(167,139,250,0.3)', text: '#A78BFA' },
+  forca:  { bg: 'rgba(251,191,36,0.12)',  border: 'rgba(251,191,36,0.3)',  text: '#FBBF24' },
+  cardio: { bg: 'rgba(239,68,68,0.12)',   border: 'rgba(239,68,68,0.3)',   text: '#F87171' },
+  habito: { bg: 'rgba(245,200,66,0.12)',  border: 'rgba(245,200,66,0.3)',  text: '#F5C842' },
+  outro:  { bg: 'rgba(148,163,184,0.12)', border: 'rgba(148,163,184,0.3)', text: '#94A3B8' },
+}
+
+const STATUS_CONFIG = {
+  ativa:      { label: 'Em andamento', color: '#60A5FA', bg: 'rgba(96,165,250,0.12)'  },
+  concluida:  { label: '✅ Concluída',  color: '#34D399', bg: 'rgba(52,211,153,0.12)'  },
+  abandonada: { label: 'Abandonada',   color: '#64748B', bg: 'rgba(100,116,139,0.12)' },
+}
+
+function NovaMetaModal({ studentId, goal, onSave, onClose }) {
+  const sugestoes = METAS_SUGERIDAS[goal] || METAS_SUGERIDAS['Ganho de Massa']
+  const [step, setStep]         = useState('escolher') // 'escolher' | 'detalhar'
+  const [selecionada, setSel]   = useState(null)
+  const [titulo, setTitulo]     = useState('')
+  const [descricao, setDescricao] = useState('')
+  const [valor, setValor]       = useState('')
+  const [unidade, setUnidade]   = useState('')
+  const [prazo, setPrazo]       = useState('')
+  const [saving, setSaving]     = useState(false)
+
+  const escolher = (s) => {
+    setSel(s)
+    setTitulo(s.titulo === 'Meta personalizada' ? '' : s.titulo)
+    setDescricao(s.desc)
+    setUnidade(s.unidade)
+    setStep('detalhar')
+  }
+
+  const salvar = async () => {
+    if (!titulo.trim()) return
+    setSaving(true)
+    await supabase.from('student_goals').insert([{
+      student_id: studentId,
+      title:      titulo,
+      description: descricao,
+      category:   selecionada?.categoria || 'outro',
+      target_value: valor ? parseFloat(valor) : null,
+      target_unit:  unidade,
+      deadline:   prazo || null,
+      status:     'ativa',
+    }])
+    setSaving(false)
+    onSave()
+    onClose()
+  }
+
+  const inp = { background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'10px 12px', color:'#E2E8F0', fontSize:13, outline:'none', width:'100%', boxSizing:'border-box' }
+  const lbl = { fontSize:11, color:'#94A3B8', fontWeight:700, letterSpacing:0.8, textTransform:'uppercase', marginBottom:5, display:'block', marginTop:14 }
+
+  return (
+    <div onClick={onClose} style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.8)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:300,padding:16 }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:'#0D1117',border:'1px solid rgba(255,255,255,0.1)',borderRadius:20,padding:24,width:'100%',maxWidth:420,maxHeight:'90vh',overflowY:'auto' }}>
+
+        {step === 'escolher' && (
+          <>
+            <div style={{ fontSize:17,fontWeight:800,color:'#E2E8F0',marginBottom:4 }}>🎯 Nova Meta</div>
+            <div style={{ fontSize:12,color:'#475569',marginBottom:18 }}>Escolha uma sugestão baseada no seu objetivo ou crie a sua própria</div>
+            <div style={{ display:'flex',flexDirection:'column',gap:8 }}>
+              {sugestoes.map((s,i) => {
+                const cc = CAT_COLORS[s.categoria] || CAT_COLORS.outro
+                return (
+                  <button key={i} onClick={()=>escolher(s)} style={{ display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderRadius:12,border:`1px solid ${cc.border}`,background:cc.bg,cursor:'pointer',textAlign:'left',transition:'all 0.15s' }}>
+                    <span style={{ fontSize:22 }}>{s.icon}</span>
+                    <div>
+                      <div style={{ fontSize:13,fontWeight:800,color:'#E2E8F0' }}>{s.titulo}</div>
+                      {s.desc && <div style={{ fontSize:11,color:'#64748B',marginTop:1 }}>{s.desc} {s.placeholder}</div>}
+                    </div>
+                    <span style={{ marginLeft:'auto',color:cc.text,fontSize:16 }}>→</span>
+                  </button>
+                )
+              })}
+            </div>
+          </>
+        )}
+
+        {step === 'detalhar' && (
+          <>
+            <button onClick={()=>setStep('escolher')} style={{ background:'none',border:'none',color:'#475569',fontSize:13,cursor:'pointer',marginBottom:16,display:'flex',alignItems:'center',gap:6 }}>← Voltar</button>
+            <div style={{ fontSize:17,fontWeight:800,color:'#E2E8F0',marginBottom:4 }}>{selecionada?.icon} Definir Meta</div>
+            <div style={{ fontSize:12,color:'#475569',marginBottom:18 }}>Quanto mais específico, mais fácil de acompanhar!</div>
+
+            <label style={lbl}>Título da meta</label>
+            <input style={inp} placeholder="Ex: Perder 5kg até o verão" value={titulo} onChange={e=>setTitulo(e.target.value)} />
+
+            {selecionada?.categoria !== 'outro' && (
+              <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10 }}>
+                <div>
+                  <label style={lbl}>Valor alvo</label>
+                  <input type="number" step="0.1" style={inp} placeholder={selecionada?.placeholder} value={valor} onChange={e=>setValor(e.target.value)} />
+                </div>
+                <div>
+                  <label style={lbl}>Unidade</label>
+                  <input style={inp} placeholder="kg, cm, dias..." value={unidade} onChange={e=>setUnidade(e.target.value)} />
+                </div>
+              </div>
+            )}
+
+            <label style={lbl}>Prazo (opcional)</label>
+            <input type="date" style={inp} value={prazo} onChange={e=>setPrazo(e.target.value)} />
+
+            <label style={lbl}>Descrição / motivação (opcional)</label>
+            <textarea style={{ ...inp,minHeight:60,resize:'vertical' }} placeholder="Por que essa meta é importante para você?" value={descricao} onChange={e=>setDescricao(e.target.value)} />
+
+            <button onClick={salvar} disabled={saving||!titulo.trim()} style={{ width:'100%',background:'linear-gradient(135deg,#34D399,#059669)',border:'none',borderRadius:10,padding:13,color:'#FFF',fontWeight:800,fontSize:14,cursor:'pointer',marginTop:20,opacity:titulo.trim()?1:0.5 }}>
+              {saving ? 'Salvando...' : '🎯 Criar Meta'}
+            </button>
+          </>
+        )}
+
+        <button onClick={onClose} style={{ width:'100%',background:'transparent',border:'1px solid rgba(255,255,255,0.08)',borderRadius:10,padding:11,color:'#475569',fontWeight:600,fontSize:13,cursor:'pointer',marginTop:8 }}>Cancelar</button>
+      </div>
+    </div>
+  )
+}
+
+function TabMetas({ studentId, student, goals, onUpdate }) {
+  const [showModal, setShowModal] = useState(false)
+  const [updating, setUpdating]  = useState(null)
+
+  const updateStatus = async (goalId, status) => {
+    setUpdating(goalId)
+    await supabase.from('student_goals').update({ status }).eq('id', goalId)
+    await onUpdate()
+    setUpdating(null)
+  }
+
+  const deleteGoal = async (goalId) => {
+    await supabase.from('student_goals').delete().eq('id', goalId)
+    await onUpdate()
+  }
+
+  const ativas     = goals.filter(g => g.status === 'ativa')
+  const concluidas = goals.filter(g => g.status === 'concluida')
+  const sugestoes  = METAS_SUGERIDAS[student?.goal] || []
+
+  const cardStyle = { background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:14, padding:'16px 18px', marginBottom:10 }
+
+  return (
+    <div>
+      {showModal && <NovaMetaModal studentId={studentId} goal={student?.goal} onSave={onUpdate} onClose={()=>setShowModal(false)} />}
+
+      {/* Header */}
+      <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:18 }}>
+        <div>
+          <div style={{ fontSize:18,fontWeight:800,color:'#E2E8F0' }}>🎯 Minhas Metas</div>
+          <div style={{ fontSize:12,color:'#475569',marginTop:2 }}>{ativas.length} ativa{ativas.length!==1?'s':''} · {concluidas.length} concluída{concluidas.length!==1?'s':''}</div>
+        </div>
+        <button onClick={()=>setShowModal(true)} style={{ padding:'10px 18px',borderRadius:10,border:'none',background:'linear-gradient(135deg,#34D399,#059669)',color:'#FFF',fontWeight:800,fontSize:13,cursor:'pointer',boxShadow:'0 4px 15px rgba(52,211,153,0.3)' }}>
+          + Nova Meta
+        </button>
+      </div>
+
+      {/* Metas ativas */}
+      {ativas.length === 0 && concluidas.length === 0 ? (
+        <div style={{ textAlign:'center',padding:'40px 20px' }}>
+          <div style={{ fontSize:42,marginBottom:12 }}>🎯</div>
+          <div style={{ fontSize:15,fontWeight:700,color:'#E2E8F0',marginBottom:8 }}>Nenhuma meta ainda</div>
+          <div style={{ fontSize:13,color:'#475569',marginBottom:20 }}>Defina metas claras para manter o foco e a motivação nos seus treinos!</div>
+          {/* Sugestões rápidas */}
+          <div style={{ textAlign:'left' }}>
+            <div style={{ fontSize:11,color:'#64748B',fontWeight:700,letterSpacing:1,textTransform:'uppercase',marginBottom:10 }}>Sugestões para {student?.goal}</div>
+            <div style={{ display:'flex',flexDirection:'column',gap:6 }}>
+              {sugestoes.slice(0,3).map((s,i) => {
+                const cc = CAT_COLORS[s.categoria] || CAT_COLORS.outro
+                return (
+                  <div key={i} style={{ display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,background:cc.bg,border:`1px solid ${cc.border}` }}>
+                    <span style={{ fontSize:18 }}>{s.icon}</span>
+                    <span style={{ fontSize:13,color:'#CBD5E1',fontWeight:600 }}>{s.titulo}</span>
+                  </div>
+                )
+              })}
+            </div>
+            <button onClick={()=>setShowModal(true)} style={{ width:'100%',marginTop:14,padding:'12px',borderRadius:10,border:'1px dashed rgba(52,211,153,0.4)',background:'transparent',color:'#34D399',fontWeight:700,fontSize:13,cursor:'pointer' }}>
+              🎯 Criar minha primeira meta
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {ativas.length > 0 && (
+            <div style={{ marginBottom:22 }}>
+              <div style={{ fontSize:11,color:'#64748B',fontWeight:700,letterSpacing:1,textTransform:'uppercase',marginBottom:10 }}>Em andamento</div>
+              {ativas.map(g => {
+                const cc = CAT_COLORS[g.category] || CAT_COLORS.outro
+                const isUpdating = updating === g.id
+                const daysLeft = g.deadline ? Math.ceil((new Date(g.deadline) - new Date()) / 86400000) : null
+                return (
+                  <div key={g.id} style={{ ...cardStyle, borderLeft:`3px solid ${cc.text}` }}>
+                    <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:10 }}>
+                      <div style={{ flex:1 }}>
+                        <div style={{ display:'flex',alignItems:'center',gap:8,marginBottom:4,flexWrap:'wrap' }}>
+                          <span style={{ fontSize:14,fontWeight:800,color:'#E2E8F0' }}>{g.title}</span>
+                          <span style={{ fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:20,background:cc.bg,color:cc.text,border:`1px solid ${cc.border}` }}>{g.category}</span>
+                        </div>
+                        {g.target_value && (
+                          <div style={{ fontSize:13,color:'#94A3B8',marginBottom:4 }}>
+                            🎯 Alvo: <strong style={{ color:cc.text }}>{g.target_value} {g.target_unit}</strong>
+                          </div>
+                        )}
+                        {g.description && g.description !== g.title && (
+                          <div style={{ fontSize:12,color:'#475569',marginBottom:4,fontStyle:'italic' }}>{g.description}</div>
+                        )}
+                        {daysLeft !== null && (
+                          <div style={{ fontSize:11,color: daysLeft < 7 ? '#F87171' : daysLeft < 30 ? '#FBBF24' : '#64748B',fontWeight:600 }}>
+                            {daysLeft > 0 ? `⏳ ${daysLeft} dias restantes` : daysLeft === 0 ? '🔔 Prazo hoje!' : `⚠️ ${Math.abs(daysLeft)} dias em atraso`}
+                          </div>
+                        )}
+                      </div>
+                      <button onClick={()=>updateStatus(g.id,'concluida')} disabled={isUpdating}
+                        style={{ padding:'8px 14px',borderRadius:8,border:'none',background:'rgba(52,211,153,0.15)',color:'#34D399',fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap',flexShrink:0 }}>
+                        {isUpdating ? '...' : '✅ Concluir'}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {concluidas.length > 0 && (
+            <div>
+              <div style={{ fontSize:11,color:'#64748B',fontWeight:700,letterSpacing:1,textTransform:'uppercase',marginBottom:10 }}>Concluídas 🏆</div>
+              {concluidas.map(g => (
+                <div key={g.id} style={{ ...cardStyle, opacity:0.7 }}>
+                  <div style={{ display:'flex',alignItems:'center',gap:10 }}>
+                    <span style={{ fontSize:20 }}>✅</span>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:13,fontWeight:700,color:'#94A3B8',textDecoration:'line-through' }}>{g.title}</div>
+                      {g.target_value && <div style={{ fontSize:11,color:'#475569' }}>{g.target_value} {g.target_unit}</div>}
+                    </div>
+                    <button onClick={()=>deleteGoal(g.id)} style={{ background:'transparent',border:'none',color:'#334155',cursor:'pointer',fontSize:14 }}>🗑</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      <div style={{ marginTop:20,padding:'12px 16px',background:'rgba(52,211,153,0.05)',borderRadius:10,border:'1px solid rgba(52,211,153,0.1)' }}>
+        <div style={{ fontSize:11,color:'#34D399',fontWeight:700,marginBottom:3 }}>💡 Suas metas são visíveis para o seu professor</div>
+        <div style={{ fontSize:11,color:'#475569' }}>Ele acompanha sua evolução mas não pode editar suas metas — elas são suas!</div>
+      </div>
+    </div>
+  )
+}
+
+
 function StudentCardioTab({ studentId, student, sessions, onNewSession }) {
   const [showModal,    setShowModal]    = useState(false)
   const [filterType,   setFilterType]   = useState('todos')
@@ -536,6 +831,7 @@ export default function StudentView({ studentId }) {
   const [checkedIn, setCheckedIn]   = useState(false)
   const [showWeightModal, setShowWeightModal]   = useState(false)
   const [showMeasureModal, setShowMeasureModal] = useState(false)
+  const [goals, setGoals]                       = useState([])
 
   useEffect(() => {
     const load = async () => {
@@ -578,6 +874,11 @@ export default function StudentView({ studentId }) {
         .from('exercise_logs').select('*, exercises(name)')
         .eq('student_id', studentId).order('date', { ascending: true })
       if (logs) setExLogs(logs)
+
+      const { data: gs } = await supabase
+        .from('student_goals').select('*')
+        .eq('student_id', studentId).order('created_at', { ascending: false })
+      if (gs) setGoals(gs)
 
       setLoading(false)
     }
@@ -668,7 +969,7 @@ export default function StudentView({ studentId }) {
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-          {[['treino', '🏋️ Treino'], ['evolucao', '📈 Evolução'], ['cardio', '❤️ Cárdio']].map(([id, label]) => (
+          {[['treino', '🏋️ Treino'], ['metas', '🎯 Metas'], ['evolucao', '📈 Evolução'], ['cardio', '❤️ Cárdio']].map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)} style={{
               flex: 1, padding: '12px', borderRadius: 10, border: 'none',
               background: tab === id ? 'linear-gradient(135deg,#34D399,#059669)' : 'rgba(255,255,255,0.05)',
@@ -976,6 +1277,14 @@ export default function StudentView({ studentId }) {
           )
         })()}
 
+
+        {/* ── ABA METAS ── */}
+        {tab === 'metas' && (
+          <TabMetas studentId={studentId} student={student} goals={goals} onUpdate={async () => {
+            const { data: gs } = await supabase.from('student_goals').select('*').eq('student_id', studentId).order('created_at', { ascending: false })
+            if (gs) setGoals(gs)
+          }} />
+        )}
 
         {/* ── ABA CÁRDIO ── */}
         {tab === 'cardio' && (
