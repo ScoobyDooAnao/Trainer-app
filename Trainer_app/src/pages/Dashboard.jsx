@@ -31,7 +31,7 @@ const GOALS  = ['Ganho de Massa', 'Emagrecimento', 'Condicionamento', 'Força e 
 const LEVELS = ['Iniciante', 'Intermediário', 'Avançado']
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-function imcStyle(w, h) {
+function imcStyle(w, h, precomputed) {
   if (!w || !h) return { val: '—', color: '#94A3B8', label: '—' }
   const v = precomputed ?? parseFloat((w / ((h / 100) ** 2)).toFixed(1))
   let color, label
@@ -203,7 +203,7 @@ function NavItem({ item, active, onClick }) {
 function StudentCard({ st, onClick }) {
   const [hov, setHov] = useState(false)
   const g      = GOAL[st.goal] || GOAL['Ganho de Massa']
-  const imc    = imcStyle(st.weight, st.height)
+  const imc    = imcStyle(st.weight, st.height, st.imc_calc)
   const streak = streakStyle(st.streak || 0)
   const active = (st.lastSeenDays ?? 999) < 5
 
