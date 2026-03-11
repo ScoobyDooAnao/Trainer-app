@@ -81,36 +81,38 @@ function getDayStatus(dia, attendanceDates, logDates) {
 }
 
 function calcStreak(dates, plannedDays) {
-  // Se não tem dias planejados, retorna 0
-  if (!plannedDays || plannedDays.length === 0) return 0
-
   const JS_TO_DIA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
-  // Conjunto de datas em que o aluno treinou (YYYY-MM-DD)
   const doneSet = new Set((dates || []).map(d => String(d).slice(0, 10)))
-
   let streak = 0
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const cursor = new Date(today)
 
-  // Percorre dia a dia para trás, ignorando dias que não são de treino
+  // Sem dias planejados: conta presença em dias consecutivos quaisquer
+  if (!plannedDays || plannedDays.length === 0) {
+    for (let i = 0; i < 730; i++) {
+      const ds = cursor.toISOString().slice(0, 10)
+      if (doneSet.has(ds)) streak++
+      else if (i > 0) break
+      cursor.setDate(cursor.getDate() - 1)
+    }
+    return streak
+  }
+
+  // Com dias planejados: ignora dias de descanso, quebra só em dia de treino faltado
   for (let i = 0; i < 730; i++) {
     const dayName = JS_TO_DIA[cursor.getDay()]
     const isToday = cursor.getTime() === today.getTime()
-
     if (plannedDays.includes(dayName)) {
-      const dateStr = cursor.toISOString().slice(0, 10)
-      if (doneSet.has(dateStr)) {
-        streak++ // dia de treino cumprido ✅
+      const ds = cursor.toISOString().slice(0, 10)
+      if (doneSet.has(ds)) {
+        streak++
       } else if (!isToday) {
-        break    // faltou num dia planejado → sequência quebra 💔
-        // (hoje ainda não conta como falta — pode ainda treinar)
+        break // faltou num dia planejado → sequência quebra
       }
     }
-    // dias de descanso são simplesmente pulados
-
+    // dias de descanso são pulados sem quebrar a sequência
     cursor.setDate(cursor.getDate() - 1)
   }
-
   return streak
 }
 
