@@ -23,6 +23,125 @@ const LEVELS = ['Iniciante', 'Intermediário', 'Avançado']
 const STATUS_COLOR = { active: '#34D399', draft: '#FBBF24', archived: '#64748B' }
 const STATUS_LABEL = { active: 'Ativo', draft: 'Rascunho', archived: 'Arquivado' }
 
+// ── DuplicarPlanoModal ──────────────────────────────────────────────────────
+function DuplicarPlanoModal({ plan, student, onClose }) {
+  const [allStudents, setAllStudents] = useState([])
+  const [selected, setSelected]       = useState(null)
+  const [saving, setSaving]           = useState(false)
+  const [done, setDone]               = useState(false)
+
+  useEffect(() => {
+    supabase.from('students').select('id,name,goal')
+      .eq('teacher_id', student.teacher_id)
+      .neq('id', student.id)
+      .order('name')
+      .then(({ data }) => setAllStudents(data || []))
+  }, [])
+
+  const duplicate = async () => {
+    if (!selected) return
+    setSaving(true)
+    try {
+      // Busca plano completo com dias e exercícios
+      const { data: fullPlan } = await supabase
+        .from('workout_plans')
+        .select('*, workout_days(*, exercises(*))')
+        .eq('id', plan.id)
+        .single()
+
+      // Cria novo plano para o aluno destino
+      const { data: newPlan } = await supabase
+        .from('workout_plans')
+        .insert([{ student_id: selected, teacher_id: student.teacher_id, title: fullPlan.title + ' (cópia)', status: 'draft' }])
+        .select().single()
+
+      if (!newPlan) throw new Error('Falha ao criar plano')
+
+      // Copia dias e exercícios sequencialmente
+      for (const day of (fullPlan.workout_days || [])) {
+        const { data: newDay } = await supabase
+          .from('workout_days')
+          .insert([{ workout_plan_id: newPlan.id, day_of_week: day.day_of_week, name: day.name }])
+          .select().single()
+
+        if (newDay) {
+          const exs = (day.exercises || []).map(ex => ({
+            workout_day_id: newDay.id,
+            name:        ex.name,
+            sets:        ex.sets,
+            reps:        ex.reps,
+            weight:      ex.weight,
+            rest_seconds:ex.rest_seconds,
+            notes:       ex.notes,
+            order_index: ex.order_index,
+          }))
+          if (exs.length) await supabase.from('exercises').insert(exs)
+        }
+      }
+      setDone(true)
+    } catch(e) {
+      alert('Erro ao duplicar: ' + e.message)
+    }
+    setSaving(false)
+  }
+
+  const targetName = allStudents.find(s => s.id === selected)?.name
+
+  return (
+    <div onClick={onClose} style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200,padding:20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:'#0D1117',borderRadius:20,padding:28,width:'100%',maxWidth:440,border:'1px solid rgba(255,255,255,0.1)' }}>
+        {done ? (
+          <div style={{ textAlign:'center',padding:'20px 0' }}>
+            <div style={{ fontSize:48,marginBottom:12 }}>✅</div>
+            <div style={{ fontSize:18,fontWeight:800,color:'#34D399',marginBottom:6 }}>Plano duplicado!</div>
+            <div style={{ fontSize:13,color:'#64748B',marginBottom:24 }}>
+              "{plan.title}" foi copiado para <strong style={{ color:'#E2E8F0' }}>{targetName}</strong> como rascunho.
+            </div>
+            <button onClick={onClose} style={{ padding:'10px 28px',borderRadius:10,border:'none',background:'linear-gradient(135deg,#34D399,#059669)',color:'#FFF',fontWeight:800,fontSize:14,cursor:'pointer' }}>
+              Fechar
+            </button>
+          </div>
+        ) : (
+          <>
+            <div style={{ fontSize:18,fontWeight:800,color:'#E2E8F0',marginBottom:4 }}>📋 Duplicar Plano</div>
+            <div style={{ fontSize:13,color:'#475569',marginBottom:20 }}>"{plan.title}" → Selecione o aluno destino</div>
+
+            {allStudents.length === 0 ? (
+              <div style={{ textAlign:'center',padding:'30px 0',color:'#334155' }}>Nenhum outro aluno cadastrado.</div>
+            ) : (
+              <div style={{ display:'flex',flexDirection:'column',gap:8,maxHeight:280,overflowY:'auto',marginBottom:20 }}>
+                {allStudents.map(st => (
+                  <button key={st.id} onClick={() => setSelected(st.id)}
+                    style={{ padding:'12px 16px',borderRadius:12,border:`2px solid ${selected===st.id ? '#34D399' : 'rgba(255,255,255,0.07)'}`, background: selected===st.id ? 'rgba(52,211,153,0.1)' : 'rgba(255,255,255,0.03)', color:'#E2E8F0',fontWeight:600,fontSize:13,cursor:'pointer',textAlign:'left',display:'flex',alignItems:'center',gap:10,transition:'all 0.15s' }}>
+                    <span style={{ width:32,height:32,borderRadius:'50%',background:'rgba(255,255,255,0.08)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,flexShrink:0 }}>
+                      {st.name.charAt(0).toUpperCase()}
+                    </span>
+                    <div>
+                      <div>{st.name}</div>
+                      <div style={{ fontSize:11,color:'#475569' }}>{st.goal}</div>
+                    </div>
+                    {selected===st.id && <span style={{ marginLeft:'auto',color:'#34D399',fontSize:18 }}>✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display:'flex',gap:10 }}>
+              <button onClick={onClose} style={{ flex:1,padding:'11px 0',borderRadius:10,border:'1px solid rgba(255,255,255,0.08)',background:'transparent',color:'#64748B',fontWeight:600,fontSize:13,cursor:'pointer' }}>
+                Cancelar
+              </button>
+              <button onClick={duplicate} disabled={!selected || saving}
+                style={{ flex:2,padding:'11px 0',borderRadius:10,border:'none',background: selected ? 'linear-gradient(135deg,#34D399,#059669)' : 'rgba(255,255,255,0.05)',color: selected ? '#FFF' : '#334155',fontWeight:800,fontSize:13,cursor: selected ? 'pointer' : 'default',transition:'all 0.2s' }}>
+                {saving ? 'Duplicando...' : `📋 Duplicar para ${targetName || 'aluno selecionado'}`}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function StudentDetail({ navigate, studentId }) {
   const [student, setStudent] = useState(null)
   const [plans, setPlans] = useState([])
@@ -35,6 +154,7 @@ export default function StudentDetail({ navigate, studentId }) {
   const [saving, setSaving] = useState(false)
   const [shareLink, setShareLink] = useState('')
   const [goals, setGoals] = useState([])
+  const [duplicarPlan, setDuplicarPlan] = useState(null) // plano a duplicar
 
   useEffect(() => {
     fetchAll()
@@ -103,6 +223,7 @@ export default function StudentDetail({ navigate, studentId }) {
   return (
     <div style={s.wrap}>
       <div style={s.inner}>
+        {duplicarPlan && <DuplicarPlanoModal plan={duplicarPlan} student={student} onClose={() => setDuplicarPlan(null)} />}
         <button style={s.back} onClick={() => navigate('dashboard')}>← Voltar ao Painel</button>
 
         {/* Header */}
@@ -191,6 +312,9 @@ export default function StudentDetail({ navigate, studentId }) {
                 </div>
                 <button style={s.btn('#00C9FF')} onClick={() => navigate('workout-editor', { studentId, planId: plan.id })}>
                   ✏️ Editar Treino
+                </button>
+                <button style={{ ...s.outlineBtn, fontSize: 12 }} onClick={() => setDuplicarPlan(plan)}>
+                  📋 Duplicar
                 </button>
               </div>
             ))}
