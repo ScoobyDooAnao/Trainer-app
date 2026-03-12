@@ -848,6 +848,22 @@ function TabEvolucao({ students }) {
                         </ResponsiveContainer>
                       )}
 
+                      {/* Novo PR banner */}
+                      {forcaData.length > 1 && forcaData[forcaData.length-1].Máx >= Math.max(...forcaData.slice(0,-1).map(d => d.Máx)) && (
+                        <div style={{ background: 'linear-gradient(135deg,#7C3AED,#A855F7)', borderRadius: 14, padding: '12px 18px', marginTop: 16, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 4px 20px rgba(124,58,237,0.4)', animation: 'pulse 2s ease-in-out infinite' }}>
+                          <div style={{ fontSize: 28 }}>🏆</div>
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: '#FFF', letterSpacing: '-0.3px' }}>Novo Recorde Pessoal!</div>
+                            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.85)', marginTop: 2 }}>
+                              {selEx?.name}: <strong>{forcaData[forcaData.length-1].Máx}kg</strong> em {forcaData[forcaData.length-1].date}
+                            </div>
+                          </div>
+                          <div style={{ marginLeft: 'auto', fontSize: 11, background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: 20, color: '#FFF', fontWeight: 700 }}>
+                            +{(forcaData[forcaData.length-1].Máx - forcaData[forcaData.length-2].Máx).toFixed(1)}kg
+                          </div>
+                        </div>
+                      )}
+
                       {/* PR — maior carga registrada */}
                       {forcaData.length > 0 && (
                         <div style={{ marginTop: 20, borderTop: '1px solid rgba(12,74,110,0.08)', paddingTop: 14, display: 'flex', gap: 16 }}>
@@ -1134,6 +1150,31 @@ function TabCardio({ students }) {
   const totalKm      = sessions.reduce((a, s) => a + (s.distance_km || 0), 0)
   const avgPse       = sessions.length ? (sessions.reduce((a, s) => a + (s.pse || 0), 0) / sessions.length).toFixed(1) : '—'
 
+  // ── Métricas inteligentes ──────────────────────────────────────────
+  const _now = new Date()
+  const _monOffset = (_now.getDay() + 6) % 7
+  const _startOfWeek = new Date(_now); _startOfWeek.setDate(_now.getDate() - _monOffset); _startOfWeek.setHours(0,0,0,0)
+  const thisWeekSessions = sessions.filter(s => new Date(s.date + 'T12:00:00') >= _startOfWeek)
+  const thisWeekMin   = thisWeekSessions.reduce((a, s) => a + (s.duration_minutes || 0), 0)
+  const thisWeekCount = thisWeekSessions.length
+  const _twoWeeksAgo = new Date(_now); _twoWeeksAgo.setDate(_now.getDate() - 14)
+  const recentPse    = sessions.filter(s => new Date(s.date + 'T12:00:00') >= _twoWeeksAgo && s.pse)
+  const avgPse2w     = recentPse.length ? recentPse.reduce((a,s) => a + s.pse, 0) / recentPse.length : null
+  const overtraining = avgPse2w && avgPse2w > 7
+  const metabAlert   = thisWeekCount > 4
+  const volColor     = thisWeekMin === 0 ? '#94A3B8' : thisWeekMin < 150 ? '#16A34A' : thisWeekMin <= 200 ? '#D97706' : '#DC2626'
+  const volBg        = thisWeekMin === 0 ? 'rgba(148,163,184,0.06)' : thisWeekMin < 150 ? 'rgba(22,163,74,0.08)' : thisWeekMin <= 200 ? 'rgba(217,119,6,0.08)' : 'rgba(220,38,38,0.08)'
+  const volLabel     = thisWeekMin === 0 ? '— Sem sessões esta semana' : thisWeekMin < 150 ? '✅ Volume adequado' : thisWeekMin <= 200 ? '⚠️ Volume elevado' : '🔴 Volume excessivo'
+  const volSub       = thisWeekMin === 0 ? 'Nenhuma sessão registrada esta semana' : thisWeekMin < 150 ? `${thisWeekMin} min — dentro do ideal (< 150 min)` : thisWeekMin <= 200 ? `${thisWeekMin} min — monitore a recuperação` : `${thisWeekMin} min — risco de overreaching (> 200 min)`
+
+  // ── Faixa etária ───────────────────────────────────────────────────
+  const _age       = student?.age
+  const isElderly  = _age && _age >= 60
+  const isChild    = _age && _age < 12
+  const isAdolesc  = _age && _age >= 12 && _age <= 17
+  const fcmax      = _age ? (isElderly ? Math.round(208 - 0.7 * _age) : 220 - _age) : null
+  const fcFormula  = isElderly ? 'Tanaka (208 − 0,7 × idade)' : '220 − idade'
+
   return (
     <div>
       {modal && <CardioSessionModal studentId={selectedId} onSave={() => fetchSessions(selectedId)} onClose={() => setModal(false)} />}
@@ -1270,6 +1311,87 @@ function TabCardio({ students }) {
               {/* Observação clínica */}
               <div style={{ background: 'rgba(12,74,110,0.06)', borderRadius: 10, padding: '10px 14px', borderLeft: '3px solid #155E8E' }}>
                 <span style={{ fontSize: 12, color: '#334155', lineHeight: 1.6 }}>💡 {presc.obs}</span>
+              </div>
+
+              {/* ── Alerta de faixa etária ── */}
+              {(isElderly || isChild || isAdolesc) && (
+                <div style={{ marginTop: 10, borderRadius: 12, padding: '14px 16px', background: isElderly ? 'rgba(5,150,105,0.08)' : isChild ? 'rgba(124,58,237,0.08)' : 'rgba(217,119,6,0.08)', border: `1.5px solid ${isElderly ? '#05966920' : isChild ? '#7C3AED20' : '#D9770620'}` }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: isElderly ? '#059669' : isChild ? '#7C3AED' : '#D97706', marginBottom: 8 }}>
+                    {isElderly ? '🧓 Aluno Idoso (60+ anos) — Prescrição Adaptada' : isChild ? '🧒 Criança (<12 anos) — Restrições Ativas' : '🧒 Adolescente (12–17 anos) — Observações'}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    {fcmax && (
+                      <div style={{ fontSize: 11, color: '#334155', background: 'rgba(255,255,255,0.6)', borderRadius: 8, padding: '6px 10px' }}>
+                        ❤️ <strong>FCmáx:</strong> {fcmax} bpm — fórmula {fcFormula}
+                      </div>
+                    )}
+                    {isElderly && <>
+                      <div style={{ fontSize: 11, color: '#334155', background: 'rgba(220,38,38,0.06)', borderRadius: 8, padding: '6px 10px' }}>⚠️ <strong>HIIT:</strong> avaliar com cautela. Iniciar apenas com aprovação médica.</div>
+                      <div style={{ fontSize: 11, color: '#334155', background: 'rgba(5,150,105,0.08)', borderRadius: 8, padding: '6px 10px' }}>🦾 <strong>PSE máx recomendado:</strong> 6/10 — intensidades acima aumentam risco cardiovascular.</div>
+                      <div style={{ fontSize: 11, color: '#334155', background: 'rgba(5,150,105,0.08)', borderRadius: 8, padding: '6px 10px' }}>⚖️ <strong>4º pilar:</strong> incluir 1 sessão semanal de equilíbrio e mobilidade. (Sherrington et al., 2019)</div>
+                      <div style={{ fontSize: 11, color: '#334155', background: 'rgba(5,150,105,0.08)', borderRadius: 8, padding: '6px 10px' }}>🦴 <strong>Sarcopenia:</strong> 2–3x/semana de treino de força é a 1ª linha de prevenção. (Hurst et al., 2022)</div>
+                    </>}
+                    {isChild && <>
+                      <div style={{ fontSize: 11, color: '#334155', background: 'rgba(220,38,38,0.06)', borderRadius: 8, padding: '6px 10px' }}>🚫 <strong>HIIT bloqueado</strong> — não recomendado para menores de 12 anos.</div>
+                      <div style={{ fontSize: 11, color: '#334155', background: 'rgba(220,38,38,0.06)', borderRadius: 8, padding: '6px 10px' }}>🚫 <strong>1RM não aplicável</strong> — prescrição por PSE e peso corporal.</div>
+                      <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.06)', borderRadius: 8, padding: '6px 10px' }}>🎮 <strong>LTAD — FUNdamentals:</strong> foco em habilidades motoras multilaterais e ludicidade.</div>
+                      <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.06)', borderRadius: 8, padding: '6px 10px' }}>🦴 <strong>Atenção:</strong> placas epifisárias vulneráveis — evitar cargas axiais pesadas.</div>
+                    </>}
+                    {isAdolesc && <>
+                      <div style={{ fontSize: 11, color: '#334155', background: 'rgba(217,119,6,0.06)', borderRadius: 8, padding: '6px 10px' }}>⚠️ <strong>Carga máxima:</strong> limitar a 70–75% do 1RM durante fase de crescimento ósseo.</div>
+                      <div style={{ fontSize: 11, color: '#334155', background: 'rgba(217,119,6,0.06)', borderRadius: 8, padding: '6px 10px' }}>📈 <strong>LTAD — Learn/Train to Train:</strong> técnica em primeiro lugar, volume progressivo. (Faigenbaum et al., 2009)</div>
+                      {_age && _age < 14 && <div style={{ fontSize: 11, color: '#334155', background: 'rgba(220,38,38,0.06)', borderRadius: 8, padding: '6px 10px' }}>🚫 <strong>1RM:</strong> não recomendado abaixo de 14 anos — fórmula de Epley não validada.</div>}
+                    </>}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── MÉTRICAS INTELIGENTES ── */}
+          {sessions.length > 0 && (
+            <div style={{ ...GLASS_CARD, marginBottom: 0 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251', marginBottom: 14 }}>🧠 Alertas Inteligentes</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+                {/* Semáforo volume semanal */}
+                <div style={{ borderRadius: 12, padding: '12px 16px', background: volBg, border: `1.5px solid ${volColor}30`, display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 14, height: 14, borderRadius: '50%', background: volColor, boxShadow: `0 0 8px ${volColor}80`, flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: volColor }}>{volLabel}</div>
+                    <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{volSub}</div>
+                  </div>
+                  <div style={{ fontSize: 18, fontWeight: 900, color: volColor }}>{thisWeekMin}<span style={{ fontSize: 10, fontWeight: 600 }}>min</span></div>
+                </div>
+
+                {/* Alerta overtraining */}
+                <div style={{ borderRadius: 12, padding: '12px 16px', background: overtraining ? 'rgba(220,38,38,0.07)' : 'rgba(22,163,74,0.06)', border: `1.5px solid ${overtraining ? '#DC262620' : '#16A34A20'}`, display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ fontSize: 20 }}>{overtraining ? '🔥' : '😌'}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: overtraining ? '#DC2626' : '#16A34A' }}>
+                      {overtraining ? 'Sinal de Overtraining Detectado' : 'Intensidade sob controle'}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                      {avgPse2w
+                        ? `PSE médio (últimas 2 semanas): ${avgPse2w.toFixed(1)}/10 ${overtraining ? '— reduza para 1–2 sessões leves.' : '— dentro do ideal.'}`
+                        : 'Dados insuficientes para análise de overtraining.'}
+                    </div>
+                  </div>
+                  {avgPse2w && <div style={{ fontSize: 18, fontWeight: 900, color: overtraining ? '#DC2626' : '#16A34A' }}>{avgPse2w.toFixed(1)}<span style={{ fontSize: 10 }}>/10</span></div>}
+                </div>
+
+                {/* Alerta compensação metabólica */}
+                {metabAlert && (
+                  <div style={{ borderRadius: 12, padding: '12px 16px', background: 'rgba(217,119,6,0.07)', border: '1.5px solid rgba(217,119,6,0.2)', display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ fontSize: 20 }}>⚡</div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: '#D97706' }}>Compensação Metabólica — Atenção</div>
+                      <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                        {thisWeekCount} sessões esta semana. Volume elevado pode ativar compensação e dificultar resultados. (Pontzer et al., 2016)
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
