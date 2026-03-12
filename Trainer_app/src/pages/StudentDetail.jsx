@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 const s = {
   wrap: { minHeight: '100vh', background: '#080B12', padding: '24px 20px' },
@@ -7,7 +8,7 @@ const s = {
   back: { background: 'none', border: 'none', color: '#475569', fontSize: 14, cursor: 'pointer', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 6 },
   header: { background: 'linear-gradient(135deg,#0f2027,#203a43)', borderRadius: 20, padding: 24, marginBottom: 20, border: '1px solid rgba(52,211,153,0.15)' },
   tabs: { display: 'flex', gap: 8, marginBottom: 20 },
-  tab: (active) => ({ flex: 1, padding: '12px 8px', borderRadius: 10, border: 'none', background: active ? 'linear-gradient(135deg,#34D399,#059669)' : 'rgba(255,255,255,0.05)', color: active ? '#fff' : '#64748B', fontWeight: 700, fontSize: 13, cursor: 'pointer' }),
+  tab: (active, isEval) => ({ flex: 1, padding: '12px 8px', borderRadius: 10, border: isEval && !active ? '1px solid rgba(99,102,241,0.25)' : 'none', background: active ? (isEval ? 'linear-gradient(135deg,#6366F1,#8B5CF6)' : 'linear-gradient(135deg,#34D399,#059669)') : (isEval ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.05)'), color: active ? '#fff' : (isEval ? '#818CF8' : '#64748B'), fontWeight: 700, fontSize: 13, cursor: 'pointer', boxShadow: active && isEval ? '0 4px 16px rgba(99,102,241,0.4)' : 'none' }),
   card: { background: '#0D1117', borderRadius: 16, padding: 20, border: '1px solid rgba(255,255,255,0.07)', marginBottom: 12 },
   label: { fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 },
   val: { fontSize: 15, fontWeight: 700, color: '#fff' },
@@ -141,6 +142,755 @@ function DuplicarPlanoModal({ plan, student, onClose }) {
     </div>
   )
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── MOTOR DE AVALIAÇÃO CIENTÍFICA v2 ───────────────────────────────────────
+// 11 pilares ponderados + confiança + histórico + recomendações automáticas
+// Refs: ACSM 2022, Schoenfeld 2017, Kraemer 2004, Tanaka 2001,
+//       Balyi LTAD 2013, WHO 2020, Boyle 2016, Foster 1998 (ACWR),
+//       Fonseca 2014 (stimulus variation), NSCA Guidelines 2021
+// ═══════════════════════════════════════════════════════════════════════════
+
+function calcAge(student) {
+  if (student.birth_date) {
+    const birth = new Date(student.birth_date)
+    return Math.floor((new Date() - birth) / (365.25 * 24 * 3600000))
+  }
+  return student.age ? parseInt(student.age) : null
+}
+
+function getScoreColor(score) {
+  if (score >= 80) return { text: '#4ADE80', bg: 'rgba(74,222,128,0.12)', border: 'rgba(74,222,128,0.3)', label: 'Excelente' }
+  if (score >= 65) return { text: '#A3E635', bg: 'rgba(163,230,53,0.10)', border: 'rgba(163,230,53,0.25)', label: 'Bom' }
+  if (score >= 45) return { text: '#FBBF24', bg: 'rgba(251,191,36,0.12)', border: 'rgba(251,191,36,0.3)', label: 'Regular' }
+  if (score >= 25) return { text: '#FB923C', bg: 'rgba(251,146,60,0.12)', border: 'rgba(251,146,60,0.3)', label: 'Atenção' }
+  return { text: '#F87171', bg: 'rgba(248,113,113,0.12)', border: 'rgba(248,113,113,0.3)', label: 'Crítico' }
+}
+
+// ── Confiança da avaliação ─────────────────────────────────────────────────
+function getConfidence({ allExercises, exerciseLogs, cardioSessions, progress, student, allDays }) {
+  let pts = 0
+  const items = []
+  if (allExercises.length >= 4)                  { pts += 18; items.push('plano com exercícios') }
+  else if (allExercises.length > 0)              { pts += 8;  items.push('plano parcial') }
+  else                                           { items.push('sem plano ativo') }
+  if (allDays.some(d => d.exercises?.some(e => e.type))) { pts += 10; items.push('tipos musculares definidos') }
+  if (exerciseLogs.length >= 30)                 { pts += 22; items.push('histórico de cargas rico') }
+  else if (exerciseLogs.length >= 10)            { pts += 14; items.push('histórico de cargas parcial') }
+  else if (exerciseLogs.length >= 3)             { pts += 6;  items.push('poucos registros de carga') }
+  else                                           { items.push('sem registros de carga') }
+  if (student.birth_date || student.age)         { pts += 12; items.push('dados etários') }
+  if (student.weight && student.height)          { pts += 10; items.push('antropometria completa') }
+  else if (student.weight || student.height)     { pts += 5;  items.push('antropometria parcial') }
+  if (progress.length >= 2)                      { pts += 14; items.push('avaliações físicas') }
+  else if (progress.length === 1)                { pts += 7;  items.push('1 avaliação física') }
+  if (cardioSessions.length >= 5)                { pts += 10; items.push('histórico cárdio') }
+  else if (cardioSessions.length >= 1)           { pts += 5;  items.push('cárdio parcial') }
+  // Span temporal dos logs
+  if (exerciseLogs.length >= 2) {
+    const dates = exerciseLogs.map(l => l.date).sort()
+    const spanWeeks = (new Date(dates[dates.length-1]) - new Date(dates[0])) / (7*864e5)
+    if (spanWeeks >= 8) { pts += 4; items.push('span ≥8 semanas') }
+  }
+  return { pct: Math.min(100, pts), items }
+}
+
+// ── Recomendações automáticas por pilar ───────────────────────────────────
+const RECS = {
+  volume:     s => s >= 80 ? [] : s >= 50 ? ['Aumente gradualmente para 15–20 séries/semana por grupo muscular (ACSM 2022).'] : ['Cadastre o plano ativo com séries e grupos musculares para avaliação completa.', 'Volume atual muito baixo — considere 10+ séries/semana para resultados mínimos.'],
+  freq:       s => s >= 80 ? [] : s >= 55 ? ['Ajuste a frequência semanal de acordo com o objetivo: Massa/Emagrecimento 3–5×, Força 3–4×.'] : ['Nenhum dia de treino configurado. Cadastre os dias da semana no plano ativo.'],
+  balance:    s => s >= 80 ? [] : ['Revise a proporção de exercícios de puxada vs empurrão (alvo 1:1). Adicione puxadas dorsais se houver excesso de peito/ombro.', 'Verifique cadeia posterior (posterior de coxa, glúteo) para equilibrar com quadríceps.'],
+  progress:   s => s >= 80 ? [] : s >= 50 ? ['Registre cargas semanalmente para monitorar progressão. ACSM: aumento de 2–10%/semana.'] : ['Nenhuma progressão detectada. Aplique sobrecarga progressiva — aumente 1 variável (peso, reps ou séries) a cada 1–2 semanas.'],
+  objective:  s => s >= 80 ? [] : ['Ajuste as faixas de repetição ao objetivo: Massa 6–12 reps, Força 1–6, Condicionamento 12–20, Emagrecimento 8–15.'],
+  age:        s => s >= 80 ? [] : ['Revise os alertas etários no pilar Adequação Etária e ajuste o plano conforme as diretrizes LTAD/ACSM para a faixa do aluno.'],
+  monitor:    s => s >= 80 ? [] : ['Realize avaliação física a cada 30 dias. Registre peso, medidas e cargas para aumentar a confiança da avaliação.'],
+  recovery:   s => s >= 80 ? [] : ['Insira pelo menos 1 dia de descanso entre sessões do mesmo grupo muscular (Schoenfeld 2018: 48–72h mínimo).', 'Considere dividir o plano por grupos musculares para garantir recuperação adequada.'],
+  overtraining: s => s >= 80 ? [] : s >= 55 ? ['PSE médio elevado. Considere sessões de baixa intensidade (PSE ≤5) ou 1 semana de deload.'] : ['Razão carga aguda:crônica elevada (ACWR >1.5) — risco de overtraining. Reduza volume ou intensidade por 5–7 dias.'],
+  variation:  s => s >= 80 ? [] : ['Varie os estímulos a cada 4–6 semanas: alterne períodos de hipertrofia (6–12 reps), força (1–6) e resistência (12–20) para evitar estagnação (Fonseca 2014).'],
+  levelFit:   s => s >= 80 ? [] : ['Ajuste o plano ao nível do aluno. Iniciantes: 2–3×/sem, 10–15 séries, foco em movimentos compostos. Avançados: periodização com variação de métodos.'],
+}
+
+function generateRecommendations(pilares) {
+  return pilares
+    .filter(p => p.score < 80)
+    .sort((a, b) => a.score - b.score)
+    .flatMap(p => (RECS[p.id] ? RECS[p.id](p.score).map(txt => ({ pilar: p.name, icon: p.icon, txt, score: p.score })) : []))
+    .slice(0, 6)
+}
+
+// ── Motor de avaliação ─────────────────────────────────────────────────────
+function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLogs, cardioSessions, progress }) {
+  const age    = calcAge(student)
+  const goal   = student.goal || ''
+  const level  = student.level || 'Iniciante'
+
+  // ── Pillar 1: Volume de Força ────────────────────────────────────────────
+  // ACSM 2022: 10–20 séries/grupo muscular/semana (Schoenfeld meta-analysis 2017)
+  const totalSets = allExercises.reduce((sum, ex) => sum + (parseInt(ex.sets) || 3), 0)
+  let volumeScore = 0
+  let volumeMsg   = ''
+  if (totalSets === 0) {
+    volumeScore = 0
+    volumeMsg = 'Nenhum exercício cadastrado no plano ativo.'
+  } else if (totalSets < 10) {
+    volumeScore = 30
+    volumeMsg = `${totalSets} séries semanais — volume muito baixo. Mínimo recomendado: 10 séries/semana por grupo muscular (Schoenfeld 2017).`
+  } else if (totalSets < 20) {
+    volumeScore = 60
+    volumeMsg = `${totalSets} séries semanais — volume moderado. Alvo ideal: 15–25 séries para hipertrofia e performance (ACSM 2022).`
+  } else if (totalSets < 40) {
+    volumeScore = 90
+    volumeMsg = `${totalSets} séries semanais — volume adequado para o nível ${level}. Dentro da janela recomendada pelo ACSM.`
+  } else if (totalSets < 60) {
+    volumeScore = 100
+    volumeMsg = `${totalSets} séries semanais — excelente volume para atleta ${level}. Monitore sinais de overtraining.`
+  } else {
+    volumeScore = 55
+    volumeMsg = `${totalSets} séries semanais — volume elevado. Risco de overtraining. Considere deload semanal a cada 4–6 semanas.`
+  }
+
+  // ── Pillar 2: Frequência Semanal ─────────────────────────────────────────
+  // ACSM Position Stand 2022 por objetivo
+  const FREQ = {
+    'Ganho de Massa':       { min: 3, max: 5, ideal: '3–5×/sem' },
+    'Emagrecimento':        { min: 3, max: 5, ideal: '3–5×/sem' },
+    'Condicionamento':      { min: 4, max: 5, ideal: '4–5×/sem' },
+    'Força e Performance':  { min: 3, max: 4, ideal: '3–4×/sem' },
+  }
+  const freqTarget = FREQ[goal] || { min: 3, max: 5, ideal: '3–5×/sem' }
+  const daysPerWeek = plannedDays.length
+  let freqScore = 0, freqMsg = ''
+  if (daysPerWeek === 0) {
+    freqScore = 0; freqMsg = 'Nenhum dia de treino configurado no plano.'
+  } else if (daysPerWeek < freqTarget.min) {
+    freqScore = 55; freqMsg = `${daysPerWeek} dia${daysPerWeek > 1 ? 's' : ''}/semana — abaixo do ideal para "${goal}" (ACSM: ${freqTarget.ideal}).`
+  } else if (daysPerWeek <= freqTarget.max) {
+    freqScore = 100; freqMsg = `${daysPerWeek} dias/semana — frequência ideal para "${goal}" segundo ACSM 2022.`
+  } else {
+    freqScore = 65; freqMsg = `${daysPerWeek} dias/semana — frequência elevada. Verifique dias de descanso para recuperação (ACSM: ${freqTarget.ideal}).`
+  }
+
+  // ── Pillar 3: Equilíbrio Muscular ────────────────────────────────────────
+  // Boyle 2016 (Functional Training Bible): razão puxada:empurrão 1:1–1.2
+  const PUSH = ['Peito', 'Tríceps', 'Ombro']
+  const PULL = ['Costas', 'Bíceps']
+  const ANTERIOR  = ['Quadríceps']
+  const POSTERIOR = ['Posterior', 'Glúteo', 'Panturrilha']
+
+  const pushN = allExercises.filter(ex => PUSH.includes(ex.type)).length
+  const pullN = allExercises.filter(ex => PULL.includes(ex.type)).length
+  const antN  = allExercises.filter(ex => ANTERIOR.includes(ex.type)).length
+  const postN = allExercises.filter(ex => POSTERIOR.includes(ex.type)).length
+
+  let balanceScore = 80
+  const balanceIssues = []
+
+  if (pushN + pullN >= 2) {
+    const ppRatio = pushN / Math.max(pullN, 1)
+    if (ppRatio > 1.8) { balanceScore -= 25; balanceIssues.push(`excesso de empurrão vs puxada (${pushN}:${pullN}) — risco de desequilíbrio postural`) }
+    else if (ppRatio < 0.4) { balanceScore -= 10; balanceIssues.push(`excesso de puxada vs empurrão (${pullN}:${pushN})`) }
+    else if (ppRatio >= 0.7 && ppRatio <= 1.3) balanceScore = 100
+  } else if (allExercises.length > 0) {
+    balanceScore = 55; balanceIssues.push('grupos push/pull insuficientes para avaliar equilíbrio horizontal')
+  }
+
+  if (antN > 2 && postN === 0) {
+    balanceScore -= 25; balanceIssues.push('cadeia posterior (posterior/glúteo) ausente — risco de síndrome patelofemoral')
+  } else if (antN > 0 && postN > 0 && antN / postN > 2) {
+    balanceScore -= 15; balanceIssues.push(`dominância anterior excessiva vs posterior (${antN}:${postN})`)
+  }
+  balanceScore = Math.max(0, Math.min(100, balanceScore))
+  const balanceMsg = balanceIssues.length
+    ? balanceIssues.map(i => `⚠️ ${i}`).join(' · ')
+    : pushN + pullN + antN + postN > 0
+      ? `Boa distribuição push/pull detectada (${pushN} empurrão : ${pullN} puxada). Equilíbrio muscular adequado.`
+      : 'Não foi possível avaliar — adicione o tipo muscular nos exercícios do plano.'
+
+  // ── Pillar 4: Progressão de Carga ────────────────────────────────────────
+  // ACSM FITT-VP: sobrecarga progressiva 2–10% por semana (Kraemer 2004)
+  let progressScore = 50, progressMsg = 'Dados insuficientes para avaliar progressão (mínimo 2 registros por exercício).'
+
+  if (exerciseLogs && exerciseLogs.length >= 3) {
+    const byEx = {}
+    exerciseLogs.forEach(log => {
+      const name = log.exercises?.name || log.exercise_id
+      if (!byEx[name]) byEx[name] = []
+      const maxW = Math.max(...(log.sets || []).map(s => +s.weight || 0))
+      if (maxW > 0) byEx[name].push({ date: log.date, maxW })
+    })
+    const exsTracked = Object.values(byEx).filter(arr => arr.length >= 2)
+    if (exsTracked.length > 0) {
+      let up = 0, flat = 0, down = 0
+      exsTracked.forEach(arr => {
+        const sorted = [...arr].sort((a, b) => a.date > b.date ? 1 : -1)
+        const delta = (sorted[sorted.length - 1].maxW - sorted[0].maxW) / sorted[0].maxW
+        if (delta >  0.03) up++
+        else if (delta < -0.03) down++
+        else flat++
+      })
+      const total = up + flat + down
+      progressScore = Math.round((up * 100 + flat * 62 + down * 20) / total)
+      progressMsg = `${total} exercício${total > 1 ? 's' : ''} acompanhado${total > 1 ? 's' : ''}: ${up} com carga crescente↑, ${flat} estável→, ${down} decrescente↓. ${down > 0 ? '⚠️ Investigue redução de carga.' : up > 0 ? '✅ Progressão detectada.' : 'Considere aumentar cargas progressivamente (ACSM: 2–10%/semana).'}`
+    }
+  }
+
+  // ── Pillar 5: Adequação ao Objetivo ──────────────────────────────────────
+  // Rep ranges: Schoenfeld 2010 — força 1-6, hipertrofia 6-12, endurance >12
+  const REP_RANGES = {
+    'Ganho de Massa':       { min: 6,  max: 12, label: '6–12 reps (zona de hipertrofia)' },
+    'Força e Performance':  { min: 1,  max: 6,  label: '1–6 reps (zona de força máxima)' },
+    'Condicionamento':      { min: 12, max: 20, label: '12–20 reps (zona de resistência muscular)' },
+    'Emagrecimento':        { min: 8,  max: 15, label: '8–15 reps (metabólico + hipertrofia moderada)' },
+  }
+  const repRange = REP_RANGES[goal]
+  let objScore = 70, objIssues = []
+
+  if (repRange && allExercises.length > 0) {
+    let aligned = 0
+    allExercises.forEach(ex => {
+      const m = (ex.reps || '').match(/\d+/)
+      if (m) { const r = parseInt(m[0]); if (r >= repRange.min && r <= repRange.max) aligned++ }
+    })
+    const pct = aligned / allExercises.length
+    objScore = Math.round(40 + pct * 60)
+    if (pct < 0.5) objIssues.push(`${Math.round(pct * 100)}% dos exercícios com reps alinhadas ao objetivo (alvo: ${repRange.label})`)
+    else objIssues = []
+  }
+
+  // Cárdio complementar para objetivos de condicionamento/emagrecimento
+  if (goal === 'Emagrecimento' || goal === 'Condicionamento') {
+    const now = new Date()
+    const last14sessions = (cardioSessions || []).filter(s => (now - new Date(s.date)) < 14 * 864e5)
+    const weeklyCardioMin = last14sessions.reduce((sum, s) => sum + (s.duration_minutes || 0), 0) / 2
+    if (weeklyCardioMin < 90 && last14sessions.length < 2) {
+      objScore = Math.max(objScore - 15, 10)
+      objIssues.push(`volume cárdio insuficiente nas últimas 2 semanas — WHO 2020 recomenda ≥150 min/sem para ${goal}`)
+    } else if (weeklyCardioMin >= 150) {
+      objScore = Math.min(objScore + 8, 100)
+    }
+  }
+  const objMsg = objIssues.length
+    ? objIssues.map(i => `⚠️ ${i}`).join('. ')
+    : repRange
+      ? `Faixas de repetição e volume compatíveis com objetivo "${goal}" (${repRange.label}).`
+      : 'Configure o objetivo do aluno para avaliação detalhada.'
+
+  // ── Pillar 6: Adequação Etária ───────────────────────────────────────────
+  // LTAD (Balyi 2013), Tanaka 2001, ACSM 2022 para populações especiais
+  let ageScore = 100, ageIssues = []
+
+  if (age !== null) {
+    const lowRepCount = allExercises.filter(ex => parseInt(ex.reps) <= 3).length
+    if (age >= 60) {
+      // Idosos: FCmax = 208 − 0.7×age (Tanaka 2001), HIIT com cautela, equilíbrio obrigatório
+      if (daysPerWeek > 4) { ageScore -= 12; ageIssues.push('frequência >4×/sem — risco de overuse em 60+ (recomendado 3–4×/sem)') }
+      if (lowRepCount > 0) { ageScore -= 15; ageIssues.push('exercícios de força máxima (<4 reps) — contraindicado sem avaliação cardiovascular prévia') }
+      if (!allExercises.some(ex => ['Core', 'Full Body'].includes(ex.type))) {
+        ageScore -= 12; ageIssues.push('ausência de exercícios de equilíbrio/Core — pilar essencial para prevenir quedas em idosos (ACSM 2022)')
+      }
+    } else if (age < 12) {
+      // Crianças: LTAD FUNdamentals — multilateral, sem 1RM
+      if (lowRepCount > 0) { ageScore -= 40; ageIssues.push('exercícios de força máxima contraindicados <12 anos — risco de lesão epifisária (LTAD)') }
+      if (daysPerWeek > 3) { ageScore -= 15; ageIssues.push('frequência >3×/sem excessiva para crianças — priorize multilateralidade') }
+    } else if (age < 17) {
+      // Adolescentes: LTAD Learn/Train to Train
+      if (age < 14 && lowRepCount > 0) { ageScore -= 25; ageIssues.push('1RM contraindicado antes dos 14 anos — LTAD (Balyi 2013)') }
+      const heavyLoadPct = allExercises.filter(ex => {
+        const m = (ex.reps || '').match(/\d+/)
+        return m && parseInt(m[0]) < 6
+      }).length / Math.max(allExercises.length, 1)
+      if (heavyLoadPct > 0.4) { ageScore -= 15; ageIssues.push('>40% dos exercícios com carga pesada (<6 reps) — adolescentes: max 70–75% de 1RM') }
+    }
+    ageScore = Math.max(0, ageScore)
+  }
+  const ageMsg = age === null
+    ? '⚠️ Data de nascimento não cadastrada — adicione o campo birth_date para habilitar avaliação etária completa.'
+    : ageIssues.length
+      ? ageIssues.map(i => `⚠️ ${i}`).join('. ') + '.'
+      : `Nenhum risco etário detectado para ${age} anos. Prescrição adequada à faixa etária.`
+
+  // ── Pillar 7: Dados & Monitoramento ──────────────────────────────────────
+  const now2 = new Date()
+  let monitorScore = 0, monitorItems = []
+  if (student.weight) { monitorScore += 20; monitorItems.push('✅ Peso cadastrado') }
+  else monitorItems.push('❌ Peso não cadastrado')
+  if (student.height) { monitorScore += 15; monitorItems.push('✅ Altura cadastrada') }
+  else monitorItems.push('❌ Altura não cadastrada')
+  if (progress.some(p => (now2 - new Date(p.date + 'T12:00:00')) < 30 * 864e5)) { monitorScore += 30; monitorItems.push('✅ Avaliação física registrada nos últimos 30 dias') }
+  else monitorItems.push('⚠️ Sem avaliação física recente (>30 dias)')
+  if (exerciseLogs && exerciseLogs.some(l => (now2 - new Date(l.date + 'T12:00:00')) < 14 * 864e5)) { monitorScore += 35; monitorItems.push('✅ Registros de carga nos últimos 14 dias') }
+  else monitorItems.push('⚠️ Sem registros de carga recentes (>14 dias)')
+  const monitorMsg = monitorItems.join(' · ')
+
+  // ── Pilar 8: Recuperação ─────────────────────────────────────────────────
+  // Schoenfeld & Ogborn 2018: 48–72h entre sessões do mesmo grupo muscular
+  const DIA_ORDER = { Seg:0, Ter:1, Qua:2, Qui:3, Sex:4, Sáb:5, Dom:6 }
+  let recoveryScore = 100, recoveryIssues = []
+  if (allDays && allDays.length >= 2) {
+    const sortedDays = [...allDays].sort((a, b) => (DIA_ORDER[a.day_of_week]??9) - (DIA_ORDER[b.day_of_week]??9))
+    for (let i = 0; i < sortedDays.length - 1; i++) {
+      const dayA = sortedDays[i], dayB = sortedDays[i+1]
+      const gapDays = (DIA_ORDER[dayB.day_of_week]??0) - (DIA_ORDER[dayA.day_of_week]??0)
+      if (gapDays <= 1) {
+        const typesA = new Set((dayA.exercises||[]).map(e => e.type).filter(Boolean))
+        const typesB = new Set((dayB.exercises||[]).map(e => e.type).filter(Boolean))
+        const shared = [...typesA].filter(t => typesB.has(t))
+        if (shared.length > 0) {
+          recoveryScore -= 20
+          recoveryIssues.push(`${dayA.day_of_week}→${dayB.day_of_week}: mesmo grupo muscular em dias consecutivos (${shared.slice(0,2).join(', ')})`)
+        }
+      }
+    }
+    recoveryScore = Math.max(0, recoveryScore)
+  } else if (allExercises.length > 0) {
+    recoveryScore = 70
+  }
+  const recoveryMsg = recoveryIssues.length
+    ? recoveryIssues.map(i => `⚠️ ${i}`).join('. ') + '. Insira descanso de ≥48h entre sessões do mesmo grupo (Schoenfeld 2018).'
+    : allDays && allDays.length >= 2
+      ? `Distribuição de dias adequada — sem sobreposição de grupos musculares em dias consecutivos detectada.`
+      : 'Configure os dias do plano com tipos musculares para avaliação de recuperação.'
+
+  // ── Pilar 9: PSE & Overtraining (ACWR) ──────────────────────────────────
+  // Foster 1998: carga interna = PSE × duração. ACWR seguro: 0.8–1.3
+  let overtScore = 80, overtMsg = 'Dados de PSE insuficientes para calcular índice de carga interna (mínimo 4 sessões de cárdio).'
+  if (cardioSessions && cardioSessions.length >= 4) {
+    const now3 = new Date()
+    const withLoad = cardioSessions
+      .filter(s => s.pse && s.duration_minutes)
+      .map(s => ({ load: s.pse * s.duration_minutes, date: new Date(s.date + 'T12:00:00') }))
+      .filter(s => (now3 - s.date) < 28 * 864e5)
+      .sort((a,b) => b.date - a.date)
+
+    if (withLoad.length >= 4) {
+      const acuteLoad    = withLoad.filter(s => (now3 - s.date) < 7  * 864e5).reduce((s,r) => s + r.load, 0)
+      const chronicBase  = withLoad.filter(s => (now3 - s.date) < 28 * 864e5).reduce((s,r) => s + r.load, 0) / 4
+      const acwr         = chronicBase > 0 ? acuteLoad / chronicBase : 1.0
+      const allLoads     = withLoad.map(s => s.load)
+      const meanL        = allLoads.reduce((s,v) => s+v, 0) / allLoads.length
+      const stdL         = Math.sqrt(allLoads.map(v => (v-meanL)**2).reduce((s,v)=>s+v,0) / allLoads.length)
+      const monotony     = stdL > 0 ? meanL / stdL : 1.0
+
+      if (acwr > 1.5) {
+        overtScore = 25
+        overtMsg = `⚠️ ACWR = ${acwr.toFixed(2)} — zona de risco elevado (>1.5). Carga aguda muito superior à crônica. Reduza volume/intensidade imediatamente (Foster 1998).`
+      } else if (acwr > 1.3) {
+        overtScore = 55
+        overtMsg = `⚠️ ACWR = ${acwr.toFixed(2)} — zona de atenção (1.3–1.5). Monitore sinais de fadiga e considere reduzir PSE das próximas sessões.`
+      } else if (acwr < 0.8) {
+        overtScore = 65
+        overtMsg = `ACWR = ${acwr.toFixed(2)} — carga aguda abaixo da crônica. Pode indicar destreinamento ou baixa intensidade recente. Considere aumentar progressivamente.`
+      } else {
+        overtScore = 100
+        overtMsg = `ACWR = ${acwr.toFixed(2)} — zona segura (0.8–1.3). Carga aguda e crônica equilibradas.${monotony > 2 ? ' ⚠️ Monotonia elevada (' + monotony.toFixed(1) + ') — varie tipos de sessão.' : ''}`
+      }
+    }
+  }
+
+  // ── Pilar 10: Variação de Estímulo ───────────────────────────────────────
+  // Fonseca 2014; ACSM FITT-VP: variação de rep range a cada 4–6 semanas
+  let varScore = 70, varMsg = 'Dados insuficientes para avaliar variação de estímulo (mínimo 3 semanas de registros).'
+  if (exerciseLogs && exerciseLogs.length >= 6) {
+    const now4 = new Date()
+    const weekBuckets = {}
+    exerciseLogs.forEach(log => {
+      const wk = Math.floor((now4 - new Date(log.date + 'T12:00:00')) / (7 * 864e5))
+      if (wk < 8) {
+        if (!weekBuckets[wk]) weekBuckets[wk] = []
+        const m = (log.sets?.[0]?.reps || '').toString().match(/\d+/)
+        if (m) weekBuckets[wk].push(parseInt(m[0]))
+      }
+    })
+    const weeks = Object.values(weekBuckets)
+    if (weeks.length >= 3) {
+      const zoneOf = reps => reps <= 6 ? 'força' : reps <= 12 ? 'hipertrofia' : 'resistência'
+      const weeklyZones = weeks.map(repsArr => {
+        const counts = {}
+        repsArr.forEach(r => { const z = zoneOf(r); counts[z] = (counts[z]||0)+1 })
+        return Object.entries(counts).sort((a,b)=>b[1]-a[1])[0]?.[0] || 'hipertrofia'
+      })
+      const uniqueZones = new Set(weeklyZones)
+      const sameZoneStreak = weeklyZones.slice(0,6).every(z => z === weeklyZones[0])
+      if (uniqueZones.size >= 3)       { varScore = 100; varMsg = `Excelente variação de estímulo detectada: treino alterna zonas de força, hipertrofia e resistência (Fonseca 2014).` }
+      else if (uniqueZones.size === 2) { varScore = 75;  varMsg = `Variação moderada — ${[...uniqueZones].join(' e ')} alternados. Para estagnação máxima considere incluir zona de ${uniqueZones.has('força') ? 'resistência' : 'força'}.` }
+      else if (sameZoneStreak)         { varScore = 40;  varMsg = `⚠️ Mesma zona de estímulo (${weeklyZones[0]}) por >4 semanas consecutivas — risco de adaptação. Varie o rep range nas próximas semanas.` }
+      else                             { varScore = 60;  varMsg = `Pouca variação de estímulo. Alterne periodicamente entre força (1–6), hipertrofia (6–12) e resistência (12–20) reps.` }
+    }
+  }
+
+  // ── Pilar 11: Adequação ao Nível ─────────────────────────────────────────
+  // NSCA 2021; ACSM: parâmetros diferenciados por nível de treinamento
+  const levelMap = { 'Iniciante': 0, 'Intermediário': 1, 'Avançado': 2 }
+  const lvl = levelMap[level] ?? 0
+  let levelScore = 100, levelIssues = []
+
+  const LEVEL_PARAMS = [
+    { minSets: 8,  maxSets: 18, minFreq: 2, maxFreq: 3, minReps: 12, maxReps: 15, label: 'Iniciante' },
+    { minSets: 12, maxSets: 25, minFreq: 3, maxFreq: 4, minReps: 8,  maxReps: 12, label: 'Intermediário' },
+    { minSets: 18, maxSets: 40, minFreq: 4, maxFreq: 6, minReps: 5,  maxReps: 12, label: 'Avançado' },
+  ]
+  const lp = LEVEL_PARAMS[lvl]
+
+  if (allExercises.length > 0) {
+    // Volume vs nível
+    if (totalSets > 0 && totalSets > lp.maxSets) {
+      levelScore -= 15; levelIssues.push(`volume de ${totalSets} séries excede o recomendado para ${lp.label} (máx ~${lp.maxSets}/semana) — risco de overtraining`)
+    } else if (totalSets > 0 && totalSets < lp.minSets) {
+      levelScore -= 10; levelIssues.push(`volume de ${totalSets} séries abaixo do esperado para ${lp.label} (mín ~${lp.minSets}/semana)`)
+    }
+    // Frequência vs nível
+    if (daysPerWeek > lp.maxFreq) {
+      levelScore -= 15; levelIssues.push(`frequência de ${daysPerWeek}×/sem elevada para ${lp.label} (recomendado ${lp.minFreq}–${lp.maxFreq}×/sem)`)
+    } else if (daysPerWeek > 0 && daysPerWeek < lp.minFreq) {
+      levelScore -= 8; levelIssues.push(`frequência de ${daysPerWeek}×/sem baixa para ${lp.label}`)
+    }
+    // Complexidade para avançados: espera variação de rep range e periodização
+    if (lvl === 2 && varScore < 60) {
+      levelScore -= 15; levelIssues.push('aluno avançado sem periodização detectada — esperado variação de métodos e rep ranges (NSCA 2021)')
+    }
+    // Iniciantes: alertar sobre exercícios de força máxima
+    if (lvl === 0 && allExercises.filter(ex => parseInt(ex.reps) <= 4).length > 0) {
+      levelScore -= 20; levelIssues.push('exercícios de força máxima (<5 reps) para iniciante — risco técnico elevado sem base de movimento (NSCA 2021)')
+    }
+    levelScore = Math.max(0, levelScore)
+  } else {
+    levelScore = 50
+  }
+  const levelMsg = levelIssues.length
+    ? levelIssues.map(i => `⚠️ ${i}`).join('. ') + '.'
+    : `Parâmetros de volume, frequência e complexidade compatíveis com nível ${lp.label}.`
+
+  // ── Score final ponderado (11 pilares) ───────────────────────────────────
+  const W = { volume:0.14, freq:0.10, balance:0.14, progress:0.12, objective:0.10, age:0.08, monitor:0.04, recovery:0.10, overtraining:0.08, variation:0.06, levelFit:0.04 }
+  const finalScore = Math.round(
+    volumeScore   * W.volume      +
+    freqScore     * W.freq        +
+    balanceScore  * W.balance     +
+    progressScore * W.progress    +
+    objScore      * W.objective   +
+    ageScore      * W.age         +
+    monitorScore  * W.monitor     +
+    recoveryScore * W.recovery    +
+    overtScore    * W.overtraining +
+    varScore      * W.variation   +
+    levelScore    * W.levelFit
+  )
+
+  return {
+    finalScore,
+    pilares: [
+      { id: 'volume',      icon: '📦', name: 'Volume de Força',       score: volumeScore,   peso: '14%', msg: volumeMsg,   ref: 'Schoenfeld 2017; ACSM 2022' },
+      { id: 'balance',     icon: '⚖️', name: 'Equilíbrio Muscular',   score: balanceScore,  peso: '14%', msg: balanceMsg,  ref: 'Boyle 2016; NSCA Guidelines' },
+      { id: 'recovery',    icon: '🛌', name: 'Recuperação',           score: recoveryScore, peso: '10%', msg: recoveryMsg, ref: 'Schoenfeld & Ogborn 2018' },
+      { id: 'progress',    icon: '📈', name: 'Progressão de Carga',   score: progressScore, peso: '12%', msg: progressMsg, ref: 'ACSM FITT-VP; Kraemer 2004' },
+      { id: 'freq',        icon: '📅', name: 'Frequência Semanal',    score: freqScore,     peso: '10%', msg: freqMsg,     ref: 'ACSM Position Stand 2022' },
+      { id: 'objective',   icon: '🎯', name: 'Adequação ao Objetivo', score: objScore,      peso: '10%', msg: objMsg,      ref: 'Schoenfeld 2010; WHO 2020' },
+      { id: 'overtraining',icon: '💤', name: 'PSE & Fadiga (ACWR)',   score: overtScore,    peso: '8%',  msg: overtMsg,    ref: 'Foster 1998; NSCA 2021' },
+      { id: 'age',         icon: '🧬', name: 'Adequação Etária',      score: ageScore,      peso: '8%',  msg: ageMsg,      ref: 'Tanaka 2001; Balyi LTAD 2013' },
+      { id: 'variation',   icon: '🧪', name: 'Variação de Estímulo',  score: varScore,      peso: '6%',  msg: varMsg,      ref: 'Fonseca 2014; ACSM FITT-VP' },
+      { id: 'levelFit',    icon: '🏅', name: 'Adequação ao Nível',    score: levelScore,    peso: '4%',  msg: levelMsg,    ref: 'NSCA 2021; ACSM 2022' },
+      { id: 'monitor',     icon: '📊', name: 'Monitoramento',         score: monitorScore,  peso: '4%',  msg: monitorMsg,  ref: 'ACSM 2022' },
+    ],
+  }
+}
+
+// ── Histórico de score (retroativo por semana) ────────────────────────────
+function computeHistoricalScores({ student, allDays, allExercises, plannedDays, exerciseLogs, cardioSessions, progress }) {
+  const weeks = []
+  const now = new Date()
+  for (let w = 5; w >= 0; w--) {
+    const cutoff = new Date(now.getTime() - w * 7 * 864e5)
+    const filteredLogs    = exerciseLogs.filter(l => new Date(l.date + 'T12:00:00') <= cutoff)
+    const filteredCardio  = cardioSessions.filter(s => new Date(s.date + 'T12:00:00') <= cutoff)
+    const filteredProg    = progress.filter(p => new Date(p.date + 'T12:00:00') <= cutoff)
+    if (filteredLogs.length < 2 && filteredCardio.length < 2 && filteredProg.length < 1) continue
+    const r = runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLogs: filteredLogs, cardioSessions: filteredCardio, progress: filteredProg })
+    const label = w === 0 ? 'Hoje' : w === 1 ? '1s' : `${w}s`
+    weeks.push({ label, score: r.finalScore })
+  }
+  return weeks
+}
+
+// ── TabAvaliacao UI v2 ────────────────────────────────────────────────────
+function TabAvaliacao({ student, studentId, progress }) {
+  const [loading,   setLoading]  = useState(true)
+  const [result,    setResult]   = useState(null)
+  const [history,   setHistory]  = useState([])
+  const [confidence,setConf]     = useState(null)
+  const [recs,      setRecs]     = useState([])
+  const [expanded,  setExpanded] = useState(null)
+  const [activeTab, setActiveTab] = useState('pilares') // 'pilares' | 'recs' | 'history'
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      const [
+        { data: plans },
+        { data: exLogs },
+        { data: cardio },
+      ] = await Promise.all([
+        supabase.from('workout_plans')
+          .select('*, workout_days(*, exercises(*))')
+          .eq('student_id', studentId)
+          .eq('status', 'active')
+          .order('updated_at', { ascending: false })
+          .limit(1),
+        supabase.from('exercise_logs')
+          .select('*, exercises(name)')
+          .eq('student_id', studentId)
+          .order('date', { ascending: false })
+          .limit(300),
+        supabase.from('cardio_sessions')
+          .select('*')
+          .eq('student_id', studentId)
+          .order('date', { ascending: false })
+          .limit(120),
+      ])
+
+      const activePlan   = plans?.[0]
+      const allDays      = activePlan?.workout_days || []
+      const allExercises = allDays.flatMap(d => d.exercises || [])
+      const plannedDays  = allDays.map(d => d.day_of_week).filter(Boolean)
+
+      const evalResult = runEvaluation({
+        student, allExercises, allDays, plannedDays,
+        exerciseLogs:   exLogs   || [],
+        cardioSessions: cardio   || [],
+        progress:       progress || [],
+      })
+
+      const conf  = getConfidence({ allExercises, exerciseLogs: exLogs||[], cardioSessions: cardio||[], progress: progress||[], student, allDays })
+      const hist  = computeHistoricalScores({ student, allDays, allExercises, plannedDays, exerciseLogs: exLogs||[], cardioSessions: cardio||[], progress: progress||[] })
+      const recsList = generateRecommendations(evalResult.pilares)
+
+      setResult(evalResult)
+      setConf(conf)
+      setHistory(hist)
+      setRecs(recsList)
+      setLoading(false)
+    }
+    load()
+  }, [studentId, student, progress])
+
+  if (loading) return (
+    <div style={{ textAlign: 'center', padding: '60px 20px', color: '#475569' }}>
+      <div style={{ fontSize: 32, marginBottom: 10, animation: 'spin 1s linear infinite' }}>⚙️</div>
+      <div style={{ fontSize: 14 }}>Analisando prescrição com 11 pilares…</div>
+    </div>
+  )
+  if (!result) return null
+
+  const final = getScoreColor(result.finalScore)
+  const confColor = confidence?.pct >= 70 ? '#4ADE80' : confidence?.pct >= 40 ? '#FBBF24' : '#F87171'
+  const confLabel = confidence?.pct >= 70 ? 'Alta' : confidence?.pct >= 40 ? 'Moderada' : 'Baixa'
+
+  const GaugeArc = ({ score }) => {
+    const r = 70, cx = 90, cy = 90
+    const startAngle = 220 * (Math.PI/180)
+    const sweepAngle = 280 * (Math.PI/180)
+    const endAngle   = startAngle - sweepAngle * (score/100)
+    const arcPath = angle => ({ x: cx + r*Math.cos(angle), y: cy - r*Math.sin(angle) })
+    const start  = arcPath(startAngle - sweepAngle)
+    const end    = arcPath(startAngle)
+    const scored = arcPath(endAngle)
+    const large  = sweepAngle > Math.PI ? 1 : 0
+    const sLarge = sweepAngle*(score/100) > Math.PI ? 1 : 0
+    return (
+      <svg width="180" height="130" viewBox="0 0 180 130">
+        <defs>
+          <linearGradient id="gaugeGrad2" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%"   stopColor="#F87171" />
+            <stop offset="40%"  stopColor="#FBBF24" />
+            <stop offset="75%"  stopColor="#A3E635" />
+            <stop offset="100%" stopColor="#4ADE80" />
+          </linearGradient>
+          <filter id="glow2"><feGaussianBlur stdDeviation="2.5" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+        <path d={`M ${start.x} ${start.y} A ${r} ${r} 0 ${large} 1 ${end.x} ${end.y}`} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="10" strokeLinecap="round" />
+        <path d={`M ${start.x} ${start.y} A ${r} ${r} 0 ${sLarge} 1 ${scored.x} ${scored.y}`} fill="none" stroke="url(#gaugeGrad2)" strokeWidth="10" strokeLinecap="round" filter="url(#glow2)" />
+        <text x="90" y="82" textAnchor="middle" fontSize="32" fontWeight="900" fill={final.text} fontFamily="'DM Sans',sans-serif">{score}</text>
+        <text x="90" y="100" textAnchor="middle" fontSize="11" fontWeight="700" fill={final.text} fontFamily="'DM Sans',sans-serif" opacity="0.85">{final.label}</text>
+      </svg>
+    )
+  }
+
+  return (
+    <div>
+      {/* ── Header ── */}
+      <div style={{ background: 'linear-gradient(135deg,#0f172a,#0d1f35)', borderRadius: 20, padding: '24px 28px', marginBottom: 16, border: `1px solid ${final.border}`, boxShadow: `0 0 40px ${final.text}12` }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+          <div style={{ flexShrink: 0 }}><GaugeArc score={result.finalScore} /></div>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontSize: 10, color: '#475569', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 5, fontWeight: 700 }}>Índice de Qualidade da Prescrição — 11 pilares</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: final.text, marginBottom: 4 }}>{result.finalScore}/100 — {final.label}</div>
+            {/* Confiança */}
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 12px', borderRadius: 20, background: `rgba(${confColor === '#4ADE80' ? '74,222,128' : confColor === '#FBBF24' ? '251,191,36' : '248,113,113'},0.10)`, border: `1px solid ${confColor}44`, marginBottom: 10 }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: confColor }} />
+              <span style={{ fontSize: 11, color: confColor, fontWeight: 700 }}>Confiança {confLabel}: {confidence?.pct}%</span>
+              {confidence?.pct < 60 && <span style={{ fontSize: 10, color: '#64748B' }}>— adicione mais dados para melhorar</span>}
+            </div>
+            {/* Mini badges */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              {result.pilares.map(p => {
+                const c = getScoreColor(p.score)
+                return (
+                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 9px', borderRadius: 20, background: c.bg, border: `1px solid ${c.border}`, fontSize: 11, fontWeight: 700, color: c.text, cursor: 'pointer' }} onClick={() => { setActiveTab('pilares'); setExpanded(p.id) }}>
+                    {p.icon} {p.score}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Sub-tabs ── */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        {[
+          { id: 'pilares', label: `📐 ${result.pilares.length} Pilares`, },
+          { id: 'recs',    label: `💡 ${recs.length} Recomendações`, badge: recs.filter(r=>r.score<45).length },
+          { id: 'history', label: `🔄 Histórico`, },
+        ].map(t => (
+          <button key={t.id} onClick={() => setActiveTab(t.id)}
+            style={{ flex:1, padding:'10px 12px', borderRadius:10, border:'none', background: activeTab===t.id ? 'linear-gradient(135deg,#6366F1,#8B5CF6)' : 'rgba(255,255,255,0.04)', color: activeTab===t.id ? '#fff' : '#64748B', fontWeight:700, fontSize:12, cursor:'pointer', position:'relative', boxShadow: activeTab===t.id ? '0 4px 14px rgba(99,102,241,0.35)' : 'none' }}>
+            {t.label}
+            {t.badge > 0 && <span style={{ position:'absolute', top:4, right:6, background:'#F87171', color:'#fff', borderRadius:'50%', width:16, height:16, fontSize:9, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900 }}>{t.badge}</span>}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Tab: Pilares ── */}
+      {activeTab === 'pilares' && (
+        <div>
+          <div style={{ marginBottom: 8, fontSize: 11, color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>Clique em cada pilar para expandir</div>
+          {result.pilares.map(p => {
+            const c   = getScoreColor(p.score)
+            const open = expanded === p.id
+            return (
+              <div key={p.id} style={{ marginBottom: 8 }}>
+                <div onClick={() => setExpanded(open ? null : p.id)}
+                  style={{ background: '#0D1117', border: `1px solid ${open ? c.border : 'rgba(255,255,255,0.07)'}`, borderRadius: open ? '14px 14px 0 0' : 14, padding: '14px 18px', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <div style={{ fontSize: 20, width: 32, textAlign: 'center', flexShrink: 0 }}>{p.icon}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontSize: 14, fontWeight: 800, color: '#E2E8F0' }}>{p.name}</span>
+                      <span style={{ fontSize: 10, color: '#475569', background: 'rgba(255,255,255,0.04)', padding: '2px 8px', borderRadius: 20, border: '1px solid rgba(255,255,255,0.07)' }}>peso {p.peso}</span>
+                    </div>
+                    <div style={{ height: 5, borderRadius: 99, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${p.score}%`, borderRadius: 99, background: `linear-gradient(90deg,${c.text}88,${c.text})`, transition: 'width 0.7s ease' }} />
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.bg, border: `2px solid ${c.border}` }}>
+                      <span style={{ fontSize: 15, fontWeight: 900, color: c.text }}>{p.score}</span>
+                    </div>
+                    <span style={{ fontSize: 13, color: '#334155' }}>{open ? '▲' : '▼'}</span>
+                  </div>
+                </div>
+                {open && (
+                  <div style={{ background: '#080B12', border: `1px solid ${c.border}`, borderTop: 'none', borderRadius: '0 0 14px 14px', padding: '16px 18px' }}>
+                    <div style={{ fontSize: 13, color: '#CBD5E1', lineHeight: 1.65, marginBottom: 12, paddingLeft: 4 }}>{p.msg}</div>
+                    <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)' }}>
+                        <span style={{ fontSize: 11, color: '#818CF8', fontWeight: 600 }}>📖 {p.ref}</span>
+                      </div>
+                      {(RECS[p.id]?.(p.score)||[]).length > 0 && (
+                        <button onClick={e => { e.stopPropagation(); setActiveTab('recs') }} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 20, background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)', fontSize: 11, color: '#FBBF24', fontWeight: 600, cursor: 'pointer' }}>
+                          💡 Ver recomendações
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ── Tab: Recomendações ── */}
+      {activeTab === 'recs' && (
+        <div>
+          {recs.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 20px', color: '#4ADE80' }}>
+              <div style={{ fontSize: 36, marginBottom: 8 }}>🏆</div>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Nenhuma recomendação crítica!</div>
+              <div style={{ fontSize: 12, color: '#475569', marginTop: 4 }}>Todos os pilares estão com score adequado.</div>
+            </div>
+          ) : (
+            <div>
+              <div style={{ fontSize: 11, color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
+                {recs.length} ação{recs.length > 1 ? 'ões' : ''} sugerida{recs.length > 1 ? 's' : ''} — ordenadas por prioridade
+              </div>
+              {recs.map((rec, i) => {
+                const c = getScoreColor(rec.score)
+                return (
+                  <div key={i} style={{ background: '#0D1117', border: `1px solid ${c.border}`, borderRadius: 14, padding: '14px 18px', marginBottom: 10, display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: c.bg, border: `1px solid ${c.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{rec.icon}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 10, color: c.text, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{rec.pilar} — score {rec.score}</div>
+                      <div style={{ fontSize: 13, color: '#CBD5E1', lineHeight: 1.6 }}>{rec.txt}</div>
+                    </div>
+                    <div style={{ flexShrink: 0, fontSize: 11, color: '#334155', fontWeight: 700, background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '4px 8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      #{i+1}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Tab: Histórico ── */}
+      {activeTab === 'history' && (
+        <div>
+          {history.length < 2 ? (
+            <div style={{ textAlign:'center', padding:'40px 20px', color:'#475569' }}>
+              <div style={{ fontSize:32, marginBottom:8 }}>📉</div>
+              <div style={{ fontSize:14, fontWeight:700, color:'#94A3B8' }}>Histórico insuficiente</div>
+              <div style={{ fontSize:12, marginTop:4 }}>São necessários pelo menos 2 semanas de registros para gerar o gráfico de evolução do índice.</div>
+            </div>
+          ) : (
+            <div style={{ background:'#0D1117', borderRadius:16, padding:'20px 16px', border:'1px solid rgba(255,255,255,0.07)' }}>
+              <div style={{ fontSize:12, fontWeight:700, color:'#94A3B8', marginBottom:16, textTransform:'uppercase', letterSpacing:1 }}>📈 Evolução do Índice de Prescrição</div>
+              <ResponsiveContainer width="100%" height={180}>
+                <LineChart data={history}>
+                  <XAxis dataKey="label" tick={{ fill:'#475569', fontSize:11 }} axisLine={false} tickLine={false} />
+                  <YAxis domain={[0,100]} tick={{ fill:'#475569', fontSize:11 }} axisLine={false} tickLine={false} width={30} />
+                  <Tooltip
+                    contentStyle={{ background:'rgba(4,8,32,0.97)', border:'1px solid rgba(99,102,241,0.3)', borderRadius:10, fontSize:12, color:'#E2E8F0' }}
+                    formatter={v => [`${v}/100`, 'Score']}
+                  />
+                  <Line type="monotone" dataKey="score" stroke="#6366F1" strokeWidth={3} dot={{ fill:'#818CF8', r:4, strokeWidth:2, stroke:'#6366F1' }} activeDot={{ r:6, fill:'#A78BFA' }} />
+                </LineChart>
+              </ResponsiveContainer>
+              <div style={{ marginTop:12, display:'flex', gap:16, justifyContent:'center', flexWrap:'wrap' }}>
+                {history.length >= 2 && (() => {
+                  const delta = history[history.length-1].score - history[0].score
+                  const col = delta > 0 ? '#4ADE80' : delta < 0 ? '#F87171' : '#94A3B8'
+                  return <div style={{ fontSize:12, color:col, fontWeight:700 }}>{delta > 0 ? '↑' : delta < 0 ? '↓' : '→'} {Math.abs(delta)} pontos nas últimas {history.length - 1} semanas</div>
+                })()}
+              </div>
+            </div>
+          )}
+          <div style={{ marginTop:12, padding:'10px 14px', background:'rgba(99,102,241,0.04)', borderRadius:10, border:'1px solid rgba(99,102,241,0.10)', fontSize:11, color:'#475569', lineHeight:1.6 }}>
+            O histórico é calculado retroativamente usando os dados de cargas e cárdio registrados. Reflete a qualidade da prescrição ao longo do tempo com base nos dados disponíveis em cada período.
+          </div>
+        </div>
+      )}
+
+      {/* ── Rodapé ── */}
+      <div style={{ marginTop: 20, padding: '14px 18px', background: 'rgba(99,102,241,0.05)', borderRadius: 12, border: '1px solid rgba(99,102,241,0.12)' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: '#6366F1', marginBottom: 5 }}>🔬 Sobre este avaliador v2</div>
+        <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.7 }}>
+          11 pilares ponderados com confiança baseada em dados disponíveis. Referências: ACSM 2022, Schoenfeld 2017, Foster 1998 (ACWR), Boyle 2016, Balyi LTAD 2013, Fonseca 2014, WHO 2020, NSCA 2021. Ferramenta de suporte ao julgamento clínico — não substitui avaliação presencial.
+        </div>
+      </div>
+    </div>
+  )
+}
+
 
 export default function StudentDetail({ navigate, studentId }) {
   const [student, setStudent] = useState(null)
@@ -287,8 +1037,8 @@ export default function StudentDetail({ navigate, studentId }) {
 
         {/* Tabs */}
         <div style={s.tabs}>
-          {[['plans', '🏋️ Treinos'], ['progress', '📈 Evolução'], ['metas', '🎯 Metas'], ['notes', '📋 Observações']].map(([id, label]) => (
-            <button key={id} style={s.tab(tab === id)} onClick={() => setTab(id)}>{label}</button>
+          {[['plans', '🏋️ Treinos'], ['progress', '📈 Evolução'], ['metas', '🎯 Metas'], ['avaliacao', '🔬 Avaliação'], ['notes', '📋 Obs.']].map(([id, label]) => (
+            <button key={id} style={s.tab(tab === id, id === 'avaliacao')} onClick={() => setTab(id)}>{label}</button>
           ))}
         </div>
 
@@ -425,6 +1175,15 @@ export default function StudentDetail({ navigate, studentId }) {
               </>
             )}
           </div>
+        )}
+
+        {/* AVALIACAO TAB */}
+        {tab === 'avaliacao' && (
+          <TabAvaliacao
+            student={student}
+            studentId={studentId}
+            progress={progress}
+          />
         )}
 
         {/* NOTES TAB */}
