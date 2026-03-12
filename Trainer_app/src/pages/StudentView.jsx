@@ -539,6 +539,8 @@ function NovaMetaModal({ studentId, goal, onSave, onClose }) {
 function TabMetas({ studentId, student, goals, onUpdate }) {
   const [showModal, setShowModal] = useState(false)
   const [updating, setUpdating]  = useState(null)
+  const [editingProgress, setEditingProgress] = useState(null) // goalId being edited
+  const [progressInput, setProgressInput] = useState('')
 
   const updateStatus = async (goalId, status) => {
     setUpdating(goalId)
@@ -547,9 +549,23 @@ function TabMetas({ studentId, student, goals, onUpdate }) {
     setUpdating(null)
   }
 
+  const updateCurrentValue = async (goalId) => {
+    const val = parseFloat(progressInput)
+    if (isNaN(val)) { setEditingProgress(null); return }
+    await supabase.from('student_goals').update({ current_value: val }).eq('id', goalId)
+    await onUpdate()
+    setEditingProgress(null)
+    setProgressInput('')
+  }
+
   const deleteGoal = async (goalId) => {
     await supabase.from('student_goals').delete().eq('id', goalId)
     await onUpdate()
+  }
+
+  // Auto-populate current_value from stored field
+  const getAutoProgress = (g) => {
+    return g.current_value ?? null
   }
 
   const ativas     = goals.filter(g => g.status === 'ativa')
@@ -637,12 +653,75 @@ function TabMetas({ studentId, student, goals, onUpdate }) {
                           <span style={{ fontSize:14,fontWeight:800,color:'#E2E8F0' }}>{g.title}</span>
                           <span style={{ fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:20,background:cc.bg,color:cc.text,border:`1px solid ${cc.border}` }}>{g.category}</span>
                         </div>
-                        {g.target_value && (
-                          <div style={{ fontSize:13,color:'#94A3B8',marginBottom:4 }}>
-                            🎯 Alvo: <strong style={{ color:cc.text }}>{g.target_value} {g.target_unit}</strong>
-                          </div>
-                        )}
-                        {g.description && g.description !== g.title && (
+
+                        {/* ── Barra de progresso ── */}
+                        {g.target_value && (() => {
+                          const current = getAutoProgress(g)
+                          const pct = current != null ? Math.min(Math.round((current / g.target_value) * 100), 100) : null
+                          return (
+                            <div style={{ marginBottom: 8 }}>
+                              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
+                                <span style={{ fontSize:12, color:'#94A3B8' }}>
+                                  🎯 Alvo: <strong style={{ color:cc.text }}>{g.target_value} {g.target_unit}</strong>
+                                </span>
+                                {pct != null && (
+                                  <span style={{ fontSize:12, fontWeight:800, color: pct >= 100 ? '#34D399' : pct >= 60 ? '#F5C842' : cc.text }}>
+                                    {pct}%
+                                  </span>
+                                )}
+                              </div>
+                              {pct != null && (
+                                <div style={{ height:8, borderRadius:99, background:'rgba(255,255,255,0.07)', overflow:'hidden', marginBottom:4 }}>
+                                  <div style={{
+                                    height:'100%', width:`${pct}%`,
+                                    borderRadius:99, transition:'width 0.6s ease',
+                                    background: pct >= 100 ? 'linear-gradient(90deg,#34D399,#059669)' : pct >= 60 ? 'linear-gradient(90deg,#F5C842,#D97706)' : `linear-gradient(90deg,${cc.text}99,${cc.text})`,
+                                  }} />
+                                </div>
+                              )}
+                              {current != null && (
+                                <div style={{ fontSize:11, color:'#64748B' }}>
+                                  Atual: <strong style={{ color:cc.text }}>{current} {g.target_unit}</strong>
+                                  {g.category !== 'habito' && (
+                                    <button onClick={() => { setEditingProgress(g.id); setProgressInput(String(current)) }}
+                                      style={{ marginLeft:8, background:'none', border:'none', color:'#475569', cursor:'pointer', fontSize:11, textDecoration:'underline' }}>
+                                      ✏️ editar
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                              {current == null && g.category !== 'habito' && editingProgress !== g.id && (
+                                <button onClick={() => { setEditingProgress(g.id); setProgressInput('') }}
+                                  style={{ fontSize:11, background:'rgba(255,255,255,0.05)', border:`1px solid ${cc.border}`, borderRadius:8, padding:'4px 10px', color:cc.text, cursor:'pointer', fontWeight:700 }}>
+                                  📝 Registrar progresso atual
+                                </button>
+                              )}
+                              {editingProgress === g.id && (
+                                <div style={{ display:'flex', gap:6, marginTop:6, alignItems:'center' }}>
+                                  <input
+                                    type="number"
+                                    value={progressInput}
+                                    onChange={e => setProgressInput(e.target.value)}
+                                    placeholder={`Ex: ${g.target_value / 2}`}
+                                    style={{ flex:1, background:'rgba(255,255,255,0.06)', border:`1px solid ${cc.border}`, borderRadius:8, padding:'6px 10px', color:'#E2E8F0', fontSize:13, outline:'none' }}
+                                    autoFocus
+                                  />
+                                  <span style={{ fontSize:12, color:'#64748B' }}>{g.target_unit}</span>
+                                  <button onClick={() => updateCurrentValue(g.id)}
+                                    style={{ padding:'6px 12px', borderRadius:8, border:'none', background:`${cc.text}`, color:'#FFF', fontWeight:800, fontSize:12, cursor:'pointer' }}>
+                                    ✓
+                                  </button>
+                                  <button onClick={() => setEditingProgress(null)}
+                                    style={{ padding:'6px 10px', borderRadius:8, border:'none', background:'rgba(255,255,255,0.06)', color:'#64748B', fontSize:12, cursor:'pointer' }}>
+                                    ✕
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })()}
+
+                        {!g.target_value && g.description && g.description !== g.title && (
                           <div style={{ fontSize:12,color:'#475569',marginBottom:4,fontStyle:'italic' }}>{g.description}</div>
                         )}
                         {daysLeft !== null && (
