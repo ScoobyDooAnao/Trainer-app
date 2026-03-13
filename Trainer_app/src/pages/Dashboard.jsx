@@ -214,7 +214,7 @@ function ageBadge(age) {
   let emoji, color, bg, label
   if      (age < 12)  { emoji = '🧒'; color = '#0284C7'; bg = 'rgba(2,132,199,0.12)';  label = `${age} anos · Criança`      }
   else if (age < 18)  { emoji = '🧑'; color = '#7C3AED'; bg = 'rgba(124,58,237,0.12)'; label = `${age} anos · Adolescente`  }
-  else if (age < 60)  { emoji = '💪'; color = '#059669'; bg = 'rgba(5,150,105,0.12)';  label = `${age} anos`                }
+  else if (age < 60)  { emoji = '💪'; color = '#059669'; bg = 'rgba(5,150,105,0.12)';  label = `${age} anos · Adulto`       }
   else                { emoji = '🧓'; color = '#D97706'; bg = 'rgba(217,119,6,0.12)';  label = `${age} anos · Idoso`        }
   return { emoji, color, bg, label }
 }
