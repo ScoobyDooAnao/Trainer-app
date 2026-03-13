@@ -269,7 +269,7 @@ const CAT_COLORS = {
 }
 
 // ── NOVA META MODAL ───────────────────────────────────────────────────────────
-function NovaMetaModal({ studentId, goal, onSave, onClose }) {
+function NovaMetaModal({ studentId, goal, goals, onSave, onClose }) {
   const sugestoes = METAS_SUGERIDAS[goal] || METAS_SUGERIDAS['Ganho de Massa']
   const [step, setStep]     = useState('escolher')
   const [sel, setSel]       = useState(null)
@@ -287,6 +287,14 @@ function NovaMetaModal({ studentId, goal, onSave, onClose }) {
   const [saveError, setSaveError] = useState(null)
   const salvar = async () => {
     if (!titulo.trim()) return
+    // Check duplicate category
+    if (sel?.categoria && sel.categoria !== 'outro') {
+      const dupl = (goals||[]).filter(g => g.status==='ativa' && g.category===sel.categoria)
+      if (dupl.length > 0) {
+        setSaveError(`Você já tem uma meta ativa na categoria "${sel.categoria}". Conclua ou exclua ela antes de criar outra.`)
+        return
+      }
+    }
     setSaving(true); setSaveError(null)
     const { error } = await supabase.from('student_goals').insert([{
       student_id:studentId, title:titulo, description:descricao,
@@ -413,7 +421,7 @@ function TabMetas({ studentId, student, goals, onUpdate }) {
 
   return (
     <div style={{ animation:'fadeUp 0.4s ease' }}>
-      {showModal && <NovaMetaModal studentId={studentId} goal={student?.goal}
+      {showModal && <NovaMetaModal studentId={studentId} goal={student?.goal} goals={goals}
         onSave={onUpdate} onClose={()=>setShowModal(false)} />}
 
       {/* Header */}
@@ -581,12 +589,19 @@ function TabMetas({ studentId, student, goals, onUpdate }) {
                           </div>
                         )}
                       </div>
-                      <button onClick={()=>updateStatus(g.id,'concluida')} disabled={isU} style={{
-                        padding:'8px 14px',borderRadius:10,border:'1px solid rgba(52,211,153,0.25)',
-                        background:'rgba(52,211,153,0.08)',color:'#34D399',fontWeight:800,fontSize:12,
-                        cursor:'pointer',whiteSpace:'nowrap',flexShrink:0,fontFamily:"'Nunito',sans-serif",
-                        transition:'all 0.2s',
-                      }}>{isU?'...':'⭐ Concluir'}</button>
+                      <div style={{ display:'flex',flexDirection:'column',gap:6,flexShrink:0 }}>
+                        <button onClick={()=>updateStatus(g.id,'concluida')} disabled={isU} style={{
+                          padding:'8px 14px',borderRadius:10,border:'1px solid rgba(52,211,153,0.25)',
+                          background:'rgba(52,211,153,0.08)',color:'#34D399',fontWeight:800,fontSize:12,
+                          cursor:'pointer',whiteSpace:'nowrap',fontFamily:"'Nunito',sans-serif",
+                          transition:'all 0.2s',
+                        }}>{isU?'...':'⭐ Concluir'}</button>
+                        <button onClick={()=>{ if(window.confirm('Excluir esta meta?')) deleteGoal(g.id) }} style={{
+                          padding:'6px 14px',borderRadius:10,border:'1px solid rgba(248,113,113,0.2)',
+                          background:'rgba(248,113,113,0.07)',color:'#F87171',fontWeight:700,fontSize:11,
+                          cursor:'pointer',whiteSpace:'nowrap',fontFamily:"'Nunito',sans-serif",
+                        }}>🗑 Excluir</button>
+                      </div>
                     </div>
                   </div>
                 )
