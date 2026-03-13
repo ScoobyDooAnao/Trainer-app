@@ -12,10 +12,13 @@ const YELLOW_BG     = 'rgba(245,200,66,0.15)'
 const YELLOW_BORDER = 'rgba(245,200,66,0.45)'
 
 const GOAL = {
-  'Ganho de Massa':      { bg: '#E0F4FF', accent: '#0284C7', icon: '💪' },
-  'Emagrecimento':       { bg: '#FEF2F2', accent: '#E05252', icon: '🔥' },
-  'Força e Performance': { bg: '#EDE9FE', accent: '#7C3AED', icon: '⚡' },
-  'Condicionamento':     { bg: '#FFFBEB', accent: '#D97706', icon: '🏃' },
+  'Ganho de Massa':           { bg: '#E0F4FF', accent: '#0284C7', icon: '💪' },
+  'Emagrecimento':            { bg: '#FEF2F2', accent: '#E05252', icon: '🔥' },
+  'Força e Performance':      { bg: '#EDE9FE', accent: '#7C3AED', icon: '⚡' },
+  'Condicionamento':          { bg: '#FFFBEB', accent: '#D97706', icon: '🏃' },
+  'Iniciação Esportiva':      { bg: '#ECFDF5', accent: '#059669', icon: '🎮' },
+  'Desenvolvimento Atlético': { bg: '#EFF6FF', accent: '#3B82F6', icon: '📈' },
+  'Treinamento Competitivo':  { bg: '#FDF4FF', accent: '#A21CAF', icon: '🏆' },
 }
 
 const DIAS_SEMANA = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
@@ -27,8 +30,40 @@ const NAV = [
   { id: 'evolucao', icon: '📈', label: 'Evolução'     },
   { id: 'cardio',   icon: '❤️', label: 'Cardio'       },
 ]
-const GOALS  = ['Ganho de Massa', 'Emagrecimento', 'Condicionamento', 'Força e Performance']
-const LEVELS = ['Iniciante', 'Intermediário', 'Avançado']
+const GOALS  = ['Ganho de Massa', 'Emagrecimento', 'Condicionamento', 'Força e Performance', 'Iniciação Esportiva', 'Desenvolvimento Atlético', 'Treinamento Competitivo']
+const LEVELS = ['Iniciante', 'Intermediário', 'Avançado', 'Atleta Jovem', 'Atleta Competitivo']
+
+const SPORTS = [
+  { id: 'futebol',    label: 'Futebol',       icon: '⚽' },
+  { id: 'futsal',     label: 'Futsal',         icon: '🥅' },
+  { id: 'natacao',    label: 'Natação',        icon: '🏊' },
+  { id: 'tenis',      label: 'Tênis',          icon: '🎾' },
+  { id: 'basquete',   label: 'Basquete',       icon: '🏀' },
+  { id: 'volei',      label: 'Vôlei',          icon: '🏐' },
+  { id: 'atletismo',  label: 'Atletismo',      icon: '🏃' },
+  { id: 'ginastica',  label: 'Ginástica',      icon: '🤸' },
+  { id: 'judo',       label: 'Judô',           icon: '🥋' },
+  { id: 'natação',    label: 'Natação',        icon: '🏊' },
+  { id: 'ciclismo',   label: 'Ciclismo',       icon: '🚴' },
+  { id: 'handebol',   label: 'Handebol',       icon: '🤾' },
+  { id: 'outro',      label: 'Outro',          icon: '🏅' },
+]
+
+// LTAD — Long-Term Athlete Development
+// Retorna fase com base na idade e anos de experiência
+function calcLTAD(age, expYears) {
+  if (!age) return null
+  const exp = expYears || 0
+  // Fases ajustadas pela experiência: aluno com poucos anos de prática regride uma fase
+  if (age < 9)                                    return { fase: 'FUNdamentals',      cor: '#0284C7', bg: 'rgba(2,132,199,0.1)',   icon: '🎮', desc: 'Habilidades motoras fundamentais e ludicidade' }
+  if (age < 12 && exp < 3)                        return { fase: 'FUNdamentals',      cor: '#0284C7', bg: 'rgba(2,132,199,0.1)',   icon: '🎮', desc: 'Habilidades motoras fundamentais e ludicidade' }
+  if (age < 13)                                   return { fase: 'Learn to Train',    cor: '#059669', bg: 'rgba(5,150,105,0.1)',   icon: '📚', desc: 'Aprender habilidades esportivas gerais' }
+  if (age < 16 && exp < 4)                        return { fase: 'Learn to Train',    cor: '#059669', bg: 'rgba(5,150,105,0.1)',   icon: '📚', desc: 'Aprender habilidades esportivas gerais' }
+  if (age < 17)                                   return { fase: 'Train to Train',    cor: '#D97706', bg: 'rgba(217,119,6,0.1)',   icon: '💪', desc: 'Construir base física específica ao esporte' }
+  if (age < 19 && exp < 5)                        return { fase: 'Train to Train',    cor: '#D97706', bg: 'rgba(217,119,6,0.1)',   icon: '💪', desc: 'Construir base física específica ao esporte' }
+  if (age <= 23)                                  return { fase: 'Train to Compete',  cor: '#7C3AED', bg: 'rgba(124,58,237,0.1)',  icon: '🏆', desc: 'Especialização e desempenho competitivo' }
+  return null
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function imcStyle(w, h, precomputed) {
@@ -257,6 +292,8 @@ function StudentCard({ st, onClick, onDelete }) {
   const active = (st.lastSeenDays ?? 999) < 5
   const age    = calcAgeFromStudent(st)
   const badge  = ageBadge(age)
+  const ltad   = calcLTAD(age, st.experience_years)
+  const sport  = SPORTS.find(s => s.id === st.sport)
 
   const handleDelete = async () => {
     setDeleting(true)
@@ -326,18 +363,34 @@ function StudentCard({ st, onClick, onDelete }) {
           {/* Nome */}
           <div style={{ fontSize: 18, fontWeight: 800, color: '#0D1B2A', letterSpacing: '-0.4px', lineHeight: 1.2, marginBottom: 6, paddingRight: 28 }}>{st.name}</div>
 
-          {/* Badge de idade/faixa etária */}
-          {badge && (
-            <div style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'2px 9px', borderRadius:20, background: badge.bg, border:`1px solid ${badge.color}33`, marginBottom:6 }}>
-              <span style={{ fontSize:11 }}>{badge.emoji}</span>
-              <span style={{ fontSize:11, fontWeight:700, color: badge.color }}>{badge.label}</span>
-            </div>
-          )}
+          {/* Badges — faixa etária + esporte + LTAD */}
+          <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:8 }}>
+            {badge && (
+              <div style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'2px 9px', borderRadius:20, background: badge.bg, border:`1px solid ${badge.color}33` }}>
+                <span style={{ fontSize:11 }}>{badge.emoji}</span>
+                <span style={{ fontSize:11, fontWeight:700, color: badge.color }}>{badge.label}</span>
+              </div>
+            )}
+            {sport && (
+              <div style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'2px 9px', borderRadius:20, background:'rgba(59,130,246,0.1)', border:'1px solid rgba(59,130,246,0.25)' }}>
+                <span style={{ fontSize:11 }}>{sport.icon}</span>
+                <span style={{ fontSize:11, fontWeight:700, color:'#3B82F6' }}>{sport.label}</span>
+              </div>
+            )}
+            {ltad && (
+              <div title={ltad.desc} style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'2px 9px', borderRadius:20, background: ltad.bg, border:`1px solid ${ltad.cor}33` }}>
+                <span style={{ fontSize:11 }}>{ltad.icon}</span>
+                <span style={{ fontSize:11, fontWeight:700, color: ltad.cor }}>{ltad.fase}</span>
+              </div>
+            )}
+          </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 12, color: g.accent, fontWeight: 700 }}>{g.icon} {st.goal}</span>
-            <span style={{ fontSize: 10, color: '#CBD5E1' }}>·</span>
-            <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>{st.level}</span>
+            {st.guardian_name && <>
+              <span style={{ fontSize: 10, color: '#CBD5E1' }}>·</span>
+              <span style={{ fontSize: 11, color: '#64748B' }}>👨‍👩‍👧 {st.guardian_name.split(' ')[0]}</span>
+            </>}
           </div>
         </div>
 
@@ -1692,37 +1745,149 @@ function TabCardio({ students }) {
 
 // ── NovoAlunoModal ─────────────────────────────────────────────────────────
 function NovoAlunoModal({ onSave, onClose, teacherId }) {
-  const [form, setForm]     = useState({ name: '', age: '', weight: '', height: '', goal: 'Ganho de Massa', level: 'Iniciante', notes: '' })
+  const [form, setForm] = useState({
+    name: '', age: '', weight: '', height: '',
+    goal: 'Iniciação Esportiva', level: 'Iniciante', notes: '',
+    sport: '', sport_position: '', experience_years: '',
+    guardian_name: '', guardian_phone: '',
+  })
   const [saving, setSaving] = useState(false)
-  const f = (field, val) => setForm(prev => ({ ...prev, [field]: val }))
+  const f   = (field, val) => setForm(prev => ({ ...prev, [field]: val }))
   const inp = { width: '100%', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '10px 12px', color: '#0D1B2A', fontSize: 14, outline: 'none', boxSizing: 'border-box' }
   const lbl = { fontSize: 11, color: '#64748B', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6, display: 'block', marginTop: 14 }
+  const sep = (title) => (
+    <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:22, marginBottom:4 }}>
+      <div style={{ flex:1, height:1, background:'#E2E8F0' }} />
+      <span style={{ fontSize:10, color:'#94A3B8', fontWeight:700, textTransform:'uppercase', letterSpacing:1.2, whiteSpace:'nowrap' }}>{title}</span>
+      <div style={{ flex:1, height:1, background:'#E2E8F0' }} />
+    </div>
+  )
+
+  // Preview LTAD em tempo real
+  const previewAge  = parseInt(form.age) || null
+  const previewLTAD = calcLTAD(previewAge, parseInt(form.experience_years) || 0)
+
   const save = async () => {
     if (!form.name.trim()) return
     setSaving(true)
-    await supabase.from('students').insert([{ ...form, age: +form.age || null, weight: +form.weight || null, height: +form.height || null, teacher_id: teacherId }])
-    setSaving(false)
-    onSave()
-    onClose()
+    await supabase.from('students').insert([{
+      teacher_id:       teacherId,
+      name:             form.name.trim(),
+      age:              +form.age              || null,
+      weight:           +form.weight           || null,
+      height:           +form.height           || null,
+      goal:             form.goal,
+      level:            form.level,
+      notes:            form.notes             || null,
+      sport:            form.sport             || null,
+      sport_position:   form.sport_position    || null,
+      experience_years: +form.experience_years || null,
+      guardian_name:    form.guardian_name     || null,
+      guardian_phone:   form.guardian_phone    || null,
+    }])
+    setSaving(false); onSave(); onClose()
   }
+
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 20, padding: 32, width: '100%', maxWidth: 460, maxHeight: '90vh', overflowY: 'auto' }}>
-        <div style={{ fontSize: 18, fontWeight: 800, color: '#0D1B2A', marginBottom: 4 }}>Novo Aluno</div>
-        <div style={{ fontSize: 13, color: '#64748B', marginBottom: 20 }}>Preencha os dados do aluno</div>
-        {[['Nome completo', 'name', 'text', 'Ex: João Silva'], ['Idade', 'age', 'number', 'Ex: 25'], ['Peso (kg)', 'weight', 'number', 'Ex: 80'], ['Altura (cm)', 'height', 'number', 'Ex: 175']].map(([label, field, type, ph]) => (
-          <div key={field}><label style={lbl}>{label}</label><input style={inp} type={type} placeholder={ph} value={form[field]} onChange={e => f(field, e.target.value)} /></div>
-        ))}
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100, padding:20 }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:'#fff', borderRadius:20, padding:28, width:'100%', maxWidth:500, maxHeight:'92vh', overflowY:'auto' }}>
+
+        {/* Header */}
+        <div style={{ fontSize:19, fontWeight:900, color:'#0D1B2A', marginBottom:2 }}>Cadastrar Aluno</div>
+        <div style={{ fontSize:13, color:'#64748B', marginBottom:20 }}>Preencha os dados do aluno e do responsável</div>
+
+        {/* ── Dados pessoais ── */}
+        {sep('Dados Pessoais')}
+        <label style={lbl}>Nome completo</label>
+        <input style={inp} type="text" placeholder="Ex: João Silva" value={form.name} onChange={e=>f('name',e.target.value)} />
+
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+          <div>
+            <label style={lbl}>Idade</label>
+            <input style={inp} type="number" placeholder="Ex: 13" value={form.age} onChange={e=>f('age',e.target.value)} />
+          </div>
+          <div>
+            <label style={lbl}>Altura (cm)</label>
+            <input style={inp} type="number" placeholder="Ex: 165" value={form.height} onChange={e=>f('height',e.target.value)} />
+          </div>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+          <div>
+            <label style={lbl}>Peso (kg)</label>
+            <input style={inp} type="number" placeholder="Ex: 55" value={form.weight} onChange={e=>f('weight',e.target.value)} />
+          </div>
+          <div>
+            <label style={lbl}>Nível</label>
+            <select style={inp} value={form.level} onChange={e=>f('level',e.target.value)}>
+              {LEVELS.map(l => <option key={l}>{l}</option>)}
+            </select>
+          </div>
+        </div>
+
         <label style={lbl}>Objetivo</label>
-        <select style={inp} value={form.goal} onChange={e => f('goal', e.target.value)}>{GOALS.map(g => <option key={g}>{g}</option>)}</select>
-        <label style={lbl}>Nível</label>
-        <select style={inp} value={form.level} onChange={e => f('level', e.target.value)}>{LEVELS.map(l => <option key={l}>{l}</option>)}</select>
-        <label style={lbl}>Observações</label>
-        <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} placeholder="Lesões, restrições..." value={form.notes} onChange={e => f('notes', e.target.value)} />
-        <button onClick={save} disabled={saving} style={{ width: '100%', background: 'linear-gradient(135deg,#F5C842,#D97706)', border: 'none', borderRadius: 10, padding: 13, color: '#431C00', fontWeight: 800, fontSize: 14, cursor: 'pointer', marginTop: 20 }}>
-          {saving ? 'Salvando...' : 'Cadastrar Aluno'}
+        <select style={inp} value={form.goal} onChange={e=>f('goal',e.target.value)}>
+          <optgroup label="— Esportivo (infantojuvenil)">
+            {['Iniciação Esportiva','Desenvolvimento Atlético','Treinamento Competitivo'].map(g=><option key={g}>{g}</option>)}
+          </optgroup>
+          <optgroup label="— Geral">
+            {['Condicionamento','Ganho de Massa','Emagrecimento','Força e Performance'].map(g=><option key={g}>{g}</option>)}
+          </optgroup>
+        </select>
+
+        {/* ── Esporte ── */}
+        {sep('Esporte')}
+        <label style={lbl}>Modalidade principal</label>
+        <select style={inp} value={form.sport} onChange={e=>f('sport',e.target.value)}>
+          <option value="">Selecionar...</option>
+          {SPORTS.filter((s,i,a)=>a.findIndex(x=>x.label===s.label)===i).map(s=>(
+            <option key={s.id} value={s.id}>{s.icon} {s.label}</option>
+          ))}
+        </select>
+
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+          <div>
+            <label style={lbl}>Posição / Especialidade</label>
+            <input style={inp} type="text" placeholder="Ex: Meia, Goleiro..." value={form.sport_position} onChange={e=>f('sport_position',e.target.value)} />
+          </div>
+          <div>
+            <label style={lbl}>Anos de experiência</label>
+            <input style={inp} type="number" placeholder="Ex: 2" min="0" value={form.experience_years} onChange={e=>f('experience_years',e.target.value)} />
+          </div>
+        </div>
+
+        {/* LTAD preview em tempo real */}
+        {previewLTAD && (
+          <div style={{ marginTop:12, padding:'10px 14px', borderRadius:10, background: previewLTAD.bg, border:`1px solid ${previewLTAD.cor}33`, display:'flex', alignItems:'center', gap:10 }}>
+            <span style={{ fontSize:18 }}>{previewLTAD.icon}</span>
+            <div>
+              <div style={{ fontSize:12, fontWeight:800, color: previewLTAD.cor }}>Fase LTAD: {previewLTAD.fase}</div>
+              <div style={{ fontSize:11, color:'#64748B' }}>{previewLTAD.desc}</div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Responsável ── */}
+        {sep('Responsável')}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+          <div>
+            <label style={lbl}>Nome do responsável</label>
+            <input style={inp} type="text" placeholder="Ex: Maria Silva" value={form.guardian_name} onChange={e=>f('guardian_name',e.target.value)} />
+          </div>
+          <div>
+            <label style={lbl}>WhatsApp do responsável</label>
+            <input style={inp} type="text" placeholder="Ex: (41) 99999-9999" value={form.guardian_phone} onChange={e=>f('guardian_phone',e.target.value)} />
+          </div>
+        </div>
+
+        {/* ── Observações ── */}
+        {sep('Observações')}
+        <label style={lbl}>Lesões, restrições ou observações</label>
+        <textarea style={{ ...inp, minHeight:65, resize:'vertical' }} placeholder="Ex: Histórico de entorse no tornozelo direito..." value={form.notes} onChange={e=>f('notes',e.target.value)} />
+
+        <button onClick={save} disabled={saving||!form.name.trim()} style={{ width:'100%', background: form.name.trim() ? 'linear-gradient(135deg,#F5C842,#D97706)' : '#F1F5F9', border:'none', borderRadius:10, padding:14, color: form.name.trim() ? '#431C00' : '#94A3B8', fontWeight:800, fontSize:15, cursor: form.name.trim() ? 'pointer' : 'default', marginTop:22 }}>
+          {saving ? 'Salvando...' : '+ Cadastrar Aluno'}
         </button>
-        <button onClick={onClose} style={{ width: '100%', background: 'rgba(0,0,0,0.04)', border: '1px solid #E2E8F0', borderRadius: 10, padding: 13, color: '#64748B', fontWeight: 600, fontSize: 14, cursor: 'pointer', marginTop: 8 }}>Cancelar</button>
+        <button onClick={onClose} style={{ width:'100%', background:'rgba(0,0,0,0.04)', border:'1px solid #E2E8F0', borderRadius:10, padding:12, color:'#64748B', fontWeight:600, fontSize:14, cursor:'pointer', marginTop:8 }}>Cancelar</button>
       </div>
     </div>
   )
