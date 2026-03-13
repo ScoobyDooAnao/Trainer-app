@@ -30,6 +30,21 @@ const CAT_STAR_COLOR = {
   peso:'#34D399', imc:'#60A5FA', medida:'#A78BFA',
   forca:'#FBBF24', cardio:'#F87171', habito:'#F5C842', outro:'#94A3B8',
 }
+// Tokens de estilo compartilhados pelos componentes de Metas e Cárdio
+const CARD = {
+  background:'rgba(13,17,23,0.92)', backdropFilter:'blur(14px)',
+  WebkitBackdropFilter:'blur(14px)',
+  border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:18, marginBottom:12,
+}
+const INP = {
+  background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)',
+  borderRadius:10, padding:'11px 14px', color:'#E2E8F0', fontSize:14,
+  outline:'none', width:'100%', boxSizing:'border-box',
+}
+const LBL = {
+  fontSize:10, color:'#64748B', fontWeight:800, letterSpacing:1.2,
+  textTransform:'uppercase', marginBottom:5, display:'block', marginTop:14,
+}
 
 // ── Cárdio + Metas components ───────────────────────────────────────────────────
 const SV_CARDIO_TYPES = [
@@ -715,6 +730,105 @@ function StudentCardioTab({ studentId, student, sessions, onNewSession }) {
 }
 
 
+// ── NOVA MEDIDA MODAL ────────────────────────────────────────────────────────
+function NovaMedidaModal({ studentId, onSave, onClose }) {
+  const [date,        setDate]        = useState(today())
+  const [peso,        setPeso]        = useState('')
+  const [cintura,     setCintura]     = useState('')
+  const [quadril,     setQuadril]     = useState('')
+  const [peito,       setPeito]       = useState('')
+  const [braco,       setBraco]       = useState('')
+  const [coxa,        setCoxa]        = useState('')
+  const [panturrilha, setPanturrilha] = useState('')
+  const [notes,       setNotes]       = useState('')
+  const [saving,      setSaving]      = useState(false)
+
+  const save = async () => {
+    if (!peso && !cintura && !quadril && !peito && !braco && !coxa && !panturrilha) return
+    setSaving(true)
+    await supabase.from('progress_entries').insert([{
+      student_id:  studentId,
+      date,
+      weight:      peso       ? parseFloat(peso)        : null,
+      measurements: {
+        waist:       cintura     ? parseFloat(cintura)     : null,
+        hip:         quadril     ? parseFloat(quadril)     : null,
+        chest:       peito       ? parseFloat(peito)       : null,
+        arm:         braco       ? parseFloat(braco)       : null,
+        thigh:       coxa        ? parseFloat(coxa)        : null,
+        calf:        panturrilha ? parseFloat(panturrilha) : null,
+      },
+      notes: notes || null,
+    }])
+    setSaving(false)
+    onSave()
+    onClose()
+  }
+
+  const campos = [
+    { label:'Peso corporal', unit:'kg',  value:peso,        set:setPeso        },
+    { label:'Cintura',       unit:'cm',  value:cintura,     set:setCintura     },
+    { label:'Quadril',       unit:'cm',  value:quadril,     set:setQuadril     },
+    { label:'Peito',         unit:'cm',  value:peito,       set:setPeito       },
+    { label:'Braço',         unit:'cm',  value:braco,       set:setBraco       },
+    { label:'Coxa',          unit:'cm',  value:coxa,        set:setCoxa        },
+    { label:'Panturrilha',   unit:'cm',  value:panturrilha, set:setPanturrilha },
+  ]
+
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.88)',
+      display:'flex', alignItems:'center', justifyContent:'center', zIndex:400, padding:16 }}>
+      <div onClick={e=>e.stopPropagation()} style={{ ...CARD, padding:24, width:'100%',
+        maxWidth:420, maxHeight:'90vh', overflowY:'auto', marginBottom:0,
+        border:'1px solid rgba(52,211,153,0.2)' }}>
+
+        <div style={{ fontSize:17, fontWeight:800, color:'#E2E8F0', marginBottom:3 }}>📏 Registrar Medidas</div>
+        <div style={{ fontSize:12, color:'#64748B', marginBottom:16 }}>Preencha os campos que deseja registrar hoje</div>
+
+        <label style={LBL}>Data</label>
+        <input type="date" style={INP} value={date} onChange={e=>setDate(e.target.value)} />
+
+        {/* Grid 2 colunas para as medidas */}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 12px' }}>
+          {campos.map(({ label, unit, value, set }) => (
+            <div key={label}>
+              <label style={LBL}>{label} <span style={{ color:'#334155', fontWeight:500 }}>({unit})</span></label>
+              <input
+                type="number" inputMode="decimal" step="0.1"
+                placeholder={unit === 'kg' ? 'Ex: 72.5' : 'Ex: 80'}
+                value={value}
+                onChange={e => set(e.target.value)}
+                style={{ ...INP, padding:'12px 10px', fontSize:15, textAlign:'center', fontWeight:700,
+                  border:`1px solid ${value ? 'rgba(52,211,153,0.4)' : 'rgba(255,255,255,0.08)'}` }}
+              />
+            </div>
+          ))}
+        </div>
+
+        <label style={{ ...LBL, gridColumn:'1/-1' }}>Observações (opcional)</label>
+        <textarea
+          style={{ ...INP, minHeight:60, resize:'vertical' }}
+          placeholder="Como você está se sentindo? Alguma observação?"
+          value={notes}
+          onChange={e=>setNotes(e.target.value)}
+        />
+
+        <button onClick={save} disabled={saving} style={{
+          width:'100%', marginTop:20, borderRadius:12, padding:14, border:'none',
+          background: saving ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#34D399,#059669)',
+          color: saving ? '#475569' : '#022c22',
+          fontWeight:800, fontSize:15, cursor: saving ? 'default' : 'pointer',
+          boxShadow: saving ? 'none' : '0 4px 20px rgba(52,211,153,0.35)',
+        }}>{saving ? 'Salvando...' : '💾 Salvar Medidas'}</button>
+
+        <button onClick={onClose} style={{ width:'100%', background:'transparent',
+          border:'1px solid rgba(255,255,255,0.07)', borderRadius:10, padding:11,
+          color:'#475569', fontWeight:600, fontSize:13, cursor:'pointer', marginTop:8 }}>Cancelar</button>
+      </div>
+    </div>
+  )
+}
+
 // ── Céu estrelado (mobile only) ───────────────────────────────────────────────
 function CosmicCSS() {
   return (
@@ -969,6 +1083,7 @@ export default function StudentView({ studentId }) {
   const [goals,      setGoals]      = useState([])
   const [cardio,     setCardio]     = useState([])
   const [tab,        setTab]        = useState('treino')
+  const [showMedidaModal, setShowMedidaModal] = useState(false)
   const [loading,    setLoading]    = useState(true)
 
   useEffect(() => {
@@ -1185,36 +1300,76 @@ export default function StudentView({ studentId }) {
         {/* ── ABA EVOLUÇÃO ── */}
         {tab === 'evolucao' && (
           <div>
+            {showMedidaModal && (
+              <NovaMedidaModal
+                studentId={studentId}
+                onSave={async () => {
+                  const { data: pr } = await supabase.from('progress_entries').select('*')
+                    .eq('student_id', studentId).order('date', { ascending: false }).limit(10)
+                  if (pr) setProgress(pr)
+                }}
+                onClose={() => setShowMedidaModal(false)}
+              />
+            )}
+
+            {/* Header com botão */}
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+              <div>
+                <div style={{ fontSize:18, fontWeight:800, color:'#E2E8F0' }}>📈 Evolução</div>
+                <div style={{ fontSize:12, color:'#64748B', marginTop:2 }}>{progress.length} registro{progress.length !== 1 ? 's' : ''}</div>
+              </div>
+              <button
+                onClick={() => setShowMedidaModal(true)}
+                style={{
+                  padding:'10px 16px', borderRadius:12, border:'none', cursor:'pointer',
+                  background:'linear-gradient(135deg,#34D399,#059669)', color:'#022c22',
+                  fontWeight:800, fontSize:13, boxShadow:'0 4px 16px rgba(52,211,153,0.3)',
+                }}>+ Medidas</button>
+            </div>
+
             {progress.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '50px 20px', color: '#334155' }}>
-                <div style={{ fontSize: 44, marginBottom: 12 }}>📈</div>
-                <div style={{ fontSize: 15 }}>Nenhum registro de evolução ainda.</div>
+              <div style={{ ...CARD, textAlign:'center', padding:'48px 20px' }}>
+                <div style={{ fontSize:44, marginBottom:12 }}>📏</div>
+                <div style={{ fontSize:15, color:'#475569', lineHeight:1.6 }}>
+                  Nenhum registro ainda.<br/>Toque em <strong style={{color:'#34D399'}}>+ Medidas</strong> para começar!
+                </div>
               </div>
             ) : (
-              progress.map((p, i) => (
-                <div key={p.id} style={{ background: '#0D1117', borderRadius: 14, padding: isMobile ? '14px 16px' : '16px 20px', border: '1px solid rgba(255,255,255,0.07)', marginBottom: 10 }}>
-                  <div style={{ fontSize: 13, color: '#34D399', fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                    {new Date(p.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-                    {i === 0 && <span style={{ fontSize: 10, background: '#34D39920', color: '#34D399', padding: '2px 9px', borderRadius: 20 }}>Mais recente</span>}
-                  </div>
-                  {/* Grid de medidas — 2 colunas no mobile */}
-                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3,auto)', gap: isMobile ? '10px 16px' : '8px 20px' }}>
-                    {[
-                      { label: 'Peso', val: p.weight ? `${p.weight} kg` : null },
-                      { label: 'Cintura', val: p.waist || p.measurements?.waist ? `${p.waist || p.measurements?.waist} cm` : null },
-                      { label: 'Peito',   val: p.chest || p.measurements?.chest  ? `${p.chest || p.measurements?.chest} cm` : null },
-                      { label: 'Quadril', val: p.hip   || p.measurements?.hip    ? `${p.hip   || p.measurements?.hip} cm`   : null },
-                      { label: 'Coxa',    val: p.thigh || p.measurements?.thigh  ? `${p.thigh || p.measurements?.thigh} cm` : null },
-                    ].filter(m => m.val).map(m => (
-                      <div key={m.label}>
-                        <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 2 }}>{m.label}</div>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: '#E2E8F0' }}>{m.val}</div>
+              progress.map((p, i) => {
+                const m = p.measurements || {}
+                const itens = [
+                  { label:'Peso',        val: p.weight            ? `${p.weight} kg`    : null },
+                  { label:'Cintura',     val: m.waist || p.waist  ? `${m.waist  || p.waist} cm`  : null },
+                  { label:'Quadril',     val: m.hip   || p.hip    ? `${m.hip    || p.hip} cm`    : null },
+                  { label:'Peito',       val: m.chest || p.chest  ? `${m.chest  || p.chest} cm`  : null },
+                  { label:'Braço',       val: m.arm               ? `${m.arm} cm`       : null },
+                  { label:'Coxa',        val: m.thigh || p.thigh  ? `${m.thigh  || p.thigh} cm`  : null },
+                  { label:'Panturrilha', val: m.calf              ? `${m.calf} cm`      : null },
+                ].filter(x => x.val)
+                return (
+                  <div key={p.id} style={{ ...CARD, marginBottom:10 }}>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:8 }}>
+                      <div style={{ fontSize:13, color:'#34D399', fontWeight:700 }}>
+                        {new Date(p.date + 'T12:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' })}
                       </div>
-                    ))}
+                      {i === 0 && <span style={{ fontSize:10, background:'#34D39918', color:'#34D399', padding:'2px 10px', borderRadius:20, border:'1px solid #34D39930' }}>Mais recente</span>}
+                    </div>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px 16px' }}>
+                      {itens.map(it => (
+                        <div key={it.label} style={{ background:'rgba(255,255,255,0.03)', borderRadius:10, padding:'10px 12px' }}>
+                          <div style={{ fontSize:9, color:'#475569', textTransform:'uppercase', letterSpacing:0.8, marginBottom:3 }}>{it.label}</div>
+                          <div style={{ fontSize:16, fontWeight:800, color:'#E2E8F0' }}>{it.val}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {p.notes && (
+                      <div style={{ fontSize:12, color:'#64748B', marginTop:10, borderTop:'1px solid rgba(255,255,255,0.05)', paddingTop:8 }}>
+                        📝 {p.notes}
+                      </div>
+                    )}
                   </div>
-                  {p.notes && <div style={{ fontSize: 12, color: '#64748B', marginTop: 10, borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 8 }}>📝 {p.notes}</div>}
-                </div>
-              ))
+                )
+              })
             )}
           </div>
         )}
