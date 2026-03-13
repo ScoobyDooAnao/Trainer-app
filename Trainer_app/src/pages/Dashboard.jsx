@@ -51,17 +51,27 @@ const SPORTS = [
 
 // LTAD — Long-Term Athlete Development
 // Retorna fase com base na idade e anos de experiência
-function calcLTAD(age, expYears) {
-  if (!age) return null
+function calcLTAD(age, expYears, sport) {
+  // LTAD só se aplica a alunos com esporte cadastrado e até 23 anos
+  if (!age || !sport) return null
   const exp = expYears || 0
-  // Fases ajustadas pela experiência: aluno com poucos anos de prática regride uma fase
-  if (age < 9)                                    return { fase: 'FUNdamentals',      cor: '#0284C7', bg: 'rgba(2,132,199,0.1)',   icon: '🎮', desc: 'Habilidades motoras fundamentais e ludicidade' }
-  if (age < 12 && exp < 3)                        return { fase: 'FUNdamentals',      cor: '#0284C7', bg: 'rgba(2,132,199,0.1)',   icon: '🎮', desc: 'Habilidades motoras fundamentais e ludicidade' }
-  if (age < 13)                                   return { fase: 'Learn to Train',    cor: '#059669', bg: 'rgba(5,150,105,0.1)',   icon: '📚', desc: 'Aprender habilidades esportivas gerais' }
-  if (age < 16 && exp < 4)                        return { fase: 'Learn to Train',    cor: '#059669', bg: 'rgba(5,150,105,0.1)',   icon: '📚', desc: 'Aprender habilidades esportivas gerais' }
-  if (age < 17)                                   return { fase: 'Train to Train',    cor: '#D97706', bg: 'rgba(217,119,6,0.1)',   icon: '💪', desc: 'Construir base física específica ao esporte' }
-  if (age < 19 && exp < 5)                        return { fase: 'Train to Train',    cor: '#D97706', bg: 'rgba(217,119,6,0.1)',   icon: '💪', desc: 'Construir base física específica ao esporte' }
-  if (age <= 23)                                  return { fase: 'Train to Compete',  cor: '#7C3AED', bg: 'rgba(124,58,237,0.1)',  icon: '🏆', desc: 'Especialização e desempenho competitivo' }
+
+  // FUNdamentals — 6 a 9 anos, ou até 11 com pouca experiência
+  if (age < 9)               return { fase: 'FUNdamentals',     cor: '#0284C7', bg: 'rgba(2,132,199,0.1)',  icon: '🎮', desc: 'Habilidades motoras fundamentais e ludicidade' }
+  if (age <= 11 && exp < 3)  return { fase: 'FUNdamentals',     cor: '#0284C7', bg: 'rgba(2,132,199,0.1)',  icon: '🎮', desc: 'Habilidades motoras fundamentais e ludicidade' }
+
+  // Learn to Train — 9 a 12 anos (ou até 15 com pouca exp)
+  if (age <= 12)             return { fase: 'Learn to Train',   cor: '#059669', bg: 'rgba(5,150,105,0.1)',  icon: '📚', desc: 'Aprender habilidades esportivas gerais' }
+  if (age <= 15 && exp < 4)  return { fase: 'Learn to Train',   cor: '#059669', bg: 'rgba(5,150,105,0.1)',  icon: '📚', desc: 'Aprender habilidades esportivas gerais' }
+
+  // Train to Train — 12 a 16 anos (base física específica)
+  if (age <= 16)             return { fase: 'Train to Train',   cor: '#D97706', bg: 'rgba(217,119,6,0.1)',  icon: '💪', desc: 'Construir base física específica ao esporte' }
+  if (age <= 17 && exp < 5)  return { fase: 'Train to Train',   cor: '#D97706', bg: 'rgba(217,119,6,0.1)',  icon: '💪', desc: 'Construir base física específica ao esporte' }
+
+  // Train to Compete — 17–18 anos, apenas se tiver esporte E for de fato atleta jovem competitivo
+  if (age <= 18)             return { fase: 'Train to Compete', cor: '#7C3AED', bg: 'rgba(124,58,237,0.1)', icon: '🏆', desc: 'Especialização e desempenho competitivo' }
+
+  // 19+ anos → fora do modelo LTAD, usar faixas etárias normais
   return null
 }
 
@@ -292,7 +302,7 @@ function StudentCard({ st, onClick, onDelete }) {
   const active = (st.lastSeenDays ?? 999) < 5
   const age    = calcAgeFromStudent(st)
   const badge  = ageBadge(age)
-  const ltad   = calcLTAD(age, st.experience_years)
+  const ltad   = calcLTAD(age, st.experience_years, st.sport)
   const sport  = SPORTS.find(s => s.id === st.sport)
 
   const handleDelete = async () => {
@@ -1765,7 +1775,7 @@ function NovoAlunoModal({ onSave, onClose, teacherId }) {
 
   // Preview LTAD em tempo real
   const previewAge  = parseInt(form.age) || null
-  const previewLTAD = calcLTAD(previewAge, parseInt(form.experience_years) || 0)
+  const previewLTAD = calcLTAD(previewAge, parseInt(form.experience_years) || 0, form.sport)
 
   const save = async () => {
     if (!form.name.trim()) return
