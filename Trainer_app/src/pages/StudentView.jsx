@@ -284,15 +284,18 @@ function NovaMetaModal({ studentId, goal, onSave, onClose }) {
     setSel(s); setTitulo(s.titulo==='Meta personalizada'?'':s.titulo)
     setDescricao(s.desc); setUnidade(s.unidade); setStep('detalhar')
   }
+  const [saveError, setSaveError] = useState(null)
   const salvar = async () => {
     if (!titulo.trim()) return
-    setSaving(true)
-    await supabase.from('student_goals').insert([{
+    setSaving(true); setSaveError(null)
+    const { error } = await supabase.from('student_goals').insert([{
       student_id:studentId, title:titulo, description:descricao,
       category:sel?.categoria||'outro', target_value:valor?parseFloat(valor):null,
       target_unit:unidade, deadline:prazo||null, status:'ativa',
     }])
-    setSaving(false); onSave(); onClose()
+    setSaving(false)
+    if (error) { setSaveError(error.message); return }
+    onSave(); onClose()
   }
 
   return (
@@ -356,10 +359,17 @@ function NovaMetaModal({ studentId, goal, onSave, onClose }) {
             <label style={LBL}>Motivação (opcional)</label>
             <textarea style={{ ...INP,minHeight:56,resize:'vertical' }}
               placeholder="Por que essa meta é importante?" value={descricao} onChange={e=>setDescricao(e.target.value)} />
+            {saveError && (
+              <div style={{ marginTop:12, padding:'10px 14px', borderRadius:10,
+                background:'rgba(248,113,113,0.12)', border:'1px solid rgba(248,113,113,0.3)',
+                fontSize:12, color:'#F87171' }}>
+                ⚠️ Erro ao salvar: {saveError}
+              </div>
+            )}
             <button onClick={salvar} disabled={saving||!titulo.trim()} style={{
               width:'100%',background:titulo.trim()?'linear-gradient(135deg,#34D399,#059669)':'rgba(255,255,255,0.05)',
               border:'none',borderRadius:12,padding:13,color:titulo.trim()?'#022c22':'#334155',
-              fontWeight:800,fontSize:14,cursor:'pointer',marginTop:20,
+              fontWeight:800,fontSize:14,cursor:'pointer',marginTop:16,
               fontFamily:"'Nunito',sans-serif",
               boxShadow:titulo.trim()?'0 4px 20px rgba(52,211,153,0.35)':'none',
             }}>{saving?'Salvando...':'🎯 Criar Meta'}</button>
@@ -448,11 +458,14 @@ function TabMetas({ studentId, student, goals, onUpdate }) {
                     <span style={{ fontSize:18 }}>{s.icon}</span>
                     <span style={{ fontSize:13,color:'#CBD5E1',fontWeight:600,flex:1,
                       fontFamily:"'Nunito',sans-serif" }}>{s.titulo}</span>
-                    <button onClick={async()=>{
-                      await supabase.from('student_goals').insert([{
+                    <button onClick={async(e)=>{
+                      e.currentTarget.disabled = true
+                      const { error } = await supabase.from('student_goals').insert([{
                         student_id:studentId, title:s.titulo, description:s.desc,
                         category:s.categoria, target_unit:s.unidade||null, status:'ativa',
-                      }]); await onUpdate()
+                      }])
+                      if (!error) await onUpdate()
+                      else { alert('Erro ao salvar meta: ' + error.message); e.currentTarget.disabled = false }
                     }} style={{ width:28,height:28,borderRadius:'50%',border:`1px solid ${cc.border}`,
                       background:cc.bg,color:cc.text,fontSize:18,fontWeight:800,cursor:'pointer',
                       display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,lineHeight:1 }}>+</button>
