@@ -200,65 +200,176 @@ function NavItem({ item, active, onClick }) {
 }
 
 // ── StudentCard ────────────────────────────────────────────────────────────
-function StudentCard({ st, onClick }) {
-  const [hov, setHov] = useState(false)
+// ── Helpers de idade ───────────────────────────────────────────────────────
+function calcAgeFromStudent(st) {
+  if (st.birth_date) {
+    const birth = new Date(st.birth_date)
+    return Math.floor((new Date() - birth) / (365.25 * 24 * 3600000))
+  }
+  return st.age ? parseInt(st.age) : null
+}
+
+function ageBadge(age) {
+  if (age === null) return null
+  let emoji, color, bg, label
+  if      (age < 12)  { emoji = '🧒'; color = '#0284C7'; bg = 'rgba(2,132,199,0.12)';  label = `${age} anos · Criança`      }
+  else if (age < 18)  { emoji = '🧑'; color = '#7C3AED'; bg = 'rgba(124,58,237,0.12)'; label = `${age} anos · Adolescente`  }
+  else if (age < 60)  { emoji = '💪'; color = '#059669'; bg = 'rgba(5,150,105,0.12)';  label = `${age} anos`                }
+  else                { emoji = '🧓'; color = '#D97706'; bg = 'rgba(217,119,6,0.12)';  label = `${age} anos · Idoso`        }
+  return { emoji, color, bg, label }
+}
+
+// ── Modal de confirmação de exclusão ───────────────────────────────────────
+function ConfirmDeleteModal({ student, onConfirm, onClose, deleting }) {
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:300, padding:20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:'#fff', borderRadius:20, padding:'28px 28px 24px', maxWidth:380, width:'100%', boxShadow:'0 24px 60px rgba(0,0,0,0.25)', fontFamily:"'DM Sans',sans-serif" }}>
+        <div style={{ fontSize:36, textAlign:'center', marginBottom:10 }}>🗑️</div>
+        <div style={{ fontSize:18, fontWeight:800, color:'#0D1B2A', textAlign:'center', marginBottom:6 }}>Excluir aluno?</div>
+        <div style={{ fontSize:14, color:'#64748B', textAlign:'center', lineHeight:1.6, marginBottom:20 }}>
+          Tem certeza que deseja excluir <strong style={{ color:'#0D1B2A' }}>{student.name}</strong>?<br/>
+          <span style={{ fontSize:12, color:'#EF4444', fontWeight:600 }}>Esta ação não pode ser desfeita. Todo histórico, treinos e registros serão removidos permanentemente.</span>
+        </div>
+        <div style={{ display:'flex', gap:10 }}>
+          <button onClick={onClose} style={{ flex:1, padding:'11px', borderRadius:10, border:'1.5px solid #E2E8F0', background:'#F8FAFC', color:'#64748B', fontWeight:700, fontSize:14, cursor:'pointer', fontFamily:'inherit' }}>
+            Cancelar
+          </button>
+          <button onClick={onConfirm} disabled={deleting} style={{ flex:1, padding:'11px', borderRadius:10, border:'none', background: deleting ? '#FCA5A5' : 'linear-gradient(135deg,#EF4444,#DC2626)', color:'#fff', fontWeight:800, fontSize:14, cursor: deleting ? 'not-allowed' : 'pointer', fontFamily:'inherit', boxShadow:'0 4px 12px rgba(239,68,68,0.35)' }}>
+            {deleting ? '⏳ Excluindo…' : '🗑️ Confirmar exclusão'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function StudentCard({ st, onClick, onDelete }) {
+  const [hov,      setHov]      = useState(false)
+  const [hovDel,   setHovDel]   = useState(false)
+  const [showDel,  setShowDel]  = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
   const g      = GOAL[st.goal] || GOAL['Ganho de Massa']
   const imc    = imcStyle(st.weight, st.height, st.imc_calc)
   const streak = streakStyle(st.streak || 0)
   const active = (st.lastSeenDays ?? 999) < 5
+  const age    = calcAgeFromStudent(st)
+  const badge  = ageBadge(age)
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    try {
+      await Promise.all([
+        supabase.from('exercise_logs').delete().eq('student_id', st.id),
+        supabase.from('attendance').delete().eq('student_id', st.id),
+        supabase.from('progress_entries').delete().eq('student_id', st.id),
+        supabase.from('student_feedbacks').delete().eq('student_id', st.id),
+        supabase.from('cardio_sessions').delete().eq('student_id', st.id),
+        supabase.from('student_goals').delete().eq('student_id', st.id),
+      ])
+      const { data: plans } = await supabase.from('workout_plans').select('id').eq('student_id', st.id)
+      if (plans?.length) {
+        const pids = plans.map(p => p.id)
+        const { data: days } = await supabase.from('workout_days').select('id').in('workout_plan_id', pids)
+        if (days?.length) await supabase.from('exercises').delete().in('workout_day_id', days.map(d => d.id))
+        await supabase.from('workout_days').delete().in('workout_plan_id', pids)
+        await supabase.from('workout_plans').delete().in('id', pids)
+      }
+      await supabase.from('students').delete().eq('id', st.id)
+      onDelete()
+    } catch (e) {
+      console.error(e)
+      setDeleting(false)
+    }
+  }
 
   return (
-    <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} onClick={onClick}
-      style={{
-        background:   hov ? 'linear-gradient(160deg,#FDE68A,#F5C842)' : 'linear-gradient(160deg,#FEF3C7,#FBBF24CC)',
-        borderRadius: 18, overflow: 'hidden',
-        border:       `1.5px solid ${hov ? '#D97706' : '#F5C84280'}`,
-        boxShadow:    hov ? '0 12px 36px rgba(245,200,66,0.45)' : '0 4px 14px rgba(245,200,66,0.25)',
-        transition:   'all 0.2s', cursor: 'pointer',
-        display: 'flex', flexDirection: 'column',
-      }}>
-      {/* Topo */}
-      <div style={{ padding: '16px 18px 14px', background: `linear-gradient(135deg,${g.bg},#FFFDF0)`, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 7, height: 7, borderRadius: '50%', background: active ? '#34D399' : '#CBD5E1', boxShadow: active ? '0 0 7px #34D399' : 'none' }} />
-            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: active ? '#065F46' : '#94A3B8' }}>
-              {active ? 'Ativo' : 'Inativo'}
-            </span>
+    <>
+      <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} onClick={onClick}
+        style={{
+          background:   hov ? 'linear-gradient(160deg,#FDE68A,#F5C842)' : 'linear-gradient(160deg,#FEF3C7,#FBBF24CC)',
+          borderRadius: 18, overflow: 'hidden',
+          border:       `1.5px solid ${hov ? '#D97706' : '#F5C84280'}`,
+          boxShadow:    hov ? '0 12px 36px rgba(245,200,66,0.45)' : '0 4px 14px rgba(245,200,66,0.25)',
+          transition:   'all 0.2s', cursor: 'pointer',
+          display: 'flex', flexDirection: 'column', position: 'relative',
+        }}>
+
+        {/* Botão excluir */}
+        <button
+          onClick={e => { e.stopPropagation(); setShowDel(true) }}
+          onMouseEnter={() => setHovDel(true)}
+          onMouseLeave={() => setHovDel(false)}
+          title="Excluir aluno"
+          style={{ position:'absolute', top:10, right:10, width:28, height:28, borderRadius:'50%', border:'none', background: hovDel ? 'rgba(239,68,68,0.18)' : 'rgba(239,68,68,0.08)', color: hovDel ? '#EF4444' : '#FCA5A5', fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.15s', zIndex:2, lineHeight:1 }}>
+          🗑️
+        </button>
+
+        {/* Topo */}
+        <div style={{ padding: '16px 18px 14px', background: `linear-gradient(135deg,${g.bg},#FFFDF0)`, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ width: 7, height: 7, borderRadius: '50%', background: active ? '#34D399' : '#CBD5E1', boxShadow: active ? '0 0 7px #34D399' : 'none' }} />
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: active ? '#065F46' : '#94A3B8' }}>
+                {active ? 'Ativo' : 'Inativo'}
+              </span>
+            </div>
+            {!active && st.lastSeenDays < 999 && (
+              <span style={{ fontSize: 10, color: YELLOW, fontWeight: 600, background: 'rgba(245,200,66,0.1)', padding: '2px 8px', borderRadius: 20, border: `1px solid ${YELLOW_BORDER}`, marginRight: 24 }}>
+                {st.lastSeenDays}d sem interagir
+              </span>
+            )}
           </div>
-          {!active && st.lastSeenDays < 999 && (
-            <span style={{ fontSize: 10, color: YELLOW, fontWeight: 600, background: 'rgba(245,200,66,0.1)', padding: '2px 8px', borderRadius: 20, border: `1px solid ${YELLOW_BORDER}` }}>
-              {st.lastSeenDays}d sem interagir
-            </span>
+
+          {/* Nome */}
+          <div style={{ fontSize: 18, fontWeight: 800, color: '#0D1B2A', letterSpacing: '-0.4px', lineHeight: 1.2, marginBottom: 6, paddingRight: 28 }}>{st.name}</div>
+
+          {/* Badge de idade/faixa etária */}
+          {badge && (
+            <div style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'2px 9px', borderRadius:20, background: badge.bg, border:`1px solid ${badge.color}33`, marginBottom:6 }}>
+              <span style={{ fontSize:11 }}>{badge.emoji}</span>
+              <span style={{ fontSize:11, fontWeight:700, color: badge.color }}>{badge.label}</span>
+            </div>
           )}
-        </div>
-        <div style={{ fontSize: 18, fontWeight: 800, color: '#0D1B2A', letterSpacing: '-0.4px', lineHeight: 1.2, marginBottom: 6 }}>{st.name}</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, color: g.accent, fontWeight: 700 }}>{g.icon} {st.goal}</span>
-          <span style={{ fontSize: 10, color: '#CBD5E1' }}>·</span>
-          <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>{st.level}</span>
-        </div>
-      </div>
-      {/* Stats */}
-      <div style={{ padding: '14px 18px', display: 'flex', gap: 8 }}>
-        {[
-          { label: 'Peso',     val: st.weight ? `${st.weight}` : '—', unit: st.weight ? 'kg' : '', color: '#431C00', sub: null }, // weight já é o mais recente de progress_entries
-          { label: 'IMC',      val: imc.val, unit: '',                  color: imc.color,            sub: imc.label },
-          { label: 'Ofensiva', val: streak.display, unit: '',           color: streak.color,         sub: (st.streak || 0) > 0 ? 'dias' : null, glow: streak.glow },
-        ].map(({ label, val, unit, color, sub, glow }) => (
-          <div key={label} style={{ flex: 1, borderRadius: 10, padding: '10px 6px', textAlign: 'center', background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(255,255,255,0.6)', boxShadow: glow ? `0 0 12px ${color}35` : 'none' }}>
-            <div style={{ fontSize: 9, color: '#7C4A00', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3, fontWeight: 700 }}>{label}</div>
-            <div style={{ fontSize: val.length > 5 ? 11 : 15, fontWeight: 800, color, lineHeight: 1 }}>{val}<span style={{ fontSize: 9, color: '#94A3B8', fontWeight: 500 }}>{unit}</span></div>
-            {sub && <div style={{ fontSize: 8, color: '#431C00', opacity: 0.75, marginTop: 2, fontWeight: 700 }}>{sub}</div>}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, color: g.accent, fontWeight: 700 }}>{g.icon} {st.goal}</span>
+            <span style={{ fontSize: 10, color: '#CBD5E1' }}>·</span>
+            <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>{st.level}</span>
           </div>
-        ))}
+        </div>
+
+        {/* Stats */}
+        <div style={{ padding: '14px 18px', display: 'flex', gap: 8 }}>
+          {[
+            { label: 'Peso',     val: st.weight ? `${st.weight}` : '—', unit: st.weight ? 'kg' : '', color: '#431C00', sub: null },
+            { label: 'IMC',      val: imc.val,        unit: '',           color: imc.color,            sub: imc.label },
+            { label: 'Ofensiva', val: streak.display, unit: '',           color: streak.color,         sub: (st.streak || 0) > 0 ? 'dias' : null, glow: streak.glow },
+          ].map(({ label, val, unit, color, sub, glow }) => (
+            <div key={label} style={{ flex: 1, borderRadius: 10, padding: '10px 6px', textAlign: 'center', background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(255,255,255,0.6)', boxShadow: glow ? `0 0 12px ${color}35` : 'none' }}>
+              <div style={{ fontSize: 9, color: '#7C4A00', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3, fontWeight: 700 }}>{label}</div>
+              <div style={{ fontSize: val.length > 5 ? 11 : 15, fontWeight: 800, color, lineHeight: 1 }}>{val}<span style={{ fontSize: 9, color: '#94A3B8', fontWeight: 500 }}>{unit}</span></div>
+              {sub && <div style={{ fontSize: 8, color: '#431C00', opacity: 0.75, marginTop: 2, fontWeight: 700 }}>{sub}</div>}
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '10px 18px', borderTop: '1px solid rgba(0,0,0,0.09)', background: hov ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, transition: 'background 0.2s' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#431C00' }}>Ver Perfil Completo</span>
+          <span style={{ fontSize: 13, color: '#431C00', transform: hov ? 'translateX(4px)' : 'translateX(0)', transition: 'transform 0.2s', display: 'inline-block' }}>→</span>
+        </div>
       </div>
-      {/* Footer */}
-      <div style={{ padding: '10px 18px', borderTop: '1px solid rgba(0,0,0,0.09)', background: hov ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, transition: 'background 0.2s' }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#431C00' }}>Ver Perfil Completo</span>
-        <span style={{ fontSize: 13, color: '#431C00', transform: hov ? 'translateX(4px)' : 'translateX(0)', transition: 'transform 0.2s', display: 'inline-block' }}>→</span>
-      </div>
-    </div>
+
+      {showDel && (
+        <ConfirmDeleteModal
+          student={st}
+          onClose={() => { setShowDel(false); setDeleting(false) }}
+          onConfirm={handleDelete}
+          deleting={deleting}
+        />
+      )}
+    </>
   )
 }
 
@@ -1758,7 +1869,7 @@ export default function Dashboard({ navigate, session }) {
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
-                {filtered.map(st => <StudentCard key={st.id} st={st} onClick={() => navigate('student-detail', { id: st.id })} />)}
+                {filtered.map(st => <StudentCard key={st.id} st={st} onClick={() => navigate('student-detail', { id: st.id })} onDelete={fetchAll} />)}
                 {Array.from({ length: (3 - (filtered.length % 3)) % 3 }).map((_, i) => <AddCard key={'add' + i} onClick={() => setShowModal(true)} />)}
               </div>
             )}
