@@ -212,10 +212,12 @@ function calcAgeFromStudent(st) {
 function ageBadge(age) {
   if (age === null) return null
   let emoji, color, bg, label
-  if      (age < 12)  { emoji = '🧒'; color = '#0284C7'; bg = 'rgba(2,132,199,0.12)';  label = `${age} anos · Criança`      }
-  else if (age < 18)  { emoji = '🧑'; color = '#7C3AED'; bg = 'rgba(124,58,237,0.12)'; label = `${age} anos · Adolescente`  }
-  else if (age < 60)  { emoji = '💪'; color = '#059669'; bg = 'rgba(5,150,105,0.12)';  label = `${age} anos · Adulto`       }
-  else                { emoji = '🧓'; color = '#D97706'; bg = 'rgba(217,119,6,0.12)';  label = `${age} anos · Idoso`        }
+  if      (age < 12)  { emoji = '🧒'; color = '#0284C7'; bg = 'rgba(2,132,199,0.12)';  label = `${age} anos · Criança`        }
+  else if (age < 18)  { emoji = '🧑'; color = '#7C3AED'; bg = 'rgba(124,58,237,0.12)'; label = `${age} anos · Adolescente`    }
+  else if (age < 30)  { emoji = '🔥'; color = '#059669'; bg = 'rgba(5,150,105,0.12)';  label = `${age} anos · Adulto Jovem`   }
+  else if (age < 45)  { emoji = '💪'; color = '#0891B2'; bg = 'rgba(8,145,178,0.12)';  label = `${age} anos · Adulto`         }
+  else if (age < 60)  { emoji = '🧠'; color = '#7C3AED'; bg = 'rgba(124,58,237,0.12)'; label = `${age} anos · Adulto Maduro`  }
+  else                { emoji = '🧓'; color = '#D97706'; bg = 'rgba(217,119,6,0.12)';  label = `${age} anos · Idoso`          }
   return { emoji, color, bg, label }
 }
 
@@ -1279,12 +1281,16 @@ function TabCardio({ students }) {
   const volSub       = thisWeekMin === 0 ? 'Nenhuma sessão registrada esta semana' : thisWeekMin < 150 ? `${thisWeekMin} min — dentro do ideal (< 150 min)` : thisWeekMin <= 200 ? `${thisWeekMin} min — monitore a recuperação` : `${thisWeekMin} min — risco de overreaching (> 200 min)`
 
   // ── Faixa etária ───────────────────────────────────────────────────
-  const _age       = student?.age
-  const isElderly  = _age && _age >= 60
-  const isChild    = _age && _age < 12
-  const isAdolesc  = _age && _age >= 12 && _age <= 17
-  const fcmax      = _age ? (isElderly ? Math.round(208 - 0.7 * _age) : 220 - _age) : null
-  const fcFormula  = isElderly ? 'Tanaka (208 − 0,7 × idade)' : '220 − idade'
+  const _age         = student?.age
+  const isElderly    = _age && _age >= 60
+  const isChild      = _age && _age < 12
+  const isAdolesc    = _age && _age >= 12 && _age < 18
+  const isAdultYoung = _age && _age >= 18 && _age < 30   // 18–29: adulto jovem
+  const isAdult      = _age && _age >= 30 && _age < 45   // 30–44: adulto
+  const isAdultMat   = _age && _age >= 45 && _age < 60   // 45–59: adulto maduro
+  // FCmáx: Tanaka para 40+ e idosos, 220-idade para jovens
+  const fcmax      = _age ? (_age >= 40 ? Math.round(208 - 0.7 * _age) : 220 - _age) : null
+  const fcFormula  = _age >= 40 ? 'Tanaka (208 − 0,7 × idade)' : '220 − idade'
 
   return (
     <div>
@@ -1425,37 +1431,82 @@ function TabCardio({ students }) {
               </div>
 
               {/* ── Alerta de faixa etária ── */}
-              {(isElderly || isChild || isAdolesc) && (
-                <div style={{ marginTop: 10, borderRadius: 12, padding: '14px 16px', background: isElderly ? 'rgba(5,150,105,0.08)' : isChild ? 'rgba(124,58,237,0.08)' : 'rgba(217,119,6,0.08)', border: `1.5px solid ${isElderly ? '#05966920' : isChild ? '#7C3AED20' : '#D9770620'}` }}>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: isElderly ? '#059669' : isChild ? '#7C3AED' : '#D97706', marginBottom: 8 }}>
-                    {isElderly ? '🧓 Aluno Idoso (60+ anos) — Prescrição Adaptada' : isChild ? '🧒 Criança (<12 anos) — Restrições Ativas' : '🧒 Adolescente (12–17 anos) — Observações'}
+              {_age && (() => {
+                // Configuração por faixa
+                const cfg = isChild      ? { color:'#7C3AED', bg:'rgba(124,58,237,0.08)', border:'#7C3AED20', title:'🧒 Criança (<12 anos) — Restrições Ativas' }
+                          : isAdolesc    ? { color:'#D97706', bg:'rgba(217,119,6,0.08)',   border:'#D9770620', title:'🧑 Adolescente (12–17 anos) — Observações' }
+                          : isAdultYoung ? { color:'#059669', bg:'rgba(5,150,105,0.06)',   border:'#05966918', title:'🔥 Adulto Jovem (18–29 anos) — Alta Performance' }
+                          : isAdult      ? { color:'#0891B2', bg:'rgba(8,145,178,0.06)',   border:'#0891B218', title:'💪 Adulto (30–44 anos) — Atenção à Sarcopenia' }
+                          : isAdultMat   ? { color:'#7C3AED', bg:'rgba(124,58,237,0.07)',  border:'#7C3AED20', title:'🧠 Adulto Maduro (45–59 anos) — Prescrição Diferenciada' }
+                          : isElderly    ? { color:'#D97706', bg:'rgba(217,119,6,0.08)',   border:'#D9770620', title:'🧓 Idoso (60+ anos) — Prescrição Adaptada' }
+                          : null
+                if (!cfg) return null
+                return (
+                  <div style={{ marginTop: 10, borderRadius: 12, padding: '14px 16px', background: cfg.bg, border: `1.5px solid ${cfg.border}` }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: cfg.color, marginBottom: 8 }}>{cfg.title}</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+
+                      {/* FCmáx — aparece em todas as faixas */}
+                      {fcmax && (
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(255,255,255,0.6)', borderRadius: 8, padding: '6px 10px' }}>
+                          ❤️ <strong>FCmáx estimada:</strong> {fcmax} bpm ({fcFormula})
+                        </div>
+                      )}
+
+                      {/* ── Criança ── */}
+                      {isChild && <>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(220,38,38,0.06)', borderRadius: 8, padding: '6px 10px' }}>🚫 <strong>HIIT bloqueado</strong> — não recomendado para menores de 12 anos.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(220,38,38,0.06)', borderRadius: 8, padding: '6px 10px' }}>🚫 <strong>1RM não aplicável</strong> — prescrição por PSE e peso corporal.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.06)', borderRadius: 8, padding: '6px 10px' }}>🎮 <strong>LTAD — FUNdamentals:</strong> foco em habilidades motoras multilaterais e ludicidade.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.06)', borderRadius: 8, padding: '6px 10px' }}>🦴 <strong>Atenção:</strong> placas epifisárias vulneráveis — evitar cargas axiais pesadas.</div>
+                      </>}
+
+                      {/* ── Adolescente ── */}
+                      {isAdolesc && <>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(217,119,6,0.06)', borderRadius: 8, padding: '6px 10px' }}>⚠️ <strong>Carga máxima:</strong> limitar a 70–75% do 1RM durante fase de crescimento ósseo.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(217,119,6,0.06)', borderRadius: 8, padding: '6px 10px' }}>📈 <strong>LTAD — Learn/Train to Train:</strong> técnica em primeiro lugar, volume progressivo. (Faigenbaum et al., 2009)</div>
+                        {_age < 14 && <div style={{ fontSize: 11, color: '#334155', background: 'rgba(220,38,38,0.06)', borderRadius: 8, padding: '6px 10px' }}>🚫 <strong>1RM:</strong> não recomendado abaixo de 14 anos — fórmula de Epley não validada.</div>}
+                      </>}
+
+                      {/* ── Adulto Jovem 18–29 ── */}
+                      {isAdultYoung && <>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(5,150,105,0.07)', borderRadius: 8, padding: '6px 10px' }}>✅ <strong>Capacidade máxima:</strong> pico de VO₂ máx e resposta hormonal. Tolerância alta a volume e intensidade.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(5,150,105,0.07)', borderRadius: 8, padding: '6px 10px' }}>⚡ <strong>Recuperação:</strong> 24–48h entre sessões do mesmo grupo muscular. Permite alta frequência.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(5,150,105,0.07)', borderRadius: 8, padding: '6px 10px' }}>📈 <strong>Periodização:</strong> suporta bloco de alta densidade. Atenção à técnica para evitar lesões por excesso de confiança.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(8,145,178,0.07)', borderRadius: 8, padding: '6px 10px' }}>💡 <strong>PSE alvo:</strong> 6–9/10 em sessões de alta intensidade. HIIT bem tolerado.</div>
+                      </>}
+
+                      {/* ── Adulto 30–44 ── */}
+                      {isAdult && <>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(8,145,178,0.07)', borderRadius: 8, padding: '6px 10px' }}>📉 <strong>Sarcopenia subclínica:</strong> perda de ~0,5–1% de massa muscular/ano após os 30. Treino de força 2–3x/semana é essencial.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(8,145,178,0.07)', borderRadius: 8, padding: '6px 10px' }}>⏱️ <strong>Recuperação:</strong> 48h ideais entre sessões intensas. VO₂ máx declina ~1%/ano — compensar com consistência.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(8,145,178,0.07)', borderRadius: 8, padding: '6px 10px' }}>💡 <strong>Periodização:</strong> ondulada diária (DUP) ou semanal. Manter volume moderado-alto com boa gestão de recuperação.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(8,145,178,0.07)', borderRadius: 8, padding: '6px 10px' }}>🧘 <strong>Mobilidade:</strong> incluir 1–2 sessões/semana de mobilidade articular para prevenção de lesões.</div>
+                      </>}
+
+                      {/* ── Adulto Maduro 45–59 ── */}
+                      {isAdultMat && <>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.07)', borderRadius: 8, padding: '6px 10px' }}>⚠️ <strong>Declínio hormonal:</strong> testosterona ↓ ~1–2%/ano (homens); menopausa em mulheres — impacta força, massa óssea e composição corporal.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.07)', borderRadius: 8, padding: '6px 10px' }}>🦴 <strong>Osteoporose:</strong> treino de força com impacto é a principal estratégia não farmacológica de prevenção. (Kohrt et al., 2004)</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.07)', borderRadius: 8, padding: '6px 10px' }}>❤️ <strong>Risco cardiovascular:</strong> monitorar FC durante esforço. PSE máx recomendado 7/10 sem avaliação médica prévia.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.07)', borderRadius: 8, padding: '6px 10px' }}>⏱️ <strong>Recuperação:</strong> 48–72h entre sessões intensas. Reduzir volume total em 10–15% vs. adulto jovem.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.07)', borderRadius: 8, padding: '6px 10px' }}>🧘 <strong>Mobilidade + equilíbrio:</strong> incluir obrigatoriamente — prevenção de quedas e manutenção funcional.</div>
+                        {_age >= 50 && <div style={{ fontSize: 11, color: '#334155', background: 'rgba(220,38,38,0.06)', borderRadius: 8, padding: '6px 10px' }}>🩺 <strong>50+ anos:</strong> recomendável avaliação médica com ECG de esforço antes de iniciar treinos de alta intensidade.</div>}
+                      </>}
+
+                      {/* ── Idoso 60+ ── */}
+                      {isElderly && <>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(220,38,38,0.06)', borderRadius: 8, padding: '6px 10px' }}>⚠️ <strong>HIIT:</strong> avaliar individualmente. Iniciar apenas com aprovação médica e histórico de atividade.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(217,119,6,0.07)', borderRadius: 8, padding: '6px 10px' }}>🦾 <strong>PSE máx recomendado:</strong> 6/10 — intensidades acima aumentam risco cardiovascular.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(217,119,6,0.07)', borderRadius: 8, padding: '6px 10px' }}>⚖️ <strong>4º pilar:</strong> 1 sessão semanal de equilíbrio e mobilidade obrigatória. (Sherrington et al., 2019)</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(217,119,6,0.07)', borderRadius: 8, padding: '6px 10px' }}>🦴 <strong>Sarcopenia:</strong> 2–3x/semana de força é a 1ª linha de prevenção e tratamento. (Hurst et al., 2022)</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(217,119,6,0.07)', borderRadius: 8, padding: '6px 10px' }}>🐢 <strong>Progressão conservadora:</strong> aumentar carga máx 5% por semana. Priorizar funcionalidade sobre performance.</div>
+                      </>}
+
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                    {fcmax && (
-                      <div style={{ fontSize: 11, color: '#334155', background: 'rgba(255,255,255,0.6)', borderRadius: 8, padding: '6px 10px' }}>
-                        ❤️ <strong>FCmáx:</strong> {fcmax} bpm — fórmula {fcFormula}
-                      </div>
-                    )}
-                    {isElderly && <>
-                      <div style={{ fontSize: 11, color: '#334155', background: 'rgba(220,38,38,0.06)', borderRadius: 8, padding: '6px 10px' }}>⚠️ <strong>HIIT:</strong> avaliar com cautela. Iniciar apenas com aprovação médica.</div>
-                      <div style={{ fontSize: 11, color: '#334155', background: 'rgba(5,150,105,0.08)', borderRadius: 8, padding: '6px 10px' }}>🦾 <strong>PSE máx recomendado:</strong> 6/10 — intensidades acima aumentam risco cardiovascular.</div>
-                      <div style={{ fontSize: 11, color: '#334155', background: 'rgba(5,150,105,0.08)', borderRadius: 8, padding: '6px 10px' }}>⚖️ <strong>4º pilar:</strong> incluir 1 sessão semanal de equilíbrio e mobilidade. (Sherrington et al., 2019)</div>
-                      <div style={{ fontSize: 11, color: '#334155', background: 'rgba(5,150,105,0.08)', borderRadius: 8, padding: '6px 10px' }}>🦴 <strong>Sarcopenia:</strong> 2–3x/semana de treino de força é a 1ª linha de prevenção. (Hurst et al., 2022)</div>
-                    </>}
-                    {isChild && <>
-                      <div style={{ fontSize: 11, color: '#334155', background: 'rgba(220,38,38,0.06)', borderRadius: 8, padding: '6px 10px' }}>🚫 <strong>HIIT bloqueado</strong> — não recomendado para menores de 12 anos.</div>
-                      <div style={{ fontSize: 11, color: '#334155', background: 'rgba(220,38,38,0.06)', borderRadius: 8, padding: '6px 10px' }}>🚫 <strong>1RM não aplicável</strong> — prescrição por PSE e peso corporal.</div>
-                      <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.06)', borderRadius: 8, padding: '6px 10px' }}>🎮 <strong>LTAD — FUNdamentals:</strong> foco em habilidades motoras multilaterais e ludicidade.</div>
-                      <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.06)', borderRadius: 8, padding: '6px 10px' }}>🦴 <strong>Atenção:</strong> placas epifisárias vulneráveis — evitar cargas axiais pesadas.</div>
-                    </>}
-                    {isAdolesc && <>
-                      <div style={{ fontSize: 11, color: '#334155', background: 'rgba(217,119,6,0.06)', borderRadius: 8, padding: '6px 10px' }}>⚠️ <strong>Carga máxima:</strong> limitar a 70–75% do 1RM durante fase de crescimento ósseo.</div>
-                      <div style={{ fontSize: 11, color: '#334155', background: 'rgba(217,119,6,0.06)', borderRadius: 8, padding: '6px 10px' }}>📈 <strong>LTAD — Learn/Train to Train:</strong> técnica em primeiro lugar, volume progressivo. (Faigenbaum et al., 2009)</div>
-                      {_age && _age < 14 && <div style={{ fontSize: 11, color: '#334155', background: 'rgba(220,38,38,0.06)', borderRadius: 8, padding: '6px 10px' }}>🚫 <strong>1RM:</strong> não recomendado abaixo de 14 anos — fórmula de Epley não validada.</div>}
-                    </>}
-                  </div>
-                </div>
-              )}
+                )
+              })()}
             </div>
           )}
 
