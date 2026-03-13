@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../supabase'
 
 // ── Responsividade ────────────────────────────────────────────────────────────
@@ -23,6 +23,55 @@ const today = () => new Date().toISOString().split('T')[0]
 const parseSets = (setsField) => {
   const n = parseInt(setsField) || 3
   return Array.from({ length: n }, (_, i) => ({ set: i + 1, weight: '', reps: '' }))
+}
+
+// ── Céu estrelado (mobile only) ───────────────────────────────────────────────
+function CosmicCSS() {
+  return (
+    <style>{`
+      @keyframes twinkle {
+        0%,100% { opacity: 0.08; transform: scale(0.6); }
+        50%      { opacity: 1;   transform: scale(1.5); }
+      }
+      @keyframes aurora {
+        0%,100% { transform: translate(0,0) scale(1);         opacity: 0.07; }
+        50%      { transform: translate(24px,-10px) scale(1.18); opacity: 0.13; }
+      }
+    `}</style>
+  )
+}
+
+function StarField() {
+  const stars = useMemo(() => Array.from({ length: 130 }, (_, i) => {
+    const big = i < 18
+    return {
+      id:    i,
+      x:     ((i * 7919 + 13) % 1000) / 10,
+      y:     ((i * 6271 + 97) % 1000) / 10,
+      size:  big ? (1.8 + (i % 5) * 0.4) : (0.4 + (i % 4) * 0.3),
+      delay: ((i * 1.37) % 7).toFixed(2),
+      dur:   (2.5 + (i % 5) * 0.7).toFixed(2),
+      op:    (0.18 + (i % 8) * 0.09).toFixed(2),
+    }
+  }), [])
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg,#02040F 0%,#060A1A 55%,#090D24 100%)' }} />
+      <div style={{ position: 'absolute', top: '-15%', left: '-10%', width: '65%', height: '55%', borderRadius: '50%', background: 'radial-gradient(ellipse,rgba(99,102,241,0.10) 0%,transparent 70%)', animation: 'aurora 14s ease-in-out infinite' }} />
+      <div style={{ position: 'absolute', bottom: '-15%', right: '-5%', width: '55%', height: '50%', borderRadius: '50%', background: 'radial-gradient(ellipse,rgba(56,189,248,0.07) 0%,transparent 70%)', animation: 'aurora 18s 5s ease-in-out infinite' }} />
+      {stars.map(s => (
+        <div key={s.id} style={{
+          position: 'absolute', left: `${s.x}%`, top: `${s.y}%`,
+          width: `${s.size}px`, height: `${s.size}px`, borderRadius: '50%',
+          background: s.size > 1.5 ? '#E8EEFF' : '#FFFFFF',
+          opacity: s.op,
+          animation: `twinkle ${s.dur}s ${s.delay}s ease-in-out infinite`,
+          boxShadow: s.size > 1.5 ? `0 0 ${s.size * 3}px rgba(200,210,255,0.55)` : 'none',
+        }} />
+      ))}
+    </div>
+  )
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
@@ -278,13 +327,17 @@ export default function StudentView({ studentId }) {
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#080B12',
+      background: isMobile ? 'transparent' : '#080B12',
       fontFamily: "'Segoe UI', system-ui, sans-serif",
       color: '#E2E8F0',
       // Espaço para a bottom nav no mobile
       paddingBottom: isMobile ? 80 : 0,
+      position: 'relative',
     }}>
-      <div style={{ maxWidth: 680, margin: '0 auto', padding: isMobile ? '16px 14px' : '24px 16px' }}>
+      {/* ── Céu estrelado — apenas mobile ── */}
+      {isMobile && <><CosmicCSS /><StarField /></>}
+
+      <div style={{ maxWidth: 680, margin: '0 auto', padding: isMobile ? '16px 14px' : '24px 16px', position: 'relative', zIndex: 1 }}>
 
         {/* ── Header ── */}
         <div style={{ background: 'linear-gradient(135deg,#0f2027,#203a43)', borderRadius: isMobile ? 16 : 20, padding: isMobile ? '18px 18px' : 24, marginBottom: 16, border: '1px solid rgba(52,211,153,0.15)' }}>
