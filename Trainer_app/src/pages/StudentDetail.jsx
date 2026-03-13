@@ -280,10 +280,13 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
   // ── Pillar 2: Frequência Semanal ─────────────────────────────────────────
   // ACSM Position Stand 2022 por objetivo
   const FREQ = {
-    'Ganho de Massa':       { min: 3, max: 5, ideal: '3–5×/sem' },
-    'Emagrecimento':        { min: 3, max: 5, ideal: '3–5×/sem' },
-    'Condicionamento':      { min: 4, max: 5, ideal: '4–5×/sem' },
-    'Força e Performance':  { min: 3, max: 4, ideal: '3–4×/sem' },
+    'Ganho de Massa':           { min: 3, max: 5, ideal: '3–5×/sem' },
+    'Emagrecimento':            { min: 3, max: 5, ideal: '3–5×/sem' },
+    'Condicionamento':          { min: 4, max: 5, ideal: '4–5×/sem' },
+    'Força e Performance':      { min: 3, max: 4, ideal: '3–4×/sem' },
+    'Iniciação Esportiva':      { min: 2, max: 3, ideal: '2–3×/sem' },
+    'Desenvolvimento Atlético': { min: 3, max: 4, ideal: '3–4×/sem' },
+    'Treinamento Competitivo':  { min: 3, max: 5, ideal: '3–5×/sem' },
   }
   const freqTarget = FREQ[goal] || { min: 3, max: 5, ideal: '3–5×/sem' }
   const daysPerWeek = plannedDays.length
@@ -365,10 +368,13 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
   // ── Pillar 5: Adequação ao Objetivo ──────────────────────────────────────
   // Rep ranges: Schoenfeld 2010 — força 1-6, hipertrofia 6-12, endurance >12
   const REP_RANGES = {
-    'Ganho de Massa':       { min: 6,  max: 12, label: '6–12 reps (zona de hipertrofia)' },
-    'Força e Performance':  { min: 1,  max: 6,  label: '1–6 reps (zona de força máxima)' },
-    'Condicionamento':      { min: 12, max: 20, label: '12–20 reps (zona de resistência muscular)' },
-    'Emagrecimento':        { min: 8,  max: 15, label: '8–15 reps (metabólico + hipertrofia moderada)' },
+    'Ganho de Massa':           { min: 6,  max: 12, label: '6–12 reps (zona de hipertrofia)' },
+    'Força e Performance':      { min: 1,  max: 6,  label: '1–6 reps (zona de força máxima)' },
+    'Condicionamento':          { min: 12, max: 20, label: '12–20 reps (zona de resistência muscular)' },
+    'Emagrecimento':            { min: 8,  max: 15, label: '8–15 reps (metabólico + hipertrofia moderada)' },
+    'Iniciação Esportiva':      { min: 10, max: 20, label: '10–20 reps (multilateral, peso corporal e baixa carga)' },
+    'Desenvolvimento Atlético': { min: 6,  max: 15, label: '6–15 reps (misto: base de força + resistência)' },
+    'Treinamento Competitivo':  { min: 4,  max: 12, label: '4–12 reps (potência + força funcional)' },
   }
   const repRange = REP_RANGES[goal]
   let objScore = 70, objIssues = []
@@ -403,39 +409,87 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
       ? `Faixas de repetição e volume compatíveis com objetivo "${goal}" (${repRange.label}).`
       : 'Configure o objetivo do aluno para avaliação detalhada.'
 
-  // ── Pillar 6: Adequação Etária ───────────────────────────────────────────
-  // LTAD (Balyi 2013), Tanaka 2001, ACSM 2022 para populações especiais
-  let ageScore = 100, ageIssues = []
+  // ── Pillar 6: Adequação Etária + Fase LTAD ──────────────────────────────
+  // LTAD (Balyi 2013), Tanaka 2001, ACSM 2022, NSCA Youth Resistance Training 2009
+  let ageScore = 100, ageIssues = [], ageOk = []
+  const ltadPhase = calcLTAD(age, student.experience_years, student.sport)
 
   if (age !== null) {
-    const lowRepCount = allExercises.filter(ex => parseInt(ex.reps) <= 3).length
+    const lowRepCount    = allExercises.filter(ex => parseInt(ex.reps) <= 3).length
+    const heavyRepCount  = allExercises.filter(ex => { const m=(ex.reps||'').match(/\d+/); return m && parseInt(m[0]) < 6 }).length
+    const heavyLoadPct   = heavyRepCount / Math.max(allExercises.length, 1)
+    const hasCoreWork    = allExercises.some(ex => ['Core','Full Body'].includes(ex.type))
+    const hasLegsWork    = allExercises.some(ex => ['Quadríceps','Posterior','Glúteo','Panturrilha'].includes(ex.type))
+    const hasUpperWork   = allExercises.some(ex => ['Peito','Costas','Ombro','Bíceps','Tríceps'].includes(ex.type))
+
     if (age >= 60) {
-      // Idosos: FCmax = 208 − 0.7×age (Tanaka 2001), HIIT com cautela, equilíbrio obrigatório
-      if (daysPerWeek > 4) { ageScore -= 12; ageIssues.push('frequência >4×/sem — risco de overuse em 60+ (recomendado 3–4×/sem)') }
-      if (lowRepCount > 0) { ageScore -= 15; ageIssues.push('exercícios de força máxima (<4 reps) — contraindicado sem avaliação cardiovascular prévia') }
-      if (!allExercises.some(ex => ['Core', 'Full Body'].includes(ex.type))) {
-        ageScore -= 12; ageIssues.push('ausência de exercícios de equilíbrio/Core — pilar essencial para prevenir quedas em idosos (ACSM 2022)')
-      }
-    } else if (age < 12) {
-      // Crianças: LTAD FUNdamentals — multilateral, sem 1RM
-      if (lowRepCount > 0) { ageScore -= 40; ageIssues.push('exercícios de força máxima contraindicados <12 anos — risco de lesão epifisária (LTAD)') }
-      if (daysPerWeek > 3) { ageScore -= 15; ageIssues.push('frequência >3×/sem excessiva para crianças — priorize multilateralidade') }
-    } else if (age < 17) {
-      // Adolescentes: LTAD Learn/Train to Train
-      if (age < 14 && lowRepCount > 0) { ageScore -= 25; ageIssues.push('1RM contraindicado antes dos 14 anos — LTAD (Balyi 2013)') }
-      const heavyLoadPct = allExercises.filter(ex => {
-        const m = (ex.reps || '').match(/\d+/)
-        return m && parseInt(m[0]) < 6
-      }).length / Math.max(allExercises.length, 1)
-      if (heavyLoadPct > 0.4) { ageScore -= 15; ageIssues.push('>40% dos exercícios com carga pesada (<6 reps) — adolescentes: max 70–75% de 1RM') }
+      // ── Idoso 60+ ── Tanaka 2001, ACSM 2022, Sherrington 2019
+      if (daysPerWeek > 4)  { ageScore -= 12; ageIssues.push('frequência >4×/sem — risco de overuse em 60+ (recomendado 3–4×/sem)') }
+      if (lowRepCount > 0)  { ageScore -= 15; ageIssues.push('exercícios de força máxima (<4 reps) sem avaliação cardiovascular prévia') }
+      if (!hasCoreWork)     { ageScore -= 12; ageIssues.push('ausência de Core/equilíbrio — pilar obrigatório para prevenir quedas (Sherrington 2019)') }
+      else ageOk.push('✅ Core presente — prevenção de quedas contemplada')
+      if (daysPerWeek >= 2 && daysPerWeek <= 4 && lowRepCount === 0) ageOk.push('✅ Frequência e intensidade adequadas para 60+')
+
+    } else if (ltadPhase?.fase === 'FUNdamentals') {
+      // ── FUNdamentals (6–11 anos) ── LTAD, NSCA 2009
+      if (lowRepCount > 0)       { ageScore -= 40; ageIssues.push('carga máxima contraindicada na fase FUNdamentals — risco de lesão epifisária (LTAD)') }
+      if (heavyLoadPct > 0.2)    { ageScore -= 20; ageIssues.push('>20% exercícios com carga elevada (<6 reps) — fase FUNdamentals prioriza peso corporal e coordenação') }
+      if (daysPerWeek > 3)       { ageScore -= 10; ageIssues.push('frequência >3×/sem excessiva para fase FUNdamentals — priorize diversificação motora') }
+      if (!hasCoreWork && !hasLegsWork) { ageScore -= 10; ageIssues.push('treino deve incluir padrões motores multilaterais: saltar, correr, girar (LTAD FUNdamentals)') }
+      else ageOk.push('✅ Padrões multilaterais presentes')
+      if (daysPerWeek <= 3 && lowRepCount === 0) ageOk.push('✅ Frequência e intensidade corretas para FUNdamentals')
+
+    } else if (ltadPhase?.fase === 'Learn to Train') {
+      // ── Learn to Train (9–15 anos) ── Faigenbaum 2009, LTAD
+      if (age < 14 && lowRepCount > 0) { ageScore -= 25; ageIssues.push('1RM contraindicado antes dos 14 anos — protocolo de Epley não validado (Balyi 2013)') }
+      if (heavyLoadPct > 0.3)    { ageScore -= 15; ageIssues.push('>30% exercícios com carga pesada — Learn to Train: técnica primeiro, carga depois (Faigenbaum 2009)') }
+      if (!hasCoreWork)          { ageScore -= 10; ageIssues.push('Core ausente — estabilidade central é base do desenvolvimento atlético nesta fase') }
+      else ageOk.push('✅ Core presente — estabilidade central contemplada')
+      if (daysPerWeek >= 2 && daysPerWeek <= 4) ageOk.push('✅ Frequência adequada para Learn to Train')
+      if (heavyLoadPct <= 0.3)   ageOk.push('✅ Carga compatível com fase Learn to Train')
+
+    } else if (ltadPhase?.fase === 'Train to Train') {
+      // ── Train to Train (12–17 anos) ── LTAD, NSCA 2009
+      if (heavyLoadPct > 0.4)    { ageScore -= 15; ageIssues.push('>40% exercícios com carga pesada — Train to Train: limite 70–75% de 1RM (NSCA 2009)') }
+      if (daysPerWeek > 5)       { ageScore -= 10; ageIssues.push('frequência >5×/sem — fase Train to Train requer deload semanal para recuperação óssea') }
+      if (!hasCoreWork)          { ageScore -= 8;  ageIssues.push('Core ausente — estabilização obrigatória para construção de base atlética (Train to Train)') }
+      if (!hasLegsWork)          { ageScore -= 8;  ageIssues.push('Ausência de trabalho de membros inferiores — base de potência essencial nesta fase') }
+      if (daysPerWeek >= 3 && daysPerWeek <= 5) ageOk.push('✅ Frequência adequada para Train to Train')
+      if (heavyLoadPct <= 0.4 && hasCoreWork)  ageOk.push('✅ Intensidade e equilíbrio corretos para Train to Train')
+
+    } else if (ltadPhase?.fase === 'Train to Compete') {
+      // ── Train to Compete (17–18 anos) ── LTAD, NSCA 2021
+      if (daysPerWeek > 5)       { ageScore -= 10; ageIssues.push('frequência >5×/sem pode comprometer recuperação em atleta jovem em competição') }
+      if (!hasCoreWork)          { ageScore -= 8;  ageIssues.push('Core ausente — integração neuromuscular crítica para performance competitiva') }
+      if (daysPerWeek >= 3)      ageOk.push('✅ Frequência de treino adequada para nível competitivo')
+      if (heavyLoadPct <= 0.5)   ageOk.push('✅ Distribuição de carga compatível com Train to Compete')
+
+    } else if (age >= 18 && age < 30) {
+      // ── Adulto Jovem 18–29 ── sem restrições específicas de fase
+      if (daysPerWeek >= 3) ageOk.push('✅ Frequência adequada para adulto jovem')
+
+    } else if (age >= 30 && age < 45) {
+      // ── Adulto 30–44 ── sarcopenia subclínica
+      if (!hasLegsWork && !hasUpperWork) { ageScore -= 10; ageIssues.push('treino de força incompleto — a partir dos 30 anos, 2–3×/sem de força previne sarcopenia subclínica') }
+      else ageOk.push('✅ Treino de força presente — prevenção de sarcopenia contemplada')
+
+    } else if (age >= 45 && age < 60) {
+      // ── Adulto Maduro 45–59 ── hormônios, ossos, CV
+      if (lowRepCount > 2)       { ageScore -= 10; ageIssues.push('múltiplos exercícios de força máxima — 45+ anos: recomendável avaliação cardiovascular prévia') }
+      if (!hasCoreWork)          { ageScore -= 8;  ageIssues.push('Core/equilíbrio ausente — funcional e preventivo para 45+ anos') }
+      if (daysPerWeek >= 2 && daysPerWeek <= 4) ageOk.push('✅ Frequência adequada para adulto maduro')
+      if (!hasLegsWork)          { ageScore -= 8;  ageIssues.push('Membros inferiores ausentes — manutenção óssea e funcional crítica para 45–59 anos (Kohrt 2004)') }
     }
+
     ageScore = Math.max(0, ageScore)
   }
+
+  const agePhaseLine = ltadPhase ? ` | Fase LTAD: ${ltadPhase.fase}` : ''
   const ageMsg = age === null
-    ? '⚠️ Data de nascimento não cadastrada — adicione o campo birth_date para habilitar avaliação etária completa.'
+    ? '⚠️ Idade não cadastrada — cadastre a idade do aluno para habilitar avaliação etária completa.'
     : ageIssues.length
-      ? ageIssues.map(i => `⚠️ ${i}`).join('. ') + '.'
-      : `Nenhum risco etário detectado para ${age} anos. Prescrição adequada à faixa etária.`
+      ? ageIssues.map(i => `⚠️ ${i}`).join(' · ') + '.'
+      : `Prescrição adequada à faixa etária (${age} anos${agePhaseLine}). ${ageOk.join(' · ')}`
 
   // ── Pillar 7: Dados & Monitoramento ──────────────────────────────────────
   const now2 = new Date()
@@ -588,8 +642,107 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
     ? levelIssues.map(i => `⚠️ ${i}`).join('. ') + '.'
     : `Parâmetros de volume, frequência e complexidade compatíveis com nível ${lp.label}.`
 
-  // ── Score final ponderado (11 pilares) ───────────────────────────────────
-  const W = { volume:0.14, freq:0.10, balance:0.14, progress:0.12, objective:0.10, age:0.08, monitor:0.04, recovery:0.10, overtraining:0.08, variation:0.06, levelFit:0.04 }
+  // ── Pilar 12: Adequação Esportiva ───────────────────────────────────────
+  // Verifica se os exercícios prescritos atendem às demandas da modalidade esportiva
+  // Ref: Boyle 2016 (Movement), NSCA Sport-Specific Conditioning 2021
+  let sportScore = 100, sportIssues = [], sportOk = []
+  const sport = student.sport
+
+  // Perfis por modalidade — grupos musculares e padrões de movimento essenciais
+  const SPORT_PROFILES = {
+    futebol:   { name: 'Futebol',   needs: ['Posterior','Glúteo','Quadríceps'], core: true,  unilateral: true,  explosao: true,  pull: false, desc: 'potência de membros inferiores, core estabilizador e agilidade' },
+    futsal:    { name: 'Futsal',    needs: ['Posterior','Glúteo','Quadríceps'], core: true,  unilateral: true,  explosao: true,  pull: false, desc: 'explosão em curta distância, mudança de direção e core' },
+    natacao:   { name: 'Natação',   needs: ['Costas','Ombro'],                  core: true,  unilateral: false, explosao: false, pull: true,  desc: 'estabilidade de ombro, puxada e core rotacional' },
+    tenis:     { name: 'Tênis',     needs: ['Ombro','Costas'],                  core: true,  unilateral: true,  explosao: true,  pull: true,  desc: 'rotação de core, unilateral, ombro e cadeia posterior' },
+    basquete:  { name: 'Basquete',  needs: ['Posterior','Glúteo','Quadríceps'], core: true,  unilateral: false, explosao: true,  pull: false, desc: 'salto vertical, posterior e core' },
+    volei:     { name: 'Vôlei',     needs: ['Ombro','Posterior','Glúteo'],      core: true,  unilateral: false, explosao: true,  pull: true,  desc: 'ombro, salto vertical, core e estabilidade escapular' },
+    atletismo: { name: 'Atletismo', needs: ['Posterior','Glúteo','Panturrilha'],core: true,  unilateral: true,  explosao: true,  pull: false, desc: 'cadeia posterior, potência e core' },
+    ginastica: { name: 'Ginástica', needs: ['Core','Costas'],                   core: true,  unilateral: false, explosao: false, pull: true,  desc: 'força relativa, core e mobilidade' },
+    judo:      { name: 'Judô',      needs: ['Costas','Bíceps'],                 core: true,  unilateral: false, explosao: false, pull: true,  desc: 'puxada, força de preensão e core' },
+    ciclismo:  { name: 'Ciclismo',  needs: ['Quadríceps','Posterior','Glúteo'], core: true,  unilateral: true,  explosao: false, pull: false, desc: 'extensão de joelho, cadeia posterior e core' },
+    handebol:  { name: 'Handebol',  needs: ['Ombro','Costas'],                  core: true,  unilateral: true,  explosao: true,  pull: true,  desc: 'arremesso, core rotacional e explosão' },
+    outro:     { name: 'Outro',     needs: [],                                  core: false, unilateral: false, explosao: false, pull: false, desc: 'modalidade personalizada' },
+  }
+
+  const profile = sport ? SPORT_PROFILES[sport] : null
+
+  if (!profile || sport === 'outro') {
+    // Sem esporte cadastrado: pilar neutro
+    sportScore = 75
+    sportIssues.push('esporte não cadastrado — adicione a modalidade no perfil para avaliação esportiva específica')
+  } else {
+    const exTypes = allExercises.map(ex => ex.type).filter(Boolean)
+    const typeSet = new Set(exTypes)
+
+    // 1. Grupos musculares prioritários presentes?
+    const missingNeeds = profile.needs.filter(n => !typeSet.has(n))
+    if (missingNeeds.length > 0) {
+      const penalty = missingNeeds.length * 15
+      sportScore -= Math.min(penalty, 40)
+      sportIssues.push(`grupos ausentes para ${profile.name}: ${missingNeeds.join(', ')} — essenciais para ${profile.desc}`)
+    } else if (profile.needs.length > 0) {
+      sportOk.push(`✅ Grupos prioritários do ${profile.name} presentes: ${profile.needs.join(', ')}`)
+    }
+
+    // 2. Core — quase universal no esporte
+    if (profile.core && !typeSet.has('Core') && !typeSet.has('Full Body')) {
+      sportScore -= 20
+      sportIssues.push(`Core ausente — ${profile.desc} exige estabilidade de tronco (Boyle 2016)`)
+    } else if (profile.core && (typeSet.has('Core') || typeSet.has('Full Body'))) {
+      sportOk.push('✅ Core presente')
+    }
+
+    // 3. Puxada — essencial para esportes de arremesso/natação/judô
+    if (profile.pull) {
+      const hasPull = ['Costas','Bíceps'].some(t => typeSet.has(t))
+      if (!hasPull) {
+        sportScore -= 15
+        sportIssues.push(`puxada ausente — ${profile.name} demanda força de puxada para equilíbrio e performance`)
+      } else {
+        sportOk.push('✅ Puxada presente')
+      }
+    }
+
+    // 4. Exercícios unilaterais — equilíbrio e transferência motora
+    if (profile.unilateral && allExercises.length > 3) {
+      const unilateralKeywords = ['unilateral','avanço','lunge','pistol','step','afundo','single']
+      const hasUnilateral = allExercises.some(ex =>
+        unilateralKeywords.some(kw => (ex.name||'').toLowerCase().includes(kw))
+      )
+      if (!hasUnilateral) {
+        sportScore -= 10
+        sportIssues.push(`exercícios unilaterais recomendados para ${profile.name} — melhora assimetrias e transferência motora`)
+      } else {
+        sportOk.push('✅ Padrão unilateral detectado')
+      }
+    }
+
+    // 5. Explosão/potência — esportes intermitentes de alta intensidade
+    if (profile.explosao && allExercises.length > 3) {
+      const powerKeywords = ['salto','jump','agachamento','squat','power','clean','snatch','sprint','pliométrico','box']
+      const hasExplosion = allExercises.some(ex =>
+        powerKeywords.some(kw => (ex.name||'').toLowerCase().includes(kw))
+      )
+      if (!hasExplosion) {
+        sportScore -= 8
+        sportIssues.push(`potência/explosão ausente — ${profile.name} é esporte de alta intermitência: inclua agachamentos, saltos ou exercícios pliométricos`)
+      } else {
+        sportOk.push('✅ Trabalho de potência detectado')
+      }
+    }
+
+    sportScore = Math.max(0, Math.min(100, sportScore))
+  }
+
+  const sportMsg = !profile || sport === 'outro'
+    ? '⚠️ ' + sportIssues[0]
+    : sportIssues.length
+      ? sportIssues.map(i => `⚠️ ${i}`).join(' · ') + '.'
+      : `Prescrição alinhada às demandas de ${profile.name}. ${sportOk.join(' · ')}`
+
+  // ── Score final ponderado (12 pilares) ───────────────────────────────────
+  // Pesos ajustados: esporte +8%, etária +2%; volume e equilíbrio -1% cada; nível -2%
+  const W = { volume:0.11, freq:0.09, balance:0.12, progress:0.11, objective:0.09, age:0.10, monitor:0.04, recovery:0.09, overtraining:0.07, variation:0.06, levelFit:0.04, sport:0.08 }
   const finalScore = Math.round(
     volumeScore   * W.volume      +
     freqScore     * W.freq        +
@@ -601,23 +754,25 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
     recoveryScore * W.recovery    +
     overtScore    * W.overtraining +
     varScore      * W.variation   +
-    levelScore    * W.levelFit
+    levelScore    * W.levelFit    +
+    sportScore    * W.sport
   )
 
   return {
     finalScore,
     pilares: [
-      { id: 'volume',      icon: '📦', name: 'Volume de Força',       score: volumeScore,   peso: '14%', msg: volumeMsg,   ref: 'Schoenfeld 2017; ACSM 2022' },
-      { id: 'balance',     icon: '⚖️', name: 'Equilíbrio Muscular',   score: balanceScore,  peso: '14%', msg: balanceMsg,  ref: 'Boyle 2016; NSCA Guidelines' },
-      { id: 'recovery',    icon: '🛌', name: 'Recuperação',           score: recoveryScore, peso: '10%', msg: recoveryMsg, ref: 'Schoenfeld & Ogborn 2018' },
-      { id: 'progress',    icon: '📈', name: 'Progressão de Carga',   score: progressScore, peso: '12%', msg: progressMsg, ref: 'ACSM FITT-VP; Kraemer 2004' },
-      { id: 'freq',        icon: '📅', name: 'Frequência Semanal',    score: freqScore,     peso: '10%', msg: freqMsg,     ref: 'ACSM Position Stand 2022' },
-      { id: 'objective',   icon: '🎯', name: 'Adequação ao Objetivo', score: objScore,      peso: '10%', msg: objMsg,      ref: 'Schoenfeld 2010; WHO 2020' },
-      { id: 'overtraining',icon: '💤', name: 'PSE & Fadiga (ACWR)',   score: overtScore,    peso: '8%',  msg: overtMsg,    ref: 'Foster 1998; NSCA 2021' },
-      { id: 'age',         icon: '🧬', name: 'Adequação Etária',      score: ageScore,      peso: '8%',  msg: ageMsg,      ref: 'Tanaka 2001; Balyi LTAD 2013' },
-      { id: 'variation',   icon: '🧪', name: 'Variação de Estímulo',  score: varScore,      peso: '6%',  msg: varMsg,      ref: 'Fonseca 2014; ACSM FITT-VP' },
-      { id: 'levelFit',    icon: '🏅', name: 'Adequação ao Nível',    score: levelScore,    peso: '4%',  msg: levelMsg,    ref: 'NSCA 2021; ACSM 2022' },
-      { id: 'monitor',     icon: '📊', name: 'Monitoramento',         score: monitorScore,  peso: '4%',  msg: monitorMsg,  ref: 'ACSM 2022' },
+      { id: 'volume',      icon: '📦', name: 'Volume de Força',         score: volumeScore,   peso: '11%', msg: volumeMsg,   ref: 'Schoenfeld 2017; ACSM 2022' },
+      { id: 'balance',     icon: '⚖️', name: 'Equilíbrio Muscular',     score: balanceScore,  peso: '12%', msg: balanceMsg,  ref: 'Boyle 2016; NSCA Guidelines' },
+      { id: 'recovery',    icon: '🛌', name: 'Recuperação',             score: recoveryScore, peso: '9%',  msg: recoveryMsg, ref: 'Schoenfeld & Ogborn 2018' },
+      { id: 'progress',    icon: '📈', name: 'Progressão de Carga',     score: progressScore, peso: '11%', msg: progressMsg, ref: 'ACSM FITT-VP; Kraemer 2004' },
+      { id: 'freq',        icon: '📅', name: 'Frequência Semanal',      score: freqScore,     peso: '9%',  msg: freqMsg,     ref: 'ACSM Position Stand 2022' },
+      { id: 'objective',   icon: '🎯', name: 'Adequação ao Objetivo',   score: objScore,      peso: '9%',  msg: objMsg,      ref: 'Schoenfeld 2010; WHO 2020' },
+      { id: 'overtraining',icon: '💤', name: 'PSE & Fadiga (ACWR)',     score: overtScore,    peso: '7%',  msg: overtMsg,    ref: 'Foster 1998; NSCA 2021' },
+      { id: 'age',         icon: '🧬', name: 'Adequação Etária (LTAD)', score: ageScore,      peso: '10%', msg: ageMsg,      ref: 'Tanaka 2001; Balyi LTAD 2013; NSCA 2009' },
+      { id: 'sport',       icon: '🏆', name: 'Adequação Esportiva',     score: sportScore,    peso: '8%',  msg: sportMsg,    ref: 'Boyle 2016; NSCA Sport-Specific 2021' },
+      { id: 'variation',   icon: '🧪', name: 'Variação de Estímulo',    score: varScore,      peso: '6%',  msg: varMsg,      ref: 'Fonseca 2014; ACSM FITT-VP' },
+      { id: 'levelFit',    icon: '🏅', name: 'Adequação ao Nível',      score: levelScore,    peso: '4%',  msg: levelMsg,    ref: 'NSCA 2021; ACSM 2022' },
+      { id: 'monitor',     icon: '📊', name: 'Monitoramento',           score: monitorScore,  peso: '4%',  msg: monitorMsg,  ref: 'ACSM 2022' },
     ],
   }
 }
@@ -703,7 +858,7 @@ function TabAvaliacao({ student, studentId, progress }) {
   if (loading) return (
     <div style={{ textAlign: 'center', padding: '60px 20px', color: '#475569' }}>
       <div style={{ fontSize: 32, marginBottom: 10, animation: 'spin 1s linear infinite' }}>⚙️</div>
-      <div style={{ fontSize: 14 }}>Analisando prescrição com 11 pilares…</div>
+      <div style={{ fontSize: 14 }}>Analisando prescrição com 12 pilares…</div>
     </div>
   )
   if (!result) return null
@@ -912,7 +1067,7 @@ function TabAvaliacao({ student, studentId, progress }) {
       <div style={{ marginTop: 20, padding: '14px 18px', background: 'rgba(99,102,241,0.05)', borderRadius: 12, border: '1px solid rgba(99,102,241,0.12)' }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: '#6366F1', marginBottom: 5 }}>🔬 Sobre este avaliador v2</div>
         <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.7 }}>
-          11 pilares ponderados com confiança baseada em dados disponíveis. Referências: ACSM 2022, Schoenfeld 2017, Foster 1998 (ACWR), Boyle 2016, Balyi LTAD 2013, Fonseca 2014, WHO 2020, NSCA 2021. Ferramenta de suporte ao julgamento clínico — não substitui avaliação presencial.
+          12 pilares ponderados com confiança baseada em dados disponíveis. Referências: ACSM 2022, Schoenfeld 2017, Foster 1998 (ACWR), Boyle 2016, Balyi LTAD 2013, Faigenbaum 2009, Fonseca 2014, WHO 2020, NSCA 2021, Kohrt 2004, Sherrington 2019. Ferramenta de suporte ao julgamento clínico — não substitui avaliação presencial.
         </div>
       </div>
     </div>
