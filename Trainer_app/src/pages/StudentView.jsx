@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from 'react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase } from '../supabase'
 
 // ── Responsividade ────────────────────────────────────────────────────────────
@@ -68,6 +67,68 @@ function svFormatPace(distKm,durMin) {
   if(!distKm||!durMin||distKm===0)return null
   const pm=durMin/distKm, m=Math.floor(pm), s=Math.round((pm-m)*60).toString().padStart(2,'0')
   return `${m}:${s}/km`
+}
+
+// ── PSE Explicação ───────────────────────────────────────────────────────────
+const PSE_SCALE = [
+  { n:1,  label:'Muito leve',       ex:'Caminhar devagar',       color:'#34D399' },
+  { n:2,  label:'Leve',             ex:'Caminhada normal',       color:'#4ADE80' },
+  { n:3,  label:'Moderado leve',    ex:'Conversa fácil',         color:'#A3E635' },
+  { n:4,  label:'Moderado',         ex:'Consegue falar frases',  color:'#FDE047' },
+  { n:5,  label:'Moderado intenso', ex:'Frases curtas',          color:'#FBBF24' },
+  { n:6,  label:'Intenso',          ex:'Difícil conversar',      color:'#FB923C' },
+  { n:7,  label:'Muito intenso',    ex:'Quase sem fôlego',       color:'#F97316' },
+  { n:8,  label:'Difícil',          ex:'Respiração pesada',      color:'#EF4444' },
+  { n:9,  label:'Muito difícil',    ex:'Máximo sustentável',     color:'#DC2626' },
+  { n:10, label:'Máximo',           ex:'Esforço total',          color:'#B91C1C' },
+]
+
+function PseExplainer({ highlight }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div style={{ marginTop:8 }}>
+      <button onClick={()=>setOpen(o=>!o)} style={{
+        background:'rgba(167,139,250,0.10)', border:'1px solid rgba(167,139,250,0.25)',
+        borderRadius:20, padding:'5px 14px', cursor:'pointer',
+        fontSize:11, fontWeight:700, color:'#A78BFA', display:'flex', alignItems:'center', gap:6,
+      }}>
+        {open ? '▲' : '▼'} O que é PSE?
+      </button>
+      {open && (
+        <div style={{ background:'rgba(0,0,0,0.4)', borderRadius:14,
+          border:'1px solid rgba(255,255,255,0.07)', padding:'14px', marginTop:8 }}>
+          <div style={{ fontSize:12, color:'#94A3B8', lineHeight:1.6, marginBottom:12 }}>
+            <strong style={{ color:'#E2E8F0' }}>PSE = Percepção Subjetiva de Esforço.</strong>{' '}
+            Escala de 1 a 10 que mede o quão difícil o exercício está para você — sem precisar de nenhum aparelho.
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
+            {PSE_SCALE.map(({ n, label, ex, color }) => {
+              const hl = highlight && n >= highlight.min && n <= highlight.max
+              return (
+                <div key={n} style={{ display:'flex', alignItems:'center', gap:8,
+                  padding:'5px 8px', borderRadius:8,
+                  background: hl ? `${color}18` : 'transparent',
+                  border: hl ? `1px solid ${color}40` : '1px solid transparent',
+                }}>
+                  <div style={{ width:22, height:22, borderRadius:6, flexShrink:0,
+                    background:`${color}22`, border:`1px solid ${color}50`,
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                    fontSize:11, fontWeight:900, color }}>
+                    {n}
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <span style={{ fontSize:12, fontWeight: hl?800:600, color: hl?'#E2E8F0':'#64748B' }}>{label}</span>
+                    <span style={{ fontSize:10, color:'#475569', marginLeft:6 }}>— {ex}</span>
+                  </div>
+                  {hl && <span style={{ fontSize:10, fontWeight:800, color }}>← Alvo</span>}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ── CARDIO MODAL ──────────────────────────────────────────────────────────────
@@ -140,6 +201,7 @@ function SvCardioModal({ studentId, onSave, onClose }) {
         <div style={{ display:'flex',justifyContent:'space-between',fontSize:9,color:'#334155',fontWeight:700 }}>
           <span>1 Leve</span><span>5 Moderado</span><span>10 Máximo</span>
         </div>
+        <PseExplainer />
 
         <label style={LBL}>Observações</label>
         <textarea style={{ ...INP, minHeight:60, resize:'vertical' }}
@@ -640,29 +702,69 @@ function StudentCardioTab({ studentId, student, sessions, onNewSession }) {
               {presc.pse.label}</div>
             <div style={{ fontSize:11,color:'#475569',marginTop:3 }}>🏃 {presc.pace}</div>
           </div>
-          <div style={{ fontSize:11,color:'#94A3B8',lineHeight:1.6,padding:'8px 12px',
+          <PseExplainer highlight={presc.pse} />
+          <div style={{ fontSize:11,color:'#94A3B8',lineHeight:1.6,padding:'8px 12px',marginTop:8,
             background:'rgba(167,139,250,0.05)',borderRadius:10,borderLeft:'2px solid rgba(167,139,250,0.3)',
             fontFamily:"'Nunito',sans-serif" }}>💡 {presc.obs}</div>
         </div>
       )}
 
-      {/* Gráfico pace */}
-      {paceData.length >= 2 && (
-        <div style={{ ...CARD, marginBottom:14 }}>
-          <div style={{ fontSize:13,fontWeight:800,color:'#E2E8F0',marginBottom:14,
-            fontFamily:"'Nunito',sans-serif" }}>🏃 Evolução do Pace</div>
-          <ResponsiveContainer width="100%" height={180}>
-            <LineChart data={paceData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-              <XAxis dataKey="date" tick={{ fontSize:10,fill:'#475569' }} />
-              <YAxis tick={{ fontSize:10,fill:'#475569' }} unit="'/km" domain={['auto','auto']} reversed />
-              <Tooltip contentStyle={{ background:'#070B1A',border:'1px solid rgba(167,139,250,0.2)',borderRadius:10 }} />
-              <Line type="monotone" dataKey="Pace" stroke="#A78BFA" strokeWidth={2.5}
-                dot={{ r:4,fill:'#A78BFA',stroke:'#02040F',strokeWidth:2 }} activeDot={{ r:6 }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+      {/* Gráfico pace — SVG puro (sem dependência) */}
+      {paceData.length >= 2 && (() => {
+        const W = 340, H = 140, PAD = { t:14, r:14, b:30, l:44 }
+        const vals  = paceData.map(d => d.Pace)
+        const minV  = Math.min(...vals), maxV = Math.max(...vals)
+        const range = maxV - minV || 1
+        // pace menor = melhor, eixo Y invertido (melhor no topo)
+        const cx = (i) => PAD.l + (i/(paceData.length-1))*(W-PAD.l-PAD.r)
+        const cy = (v) => PAD.t + ((v-minV)/range)*(H-PAD.t-PAD.b)
+        const pts = paceData.map((d,i) => `${cx(i)},${cy(d.Pace)}`).join(' ')
+        const area = `M${cx(0)},${cy(paceData[0].Pace)} ` +
+          paceData.slice(1).map((d,i)=>`L${cx(i+1)},${cy(d.Pace)}`).join(' ') +
+          ` L${cx(paceData.length-1)},${H-PAD.b} L${cx(0)},${H-PAD.b} Z`
+        return (
+          <div style={{ ...CARD, marginBottom:14 }}>
+            <div style={{ fontSize:13,fontWeight:800,color:'#E2E8F0',marginBottom:10,
+              fontFamily:"'Nunito',sans-serif" }}>🏃 Evolução do Pace</div>
+            <div style={{ overflowX:'auto' }}>
+              <svg width={W} height={H} style={{ display:'block', minWidth: W }}>
+                {/* grid lines */}
+                {[0,.5,1].map(t => {
+                  const y = PAD.t + t*(H-PAD.t-PAD.b)
+                  const labelVal = minV + (1-t)*range
+                  const m=Math.floor(labelVal), s=Math.round((labelVal-m)*60).toString().padStart(2,'0')
+                  return (
+                    <g key={t}>
+                      <line x1={PAD.l} y1={y} x2={W-PAD.r} y2={y} stroke="rgba(255,255,255,0.05)" strokeWidth={1} />
+                      <text x={PAD.l-4} y={y+4} textAnchor="end" fontSize={9} fill="#475569">{m}:{s}</text>
+                    </g>
+                  )
+                })}
+                {/* x axis labels */}
+                {paceData.map((d,i) => (
+                  (i===0 || i===paceData.length-1 || (paceData.length>4 && i===Math.floor(paceData.length/2)))
+                    ? <text key={i} x={cx(i)} y={H-PAD.b+14} textAnchor="middle" fontSize={9} fill="#475569">{d.date}</text>
+                    : null
+                ))}
+                {/* area fill */}
+                <path d={area} fill="rgba(167,139,250,0.08)" />
+                {/* line */}
+                <polyline points={pts} fill="none" stroke="#A78BFA" strokeWidth={2.5}
+                  strokeLinejoin="round" strokeLinecap="round" />
+                {/* dots */}
+                {paceData.map((d,i) => (
+                  <circle key={i} cx={cx(i)} cy={cy(d.Pace)} r={4}
+                    fill="#A78BFA" stroke="#02040F" strokeWidth={2} />
+                ))}
+              </svg>
+            </div>
+            <div style={{ display:'flex',justifyContent:'space-between',fontSize:10,color:'#475569',marginTop:6 }}>
+              <span>⬆ Melhor pace: {(()=>{const m=Math.floor(minV);const s=Math.round((minV-m)*60).toString().padStart(2,'0');return `${m}:${s}/km`})()}</span>
+              <span>Últimas {paceData.length} sessões com distância</span>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Filtro */}
       <div style={{ display:'flex',flexWrap:'wrap',gap:6,marginBottom:12 }}>
@@ -714,10 +816,13 @@ function StudentCardioTab({ studentId, student, sessions, onNewSession }) {
                   </div>
                   {s.notes&&<div style={{ fontSize:11,color:'#475569',marginTop:3,fontStyle:'italic' }}>{s.notes}</div>}
                 </div>
-                <div style={{ width:34,height:34,borderRadius:'50%',display:'flex',alignItems:'center',
+                <div title={s.pse ? `PSE ${s.pse}/10 — ${PSE_SCALE[s.pse-1]?.label||''}` : 'PSE não registrado'}
+                style={{ width:34,height:34,borderRadius:'50%',display:'flex',alignItems:'center',
                   justifyContent:'center',fontSize:13,fontWeight:900,color:'#02040F',flexShrink:0,
                   background:`hsl(${120-(s.pse||5)*12},70%,50%)`,
-                  boxShadow:`0 0 10px hsl(${120-(s.pse||5)*12},70%,50%)50` }}>
+                  boxShadow:`0 0 10px hsl(${120-(s.pse||5)*12},70%,50%)50`,
+                  cursor:'default',
+                }}>
                   {s.pse||'—'}
                 </div>
               </div>
@@ -838,10 +943,87 @@ function CosmicCSS() {
         50%      { opacity: 1;   transform: scale(1.5); }
       }
       @keyframes aurora {
-        0%,100% { transform: translate(0,0) scale(1);         opacity: 0.07; }
-        50%      { transform: translate(24px,-10px) scale(1.18); opacity: 0.13; }
+        0%,100% { transform: translate(0,0) scale(1);            opacity: 0.07; }
+        50%      { transform: translate(24px,-10px) scale(1.18);  opacity: 0.13; }
       }
+      @keyframes fadeUp {
+        from { opacity: 0; transform: translateY(12px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes float {
+        0%,100% { transform: translateY(0); }
+        50%      { transform: translateY(-7px); }
+      }
+      @keyframes starAppear {
+        0%   { opacity: 0; transform: scale(0) rotate(-20deg); }
+        60%  { opacity: 1; transform: scale(1.25) rotate(6deg); }
+        100% { opacity: 1; transform: scale(1)    rotate(0deg); }
+      }
+      @keyframes starGlow {
+        0%,100% { filter: drop-shadow(0 0 4px var(--sc))  drop-shadow(0 0 1px var(--sc)); transform: scale(1);   }
+        50%      { filter: drop-shadow(0 0 16px var(--sc)) drop-shadow(0 0 32px var(--sc)); transform: scale(1.1); }
+      }
+      @keyframes constellationPulse {
+        0%,100% { opacity: 0.10; }
+        50%      { opacity: 0.28; }
+      }
+      .cosmic-btn-glow:hover { filter: brightness(1.15); transform: translateY(-1px); }
     `}</style>
+  )
+}
+
+// ── Achievement Stars ────────────────────────────────────────────────────────
+function AchievementStar({ goal, size, index }) {
+  const color = CAT_STAR_COLOR[goal.category] || '#94A3B8'
+  const pts   = '50,4 61,36 95,36 68,58 79,92 50,71 21,92 32,58 5,36 39,36'
+  return (
+    <div title={goal.title} style={{
+      display:'flex', flexDirection:'column', alignItems:'center', gap:5, cursor:'default',
+      animation:`starAppear 0.6s ${index * 0.12}s both cubic-bezier(0.34,1.56,0.64,1)`,
+    }}>
+      <svg width={size} height={size} viewBox="0 0 100 100"
+        style={{ '--sc': color, animation:`starGlow 3.5s ${index * 0.4}s ease-in-out infinite` }}>
+        <polygon points={pts} fill={color} opacity="0.93" />
+        <polygon points={pts} fill="rgba(255,255,255,0.25)"
+          style={{ transform:'scale(0.45)', transformOrigin:'50px 52px' }} />
+      </svg>
+      <span style={{ fontSize:9, color, fontWeight:800, textAlign:'center',
+        maxWidth:size+14, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', opacity:0.85 }}>
+        {goal.title.length > 14 ? goal.title.slice(0,13)+'…' : goal.title}
+      </span>
+    </div>
+  )
+}
+
+function ConstellationDisplay({ goals }) {
+  if (!goals.length) return null
+  const getSize = (i) => Math.max(28, 58 - i * 8)
+  return (
+    <div style={{ ...CARD, position:'relative', overflow:'hidden',
+      border:'1px solid rgba(167,139,250,0.22)', padding:'22px 18px 18px', marginBottom:16 }}>
+      <svg style={{ position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none',
+        animation:'constellationPulse 4s ease-in-out infinite' }} preserveAspectRatio="none">
+        {goals.slice(0,7).map((_,i) => {
+          if (i===0) return null
+          const x1=((i-1)*15+7)+'%', y1='55%', x2=(i*15+7)+'%', y2='55%'
+          return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#A78BFA" strokeWidth="1" strokeDasharray="3,5" />
+        })}
+      </svg>
+      <div style={{ fontSize:10, color:'#A78BFA', fontWeight:800, letterSpacing:2.5,
+        textTransform:'uppercase', textAlign:'center', marginBottom:18 }}>
+        ✦ Constelação de Conquistas · {goals.length} {goals.length===1?'estrela':'estrelas'}
+      </div>
+      <div style={{ display:'flex', flexWrap:'wrap', gap:14, justifyContent:'center', alignItems:'flex-end' }}>
+        {goals.map((g,i) => <AchievementStar key={g.id} goal={g} size={getSize(i)} index={i} />)}
+      </div>
+      {goals.length >= 3 && (
+        <div style={{ textAlign:'center', marginTop:14, fontSize:11, color:'#64748B', fontStyle:'italic' }}>
+          {goals.length >= 10 ? '🌌 Constelação completa — você é incrível!' :
+           goals.length >= 5  ? '⭐ Sua constelação está crescendo!' :
+           '✨ Continue e faça sua constelação brilhar!'}
+        </div>
+      )}
+    </div>
   )
 }
 
