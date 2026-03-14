@@ -1,5 +1,3 @@
-{
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
-}
+git add vercel.json
+git commit -m "fix: rewrite rule for student link routing"
+git push
