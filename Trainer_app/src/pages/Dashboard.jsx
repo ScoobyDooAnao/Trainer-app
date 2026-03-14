@@ -16,6 +16,7 @@ const GOAL = {
   'Emagrecimento':            { bg: '#FEF2F2', accent: '#E05252', icon: '🔥' },
   'Força e Performance':      { bg: '#EDE9FE', accent: '#7C3AED', icon: '⚡' },
   'Condicionamento':          { bg: '#FFFBEB', accent: '#D97706', icon: '🏃' },
+  'Saúde e Bem-Estar':        { bg: '#F0FDF4', accent: '#16A34A', icon: '🌿' },
   'Iniciação Esportiva':      { bg: '#ECFDF5', accent: '#059669', icon: '🎮' },
   'Desenvolvimento Atlético': { bg: '#EFF6FF', accent: '#3B82F6', icon: '📈' },
   'Treinamento Competitivo':  { bg: '#FDF4FF', accent: '#A21CAF', icon: '🏆' },
@@ -30,23 +31,23 @@ const NAV = [
   { id: 'evolucao', icon: '📈', label: 'Evolução'     },
   { id: 'cardio',   icon: '❤️', label: 'Cardio'       },
 ]
-const GOALS  = ['Ganho de Massa', 'Emagrecimento', 'Condicionamento', 'Força e Performance', 'Iniciação Esportiva', 'Desenvolvimento Atlético', 'Treinamento Competitivo']
+const GOALS  = ['Ganho de Massa', 'Emagrecimento', 'Condicionamento', 'Força e Performance', 'Saúde e Bem-Estar', 'Iniciação Esportiva', 'Desenvolvimento Atlético', 'Treinamento Competitivo']
 const LEVELS = ['Iniciante', 'Intermediário', 'Avançado', 'Atleta Jovem', 'Atleta Competitivo']
 
 const SPORTS = [
-  { id: 'futebol',    label: 'Futebol',       icon: '⚽' },
-  { id: 'futsal',     label: 'Futsal',         icon: '🥅' },
-  { id: 'natacao',    label: 'Natação',        icon: '🏊' },
-  { id: 'tenis',      label: 'Tênis',          icon: '🎾' },
-  { id: 'basquete',   label: 'Basquete',       icon: '🏀' },
-  { id: 'volei',      label: 'Vôlei',          icon: '🏐' },
-  { id: 'atletismo',  label: 'Atletismo',      icon: '🏃' },
-  { id: 'ginastica',  label: 'Ginástica',      icon: '🤸' },
-  { id: 'judo',       label: 'Judô',           icon: '🥋' },
-  { id: 'natação',    label: 'Natação',        icon: '🏊' },
-  { id: 'ciclismo',   label: 'Ciclismo',       icon: '🚴' },
-  { id: 'handebol',   label: 'Handebol',       icon: '🤾' },
-  { id: 'outro',      label: 'Outro',          icon: '🏅' },
+  { id: 'futebol',       label: 'Futebol',            icon: '⚽' },
+  { id: 'futsal',        label: 'Futsal',              icon: '🥅' },
+  { id: 'natacao',       label: 'Natação',             icon: '🏊' },
+  { id: 'tenis',         label: 'Tênis',               icon: '🎾' },
+  { id: 'basquete',      label: 'Basquete',            icon: '🏀' },
+  { id: 'volei',         label: 'Vôlei',               icon: '🏐' },
+  { id: 'atletismo',     label: 'Atletismo',           icon: '🏃' },
+  { id: 'ginastica',     label: 'Ginástica',           icon: '🤸' },
+  { id: 'judo',          label: 'Judô',                icon: '🥋' },
+  { id: 'ciclismo',      label: 'Ciclismo',            icon: '🚴' },
+  { id: 'handebol',      label: 'Handebol',            icon: '🤾' },
+  { id: 'saude',         label: 'Saúde e Bem-Estar',  icon: '🌿' },
+  { id: 'custom',        label: 'Outro',               icon: '🏅' },
 ]
 
 // LTAD — Long-Term Athlete Development
@@ -1789,7 +1790,7 @@ function NovoAlunoModal({ onSave, onClose, teacherId }) {
       goal:             form.goal,
       level:            form.level,
       notes:            form.notes             || null,
-      sport:            form.sport             || null,
+      sport:            form.sport === 'custom' ? (form.sport_custom||'outro') : (form.sport || null),
       sport_position:   form.sport_position    || null,
       experience_years: +form.experience_years || null,
       guardian_name:    form.guardian_name     || null,
@@ -1839,8 +1840,11 @@ function NovoAlunoModal({ onSave, onClose, teacherId }) {
           <optgroup label="— Esportivo (infantojuvenil)">
             {['Iniciação Esportiva','Desenvolvimento Atlético','Treinamento Competitivo'].map(g=><option key={g}>{g}</option>)}
           </optgroup>
-          <optgroup label="— Geral">
-            {['Condicionamento','Ganho de Massa','Emagrecimento','Força e Performance'].map(g=><option key={g}>{g}</option>)}
+          <optgroup label="— Saúde e Bem-Estar">
+            {['Saúde e Bem-Estar','Condicionamento'].map(g=><option key={g}>{g}</option>)}
+          </optgroup>
+          <optgroup label="— Estética / Força">
+            {['Ganho de Massa','Emagrecimento','Força e Performance'].map(g=><option key={g}>{g}</option>)}
           </optgroup>
         </select>
 
@@ -1849,10 +1853,14 @@ function NovoAlunoModal({ onSave, onClose, teacherId }) {
         <label style={lbl}>Modalidade principal</label>
         <select style={inp} value={form.sport} onChange={e=>f('sport',e.target.value)}>
           <option value="">Selecionar...</option>
-          {SPORTS.filter((s,i,a)=>a.findIndex(x=>x.label===s.label)===i).map(s=>(
+          {SPORTS.map(s=>(
             <option key={s.id} value={s.id}>{s.icon} {s.label}</option>
           ))}
         </select>
+        {form.sport === 'custom' && (
+          <input style={{ ...inp, marginTop:8 }} type="text" placeholder="Qual esporte? Ex: Remo, Rugby, Padel..."
+            value={form.sport_custom||''} onChange={e=>f('sport_custom',e.target.value)} />
+        )}
 
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
           <div>
@@ -1876,17 +1884,23 @@ function NovoAlunoModal({ onSave, onClose, teacherId }) {
           </div>
         )}
 
-        {/* ── Responsável ── */}
+        {/* ── Responsável — apenas para menores de 18 anos ── */}
         {sep('Responsável')}
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
           <div>
             <label style={lbl}>Nome do responsável</label>
             <input style={inp} type="text" placeholder="Ex: Maria Silva" value={form.guardian_name} onChange={e=>f('guardian_name',e.target.value)} />
           </div>
-          <div>
-            <label style={lbl}>WhatsApp do responsável</label>
-            <input style={inp} type="text" placeholder="Ex: (41) 99999-9999" value={form.guardian_phone} onChange={e=>f('guardian_phone',e.target.value)} />
-          </div>
+          {previewAge && previewAge < 18 ? (
+            <div>
+              <label style={lbl}>WhatsApp do responsável</label>
+              <input style={inp} type="text" placeholder="Ex: (41) 99999-9999" value={form.guardian_phone} onChange={e=>f('guardian_phone',e.target.value)} />
+            </div>
+          ) : (
+            <div style={{ display:'flex', alignItems:'center', padding:'10px 12px', borderRadius:8, background:'rgba(0,0,0,0.03)', border:'1px dashed #E2E8F0', fontSize:12, color:'#94A3B8' }}>
+              📱 WhatsApp disponível para menores de 18 anos
+            </div>
+          )}
         </div>
 
         {/* ── Observações ── */}
