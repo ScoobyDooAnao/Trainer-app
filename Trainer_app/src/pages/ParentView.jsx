@@ -100,6 +100,7 @@ function GoalRow({goal}) {
           <span style={{fontSize:12,color:'rgba(255,255,255,0.3)'}}>Em andamento</span>
         )}
       </div>
+      </div>
     </div>
   )
 }
@@ -178,6 +179,27 @@ export default function ParentView({studentId}) {
   const waUrl=teacher?.whatsapp?`https://wa.me/55${teacher.whatsapp.replace(/\D/g,'')}?text=${waMsg}`:null
   const accs=['#60A5FA','#34D399','#FBBF24','#C084FC','#F87171','#22D3EE']
   const sport=SPORT_LABELS[student.sport]||student.sport
+
+  // Esta semana
+  const now7=new Date(), week7ago=new Date(now7.getTime()-7*86400000)
+  const sessWeek=[...logs,...cardio].filter(s=>new Date(s.date+'T12:00:00')>=week7ago).length
+  const cardioMin=cardio.filter(s=>new Date(s.date+'T12:00:00')>=week7ago).reduce((a,s)=>a+(s.duration_minutes||0),0)
+  const allDatesSet=[...new Set([...logs,...cardio].map(s=>s.date))].sort((a,b)=>b.localeCompare(a))
+  let streak=0
+  if(allDatesSet.length){
+    let cursor=new Date(); cursor.setHours(0,0,0,0)
+    for(const d of allDatesSet){
+      const dd=new Date(d+'T12:00:00'); dd.setHours(0,0,0,0)
+      if(Math.round((cursor-dd)/86400000)<=1){streak++; cursor=new Date(dd)} else break
+    }
+  }
+  const motivMsg=streak>=7?`🔥 ${streak} dias seguidos treinando — dedicação impressionante!`
+    :streak>=3?`💪 ${streak} dias consecutivos de treino`
+    :sessWeek>=3?`✅ ${sessWeek} sessões esta semana — dentro do planejado`
+    :sessWeek>=1?`🏃 ${sessWeek} sessão${sessWeek>1?'s':''} registrada${sessWeek>1?'s':''} esta semana`
+    :'📋 Nenhuma sessão registrada esta semana'
+  const motivColor=streak>=7?'#FBBF24':streak>=3?'#34D399':sessWeek>=3?'#34D399':sessWeek>=1?'#60A5FA':'#64748B'
+
 
   return(
     <div className="pv">
@@ -388,8 +410,47 @@ export default function ParentView({studentId}) {
         </div>
       </div>
 
+      <div style={{position:'relative',background:'#040D18'}}>
+        <div style={{position:'absolute',inset:0,backgroundImage:'linear-gradient(rgba(255,255,255,0.012) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.012) 1px,transparent 1px)',backgroundSize:'48px 48px',pointerEvents:'none'}}/>
+        <svg style={{position:'absolute',top:0,right:0,opacity:0.03,pointerEvents:'none'}} width='220' height='220' viewBox='0 0 220 220'><circle cx='220' cy='0' r='140' fill='none' stroke='white' strokeWidth='1.5'/><circle cx='220' cy='0' r='90' fill='none' stroke='white' strokeWidth='1'/></svg>
+        <svg style={{position:'absolute',bottom:0,left:0,opacity:0.03,pointerEvents:'none'}} width='220' height='220' viewBox='0 0 220 220'><circle cx='0' cy='220' r='140' fill='none' stroke='white' strokeWidth='1.5'/><circle cx='0' cy='220' r='90' fill='none' stroke='white' strokeWidth='1'/></svg>
       {/* ══ CARDS ════════════════════════════════════════════════════════════ */}
-      <div style={{padding:'20px 16px',display:'flex',flexDirection:'column',gap:14,maxWidth:560,margin:'0 auto'}}>
+      <div style={{padding:'20px 16px',display:'flex',flexDirection:'column',gap:14,maxWidth:560,margin:'0 auto',position:'relative',zIndex:1}}>
+
+        {/* Esta Semana */}
+        <div className="ani" style={{animationDelay:'0.05s',borderRadius:18,overflow:'hidden',position:'relative',background:'linear-gradient(135deg,rgba(255,220,100,0.08),rgba(255,220,100,0.03))',border:'1px solid rgba(255,220,100,0.18)'}}>
+          <div style={{position:'absolute',top:0,left:0,right:0,height:2,background:'linear-gradient(90deg,transparent,rgba(255,220,100,0.6),transparent)'}}/>
+          <div style={{padding:'18px 20px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
+              <div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:700,color:'rgba(255,220,100,0.6)',letterSpacing:2,textTransform:'uppercase',marginBottom:4}}>Esta Semana</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:'#F0F6FF',letterSpacing:0.3}}>{student.name.split(' ')[0]}</div>
+              </div>
+              {streak>0&&(
+                <div style={{textAlign:'center',background:'rgba(255,220,100,0.1)',border:'1px solid rgba(255,220,100,0.2)',borderRadius:12,padding:'8px 14px'}}>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:900,color:'#FFDC64',lineHeight:1}}>{streak}</div>
+                  <div style={{fontSize:9,color:'rgba(255,220,100,0.5)',textTransform:'uppercase',letterSpacing:0.8,marginTop:2}}>dias seguidos</div>
+                </div>
+              )}
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:14}}>
+              {[
+                {icon:'🏋️',label:'Treinos',val:sessWeek},
+                {icon:'❤️',label:'Min. Cardio',val:cardioMin||'—'},
+                {icon:'⭐',label:'Metas',val:wonGoals.length||'—'},
+              ].map(({icon,label,val},i)=>(
+                <div key={i} style={{background:'rgba(255,255,255,0.04)',borderRadius:12,padding:'10px 8px',textAlign:'center',border:'1px solid rgba(255,255,255,0.06)'}}>
+                  <div style={{fontSize:16,marginBottom:3}}>{icon}</div>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:'#F0F6FF',lineHeight:1}}>{val}</div>
+                  <div style={{fontSize:9,color:'rgba(255,255,255,0.25)',textTransform:'uppercase',letterSpacing:0.5,marginTop:2}}>{label}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{padding:'10px 14px',borderRadius:10,background:'rgba(255,255,255,0.04)',border:`1px solid ${motivColor}30`,fontSize:13,color:motivColor,fontWeight:600}}>
+              {motivMsg}
+            </div>
+          </div>
+        </div>
 
         {/* Frequência */}
         <div className="pv-card ani" style={{animationDelay:'0.1s'}}>
