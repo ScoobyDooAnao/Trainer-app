@@ -35,7 +35,7 @@ function CSS() {
   return <style>{`
     @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@300;400;500;600&display=swap');
     *{box-sizing:border-box;margin:0;padding:0;}
-    .pv{font-family:'Barlow',sans-serif;background:#06111F;min-height:100vh;color:#E8F0F8;}
+    .pv{font-family:'Barlow',sans-serif;background:#040D18;min-height:100vh;color:#E8F0F8;}
     .pv-card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:22px;}
     .pv-card-gold{background:rgba(255,220,100,0.04);border:1px solid rgba(255,220,100,0.12);border-radius:18px;padding:22px;}
     .pv-stat{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:18px 12px;text-align:center;}
@@ -48,9 +48,14 @@ function CSS() {
     .pv-h1{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:700;letter-spacing:0.5px;color:#F0F6FF;margin-bottom:3px;}
     .pv-sub{font-size:12px;color:rgba(255,255,255,0.35);}
     @keyframes pvIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes flkr{0%,100%{opacity:1}92%{opacity:.9}95%{opacity:.97}}
+    @keyframes flkr{0%,100%{opacity:1}50%{opacity:.88}92%{opacity:.94}95%{opacity:.98}}
     @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes twinkle{0%,100%{opacity:.9;r:1}50%{opacity:.3;r:.5}}
+    @keyframes grassWave{0%,100%{opacity:.13}50%{opacity:.18}}
+    @keyframes fogDrift{0%{transform:translateX(-8px)}100%{transform:translateX(8px)}}
+    @keyframes crowdPulse{0%,100%{opacity:.55}50%{opacity:.75}}
     .ani{animation:pvIn 0.5s ease both;}
+    .star{animation:twinkle 3s ease-in-out infinite;}
   `}</style>
 }
 
@@ -179,36 +184,168 @@ export default function ParentView({studentId}) {
       <CSS/>
 
       {/* ══ HEADER — STADIUM NIGHT ══════════════════════════════════════════ */}
-      <div style={{position:'relative',background:'linear-gradient(180deg,#040D1A 0%,#071528 55%,#0A1E35 100%)',overflow:'hidden',minHeight:300,paddingBottom:0}}>
+      <div style={{position:'relative',background:'linear-gradient(180deg,#020912 0%,#040E1C 40%,#061526 70%,#0C2240 100%)',overflow:'hidden',minHeight:420,paddingBottom:0}}>
 
-        {/* Floodlight beams */}
-        <svg style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',pointerEvents:'none'}} viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice">
-          {/* Left beam */}
-          <defs>
-            <linearGradient id="bl" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stopColor="#FFDC64" stopOpacity="0.18"/><stop offset="100%" stopColor="#FFDC64" stopOpacity="0"/></linearGradient>
-            <linearGradient id="br" x1="1" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#FFDC64" stopOpacity="0.18"/><stop offset="100%" stopColor="#FFDC64" stopOpacity="0"/></linearGradient>
-          </defs>
-          <polygon points="0,0 120,300 0,300" fill="url(#bl)"/>
-          <polygon points="400,0 280,300 400,300" fill="url(#br)"/>
-          {/* Beam edge lines */}
-          <line x1="0" y1="0" x2="120" y2="300" stroke="#FFDC64" strokeWidth="0.8" strokeOpacity="0.25"/>
-          <line x1="400" y1="0" x2="280" y2="300" stroke="#FFDC64" strokeWidth="0.8" strokeOpacity="0.25"/>
-          {/* Pitch circle faint */}
-          <ellipse cx="200" cy="280" rx="130" ry="50" fill="none" stroke="white" strokeWidth="1" strokeOpacity="0.05"/>
-          <circle cx="200" cy="240" r="35" fill="none" stroke="white" strokeWidth="1" strokeOpacity="0.04"/>
-          <line x1="200" y1="190" x2="200" y2="300" stroke="white" strokeWidth="0.8" strokeOpacity="0.04"/>
+        {/* ── Layer 1: Night sky + stars ── */}
+        <svg style={{position:'absolute',top:0,left:0,width:'100%',height:'55%',pointerEvents:'none'}} viewBox="0 0 400 180" preserveAspectRatio="xMidYMid slice">
+          {/* Stars — varied sizes and delays */}
+          {[
+            [30,15,1.1,0],[65,8,0.8,1.2],[110,22,1.3,0.5],[155,6,0.7,2.1],[195,18,1,0.8],
+            [240,10,0.9,1.5],[285,25,1.2,0.3],[330,12,0.8,1.8],[370,7,1,0.6],[50,35,0.7,2.4],
+            [90,42,1.1,0.9],[140,30,0.8,1.4],[200,38,1.3,0.2],[260,28,0.9,1.7],[310,45,0.7,0.7],
+            [360,33,1,2],[20,55,0.8,1.1],[80,60,1.2,0.4],[160,52,0.7,1.9],[220,65,1,0.1],
+            [290,58,0.9,1.3],[345,48,1.1,0.8],[120,70,0.8,2.2],[175,75,1,0.5],[250,68,0.7,1.6],
+          ].map(([cx,cy,r,delay],i)=>(
+            <circle key={i} cx={cx} cy={cy} r={r} fill="white" fillOpacity="0.7" className="star" style={{animationDelay:`${delay}s`,animationDuration:`${2.5+i*0.15}s`}}/>
+          ))}
+          {/* Moon glow top-right */}
+          <circle cx="360" cy="22" r="14" fill="none" stroke="rgba(255,240,180,0.12)" strokeWidth="8"/>
+          <circle cx="360" cy="22" r="8" fill="rgba(255,240,180,0.06)"/>
         </svg>
 
-        {/* Floodlight fixture dots top corners */}
-        {[[10,10],[24,8],[376,10],[390,8]].map(([x,y],i)=>(
-          <div key={i} style={{position:'absolute',top:y,left:x,width:i%2===0?8:6,height:i%2===0?8:6,borderRadius:'50%',background:'rgba(255,220,100,0.95)',boxShadow:'0 0 14px 5px rgba(255,220,100,0.45)',animation:`flkr ${3.5+i*0.4}s ease-in-out infinite ${i*0.25}s`}}/>
-        ))}
+        {/* ── Layer 2: Stadium structure (roof arc + masts) ── */}
+        <svg style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',pointerEvents:'none'}} viewBox="0 0 400 420" preserveAspectRatio="xMidYMid slice">
+          <defs>
+            {/* Floodlight beam gradients */}
+            <linearGradient id="bL1" x1="0" y1="0" x2="0.7" y2="1"><stop offset="0%" stopColor="#FFDC64" stopOpacity="0.22"/><stop offset="100%" stopColor="#FFDC64" stopOpacity="0"/></linearGradient>
+            <linearGradient id="bL2" x1="0" y1="0" x2="0.5" y2="1"><stop offset="0%" stopColor="#FFDC64" stopOpacity="0.15"/><stop offset="100%" stopColor="#FFDC64" stopOpacity="0"/></linearGradient>
+            <linearGradient id="bR1" x1="1" y1="0" x2="0.3" y2="1"><stop offset="0%" stopColor="#FFDC64" stopOpacity="0.22"/><stop offset="100%" stopColor="#FFDC64" stopOpacity="0"/></linearGradient>
+            <linearGradient id="bR2" x1="1" y1="0" x2="0.5" y2="1"><stop offset="0%" stopColor="#FFDC64" stopOpacity="0.15"/><stop offset="100%" stopColor="#FFDC64" stopOpacity="0"/></linearGradient>
+            {/* Grass glow */}
+            <radialGradient id="grassGlow" cx="50%" cy="100%" r="60%"><stop offset="0%" stopColor="#22C55E" stopOpacity="0.18"/><stop offset="100%" stopColor="#22C55E" stopOpacity="0"/></radialGradient>
+            {/* Stands gradient */}
+            <linearGradient id="standsL" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#1a3a6e" stopOpacity="0.9"/><stop offset="100%" stopColor="#0f2347" stopOpacity="0.7"/></linearGradient>
+            <linearGradient id="standsR" x1="1" y1="0" x2="0" y2="0"><stop offset="0%" stopColor="#1a3a6e" stopOpacity="0.9"/><stop offset="100%" stopColor="#0f2347" stopOpacity="0.7"/></linearGradient>
+          </defs>
 
-        {/* Crowd noise dots */}
-        <div style={{position:'absolute',bottom:0,left:0,right:0,height:56,backgroundImage:'radial-gradient(circle,rgba(255,255,255,0.07) 1px,transparent 1px)',backgroundSize:'13px 13px',maskImage:'linear-gradient(to top,rgba(0,0,0,0.25),transparent)',WebkitMaskImage:'linear-gradient(to top,rgba(0,0,0,0.25),transparent)'}}/>
+          {/* Stadium roof arc */}
+          <path d="M-20,80 Q200,10 420,80" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="2"/>
+          <path d="M-20,86 Q200,16 420,86" fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth="1"/>
+          {/* Roof support cables */}
+          {[60,130,200,270,340].map((x,i)=>(
+            <line key={i} x1={x} y1={i%2===0?14:18} x2={x+20} y2={85} stroke="rgba(255,255,255,0.07)" strokeWidth="0.7"/>
+          ))}
+
+          {/* Floodlight masts */}
+          {/* Left mast */}
+          <rect x="18" y="14" width="4" height="55" fill="rgba(200,210,230,0.25)" rx="1"/>
+          <rect x="8"  y="12" width="24" height="5"  fill="rgba(200,210,230,0.2)"  rx="1"/>
+          {/* Right mast */}
+          <rect x="378" y="14" width="4" height="55" fill="rgba(200,210,230,0.25)" rx="1"/>
+          <rect x="368" y="12" width="24" height="5"  fill="rgba(200,210,230,0.2)"  rx="1"/>
+
+          {/* ── Floodlight beams — wide cones ── */}
+          {/* Left outer beam */}
+          <polygon points="20,17 -10,320 40,320" fill="url(#bL1)"/>
+          {/* Left inner beam */}
+          <polygon points="20,17 60,300 140,300" fill="url(#bL2)"/>
+          {/* Right outer beam */}
+          <polygon points="380,17 410,320 360,320" fill="url(#bR1)"/>
+          {/* Right inner beam */}
+          <polygon points="380,17 340,300 260,300" fill="url(#bR2)"/>
+          {/* Beam edge glows */}
+          <line x1="20" y1="17" x2="-10" y2="320" stroke="#FFDC64" strokeWidth="0.6" strokeOpacity="0.3"/>
+          <line x1="20" y1="17" x2="140" y2="300" stroke="#FFDC64" strokeWidth="0.6" strokeOpacity="0.2"/>
+          <line x1="380" y1="17" x2="410" y2="320" stroke="#FFDC64" strokeWidth="0.6" strokeOpacity="0.3"/>
+          <line x1="380" y1="17" x2="260" y2="300" stroke="#FFDC64" strokeWidth="0.6" strokeOpacity="0.2"/>
+
+          {/* ── Left stands (arquibancada) ── */}
+          <path d="M0,420 L0,200 L80,240 L80,420 Z" fill="url(#standsL)"/>
+          {/* Seat rows left — 8 rows */}
+          {[0,1,2,3,4,5,6,7].map(row=>{
+            const y=210+row*26, x1=2, x2=78, tilt=row*5
+            return <line key={row} x1={x1} y1={y+tilt*0.3} x2={x2} y2={y} stroke="rgba(255,255,255,0.06)" strokeWidth="0.8"/>
+          })}
+          {/* Crowd dots left */}
+          {[0,1,2,3,4,5,6].map(row=>
+            [0,1,2,3,4,5,6,7].map(col=>{
+              const x=6+col*9, y=214+row*26
+              const col2=['#e03','#c55','#fff','#aaf','#f80','#8f8'][Math.floor(Math.random()*6)]
+              return <circle key={`${row}-${col}`} cx={x} cy={y} r="2.2" fill={col2} fillOpacity="0.35"/>
+            })
+          )}
+
+          {/* ── Right stands (arquibancada) ── */}
+          <path d="M400,420 L400,200 L320,240 L320,420 Z" fill="url(#standsR)"/>
+          {/* Seat rows right */}
+          {[0,1,2,3,4,5,6,7].map(row=>{
+            const y=210+row*26
+            return <line key={row} x1={322} y1={y} x2={398} y2={y+row*0.3} stroke="rgba(255,255,255,0.06)" strokeWidth="0.8"/>
+          })}
+          {/* Crowd dots right */}
+          {[0,1,2,3,4,5,6].map(row=>
+            [0,1,2,3,4,5,6,7].map(col=>{
+              const x=324+col*9, y=214+row*26
+              const col2=['#e03','#c55','#fff','#aaf','#f80','#8f8'][Math.floor(Math.random()*6)]
+              return <circle key={`${row}-${col}`} cx={x} cy={y} r="2.2" fill={col2} fillOpacity="0.35"/>
+            })
+          )}
+
+          {/* ── Top stands (fundo do estádio) ── */}
+          <rect x="80" y="200" width="240" height="65" fill="rgba(15,35,71,0.85)"/>
+          {/* Top stand rows */}
+          {[0,1,2,3,4,5].map(row=>(
+            <line key={row} x1="80" y1={210+row*10} x2="320" y2={210+row*10} stroke="rgba(255,255,255,0.05)" strokeWidth="0.8"/>
+          ))}
+          {/* Top crowd dots */}
+          {[0,1,2,3,4].map(row=>
+            Array.from({length:24}).map((_,col)=>{
+              const x=85+col*9.5, y=213+row*10
+              const cols=['#e03','#c55','#fff','#aaf','#f80','#e03','#8f8']
+              return <circle key={`t${row}-${col}`} cx={x} cy={y} r="2" fill={cols[col%cols.length]} fillOpacity="0.3"/>
+            })
+          )}
+
+          {/* ── Pitch / field ── */}
+          {/* Field base */}
+          <rect x="80" y="265" width="240" height="155" fill="rgba(15,80,35,0.6)" rx="2"/>
+          {/* Grass glow overlay */}
+          <rect x="80" y="265" width="240" height="155" fill="url(#grassGlow)" rx="2"/>
+          {/* Field lines */}
+          <rect x="82" y="267" width="236" height="151" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.2" rx="1"/>
+          {/* Centre line */}
+          <line x1="200" y1="267" x2="200" y2="418" stroke="rgba(255,255,255,0.18)" strokeWidth="1"/>
+          {/* Centre circle */}
+          <circle cx="200" cy="342" r="30" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="1"/>
+          <circle cx="200" cy="342" r="2"  fill="rgba(255,255,255,0.4)"/>
+          {/* Penalty areas */}
+          <rect x="153" y="267" width="94" height="30" fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth="0.9"/>
+          <rect x="153" y="388" width="94" height="30" fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth="0.9"/>
+          {/* Goal areas */}
+          <rect x="177" y="267" width="46" height="14" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.8"/>
+          <rect x="177" y="404" width="46" height="14" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.8"/>
+          {/* Goals */}
+          <rect x="188" y="263" width="24" height="6"  fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="1"/>
+          <rect x="188" y="418" width="24" height="6"  fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="1"/>
+          {/* Grass stripe pattern */}
+          {[0,1,2,3,4,5,6,7].map(i=>(
+            <rect key={i} x={82+i*30} y="267" width="15" height="151" fill="rgba(0,0,0,0.06)"/>
+          ))}
+          {/* Penalty spot */}
+          <circle cx="200" cy="285" r="1.5" fill="rgba(255,255,255,0.35)"/>
+          <circle cx="200" cy="400" r="1.5" fill="rgba(255,255,255,0.35)"/>
+        </svg>
+
+        {/* ── Layer 3: Atmospheric fog / light haze on pitch ── */}
+        <div style={{
+          position:'absolute',bottom:'8%',left:'15%',right:'15%',height:'35%',
+          background:'radial-gradient(ellipse at 50% 100%,rgba(255,220,100,0.07) 0%,rgba(34,197,94,0.05) 40%,transparent 70%)',
+          animation:'grassWave 4s ease-in-out infinite alternate',
+          pointerEvents:'none',
+        }}/>
+        {/* Side fog */}
+        <div style={{position:'absolute',top:'45%',left:0,width:'22%',height:'55%',background:'linear-gradient(90deg,rgba(10,30,60,0.6),transparent)',pointerEvents:'none'}}/>
+        <div style={{position:'absolute',top:'45%',right:0,width:'22%',height:'55%',background:'linear-gradient(-90deg,rgba(10,30,60,0.6),transparent)',pointerEvents:'none'}}/>
+
+        {/* ── Layer 4: Floodlight glow halos at fixture points ── */}
+        <div style={{position:'absolute',top:10,left:14,width:28,height:28,borderRadius:'50%',background:'radial-gradient(circle,rgba(255,220,100,0.9) 20%,rgba(255,220,100,0.3) 60%,transparent 80%)',boxShadow:'0 0 20px 8px rgba(255,220,100,0.35)',animation:'flkr 3.6s ease-in-out infinite'}}/>
+        <div style={{position:'absolute',top:10,right:14,width:28,height:28,borderRadius:'50%',background:'radial-gradient(circle,rgba(255,220,100,0.9) 20%,rgba(255,220,100,0.3) 60%,transparent 80%)',boxShadow:'0 0 20px 8px rgba(255,220,100,0.35)',animation:'flkr 3.6s ease-in-out infinite 0.7s'}}/>
+
+        {/* ── Layer 5: Content overlay fade ── */}
+        <div style={{position:'absolute',bottom:0,left:0,right:0,height:'45%',background:'linear-gradient(to top,rgba(4,13,24,0.95) 0%,rgba(4,13,24,0.6) 60%,transparent 100%)',pointerEvents:'none'}}/>
 
         {/* Content */}
-        <div style={{position:'relative',zIndex:1,padding:'26px 20px 36px'}}>
+        <div style={{position:'relative',zIndex:2,padding:'26px 20px 36px',marginTop:220}}>
 
           {/* Coach badge */}
           {teacher&&(
