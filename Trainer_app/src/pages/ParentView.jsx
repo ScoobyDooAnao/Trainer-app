@@ -165,22 +165,22 @@ function StadiumHeader({student,teacher,age,ltad,act,totalSess,activeDays,active
   )
 }
 
-// ── Training Calendar Heatmap ─────────────────────────────────────────────────
+// ── Weekly Training Calendar ─────────────────────────────────────────────────
 function TrainingCalendar({logs,cardio}){
   const now=new Date()
   const allDates=new Set([...(logs||[]).map(l=>l.date),...(cardio||[]).map(c=>c.date)])
-  // Build 13 weeks × 7 days grid (last 91 days)
-  const cells=[]
-  for(let d=90;d>=0;d--){
-    const date=new Date(now); date.setDate(date.getDate()-d); date.setHours(12,0,0,0)
-    const key=date.toISOString().slice(0,10)
-    cells.push({key,trained:allDates.has(key),date})
-  }
-  const weeks=[]
-  for(let i=0;i<cells.length;i+=7) weeks.push(cells.slice(i,i+7))
-  const MONTHS=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
-  const trainedCount=cells.filter(c=>c.trained).length
-  const streak = (() => {
+  const DAYS=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
+
+  // Current week (Sun–Sat)
+  const startOfWeek=new Date(now); startOfWeek.setDate(now.getDate()-now.getDay()); startOfWeek.setHours(0,0,0,0)
+  const weekDays=Array.from({length:7},(_,i)=>{
+    const d=new Date(startOfWeek); d.setDate(startOfWeek.getDate()+i)
+    const key=d.toISOString().slice(0,10)
+    return{key,label:DAYS[i],dayNum:d.getDate(),trained:allDates.has(key),isToday:key===now.toISOString().slice(0,10),isFuture:d>now}
+  })
+
+  // Streak
+  const streak=(()=>{
     let s=0,cur=new Date(); cur.setHours(0,0,0,0)
     const sorted=[...allDates].sort((a,b)=>b.localeCompare(a))
     for(const d of sorted){
@@ -189,51 +189,71 @@ function TrainingCalendar({logs,cardio}){
     }
     return s
   })()
+
+  const trainedThisWeek=weekDays.filter(d=>d.trained).length
+  const weekLabel=(()=>{
+    const opts={day:'numeric',month:'short'}
+    return `${startOfWeek.toLocaleDateString('pt-BR',opts)} – ${new Date(startOfWeek.getTime()+6*86400000).toLocaleDateString('pt-BR',opts)}`
+  })()
+
   return(
     <div className="pv-card ani" style={{animationDelay:'0.1s'}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
-        <div><div className="pv-h1">Calendário de Treinos</div><div className="pv-sub">Últimos 90 dias</div></div>
-        <div style={{textAlign:'right'}}>
-          {streak>0&&<div style={{background:'rgba(255,220,100,0.1)',border:'1px solid rgba(255,220,100,0.2)',borderRadius:10,padding:'6px 12px',marginBottom:6}}>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:900,color:'#FFDC64',lineHeight:1}}>{streak}</div>
-            <div style={{fontSize:9,color:'rgba(255,220,100,0.5)',textTransform:'uppercase',letterSpacing:0.8}}>dias seguidos</div>
-          </div>}
-          <div style={{fontSize:11,color:'rgba(255,255,255,0.3)'}}>{trainedCount} treinos</div>
+      {/* Header */}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:20}}>
+        <div>
+          <div className="pv-h1">Esta Semana</div>
+          <div className="pv-sub">{weekLabel}</div>
         </div>
+        {/* Streak badge */}
+        {streak>0&&(
+          <div style={{display:'flex',flexDirection:'column',alignItems:'center',background:'linear-gradient(135deg,rgba(255,220,100,0.15),rgba(255,220,100,0.05))',border:'1px solid rgba(255,220,100,0.25)',borderRadius:14,padding:'10px 16px',position:'relative',overflow:'hidden'}}>
+            <div style={{position:'absolute',top:0,left:0,right:0,height:1.5,background:'linear-gradient(90deg,transparent,rgba(255,220,100,0.5),transparent)'}}/>
+            <div style={{fontSize:9,color:'rgba(255,220,100,0.5)',textTransform:'uppercase',letterSpacing:1.5,marginBottom:2}}>Sequência</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:34,fontWeight:900,color:'#FFDC64',lineHeight:1}}>{streak}</div>
+            <div style={{fontSize:9,color:'rgba(255,220,100,0.6)',textTransform:'uppercase',letterSpacing:1}}>dias seguidos</div>
+            {streak>=7&&<div style={{fontSize:14,marginTop:2}}>🔥</div>}
+          </div>
+        )}
       </div>
-      {/* Month labels */}
-      <div style={{display:'flex',gap:4,marginBottom:4,overflowX:'auto',paddingBottom:4}}>
-        {weeks.map((wk,wi)=>{
-          const m=wk[0]?.date.getMonth()
-          const showLabel=wi===0||wk[0]?.date.getDate()<=7
-          return<div key={wi} style={{width:13,flexShrink:0,fontSize:8,color:'rgba(255,255,255,0.2)',textAlign:'center'}}>{showLabel?MONTHS[m]:''}</div>
+
+      {/* 7-day row */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:6}}>
+        {weekDays.map(day=>{
+          const bg=day.trained
+            ?'linear-gradient(160deg,#22C55E,#15803D)'
+            :day.isToday
+            ?'rgba(255,220,100,0.08)'
+            :day.isFuture
+            ?'rgba(255,255,255,0.02)'
+            :'rgba(255,255,255,0.04)'
+          const border=day.trained
+            ?'1px solid rgba(34,197,94,0.4)'
+            :day.isToday
+            ?'1px solid rgba(255,220,100,0.35)'
+            :'1px solid rgba(255,255,255,0.06)'
+          const shadow=day.trained?'0 0 12px rgba(34,197,94,0.3)':undefined
+          return(
+            <div key={day.key} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:6,padding:'12px 4px',borderRadius:14,background:bg,border,boxShadow:shadow,transition:'all 0.2s'}}>
+              <div style={{fontSize:9,fontWeight:700,color:day.trained?'rgba(255,255,255,0.7)':day.isToday?'rgba(255,220,100,0.6)':'rgba(255,255,255,0.25)',textTransform:'uppercase',letterSpacing:0.5}}>{day.label}</div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:20,fontWeight:800,color:day.trained?'#fff':day.isToday?'#FFDC64':'rgba(255,255,255,0.25)',lineHeight:1}}>{day.dayNum}</div>
+              <div style={{width:8,height:8,borderRadius:'50%',background:day.trained?'rgba(255,255,255,0.8)':day.isFuture?'transparent':'rgba(255,255,255,0.1)',border:day.isFuture?'1.5px solid rgba(255,255,255,0.08)':undefined}}/>
+            </div>
+          )
         })}
       </div>
-      {/* Grid */}
-      <div style={{display:'flex',gap:3,overflowX:'auto',paddingBottom:6}}>
-        {weeks.map((wk,wi)=>(
-          <div key={wi} style={{display:'flex',flexDirection:'column',gap:3,flexShrink:0}}>
-            {wk.map(cell=>{
-              const isToday=cell.key===now.toISOString().slice(0,10)
-              return(
-                <div key={cell.key} className="pv-day-dot" title={`${cell.key}${cell.trained?' — treino realizado':''}`} style={{
-                  width:11,height:11,borderRadius:3,flexShrink:0,
-                  background:cell.trained
-                    ?'linear-gradient(135deg,#22C55E,#16A34A)'
-                    :'rgba(255,255,255,0.06)',
-                  boxShadow:cell.trained?'0 0 6px rgba(34,197,94,0.4)':isToday?'0 0 0 1.5px rgba(255,220,100,0.5)':undefined,
-                  border:isToday?'1px solid rgba(255,220,100,0.4)':'1px solid transparent',
-                }}/>
-              )
-            })}
-          </div>
-        ))}
-      </div>
-      <div style={{display:'flex',alignItems:'center',gap:6,marginTop:8}}>
-        <div style={{width:10,height:10,borderRadius:2,background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)'}}/>
-        <span style={{fontSize:10,color:'rgba(255,255,255,0.25)'}}>Sem treino</span>
-        <div style={{width:10,height:10,borderRadius:2,background:'linear-gradient(135deg,#22C55E,#16A34A)',marginLeft:8}}/>
-        <span style={{fontSize:10,color:'rgba(255,255,255,0.25)'}}>Treino realizado</span>
+
+      {/* Week summary */}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:14,padding:'10px 14px',borderRadius:10,background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.05)'}}>
+        <div style={{fontSize:12,color:'rgba(255,255,255,0.4)'}}>
+          {trainedThisWeek===0?'Nenhum treino esta semana ainda'
+          :trainedThisWeek===1?'1 treino realizado esta semana'
+          :`${trainedThisWeek} treinos realizados esta semana`}
+        </div>
+        <div style={{display:'flex',gap:4}}>
+          {weekDays.map(d=>(
+            <div key={d.key} style={{width:8,height:8,borderRadius:2,background:d.trained?'#22C55E':d.isFuture?'rgba(255,255,255,0.04)':'rgba(255,255,255,0.1)'}}/>
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -270,28 +290,7 @@ function WeightChart({progress}){
   )
 }
 
-function FreqChart({weeks}){
-  const max=Math.max(...weeks,1)
-  const labels=['3s','2s','1s','Hoje']
-  return(
-    <div style={{display:'flex',gap:8,alignItems:'flex-end',height:72}}>
-      {weeks.map((v,i)=>{
-        const isNow=i===3,h=v>0?Math.max((v/max)*60,10):4
-        return(
-          <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
-            <div style={{fontSize:11,fontWeight:700,fontFamily:"'Barlow Condensed',sans-serif",color:v>0?(isNow?'#FFDC64':'rgba(255,255,255,0.4)'):'rgba(255,255,255,0.12)'}}>{v>0?`${v}x`:'—'}</div>
-            <div style={{width:'100%',borderRadius:6,height:h,background:v>0?(isNow?'linear-gradient(180deg,#FFDC64,#F59E0B)':'rgba(255,255,255,0.15)'):'rgba(255,255,255,0.05)',boxShadow:isNow&&v>0?'0 0 12px rgba(255,220,100,0.4)':'none',transition:'height 0.8s cubic-bezier(.4,0,.2,1)'}}/>
-            <div style={{fontSize:9,color:'rgba(255,255,255,0.2)',textTransform:'uppercase',letterSpacing:0.5}}>{labels[i]}</div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
 function EvolutionPanel({progress,logs,cardio,exerciseLogs}){
-  const weeks=getFreq4w(logs,cardio)
-  const totalSess=weeks.reduce((a,b)=>a+b,0)
   // Strength: find top exercise with most logs
   const byEx={}
   ;(exerciseLogs||[]).forEach(log=>{
@@ -305,7 +304,7 @@ function EvolutionPanel({progress,logs,cardio,exerciseLogs}){
   return(
     <div className="pv-card ani" style={{animationDelay:'0.15s'}}>
       <div className="pv-h1" style={{marginBottom:3}}>Evolução</div>
-      <div className="pv-sub" style={{marginBottom:18}}>Peso, frequência e progressão de carga</div>
+      <div className="pv-sub" style={{marginBottom:18}}>Peso corporal e progressão de força</div>
       <div style={{display:'grid',gridTemplateColumns:'1fr',gap:16}}>
         {/* Weight */}
         <div style={{background:'rgba(96,165,250,0.05)',border:'1px solid rgba(96,165,250,0.12)',borderRadius:14,padding:'14px 16px'}}>
@@ -315,14 +314,7 @@ function EvolutionPanel({progress,logs,cardio,exerciseLogs}){
           </div>
           <WeightChart progress={progress}/>
         </div>
-        {/* Frequency */}
-        <div style={{background:'rgba(255,220,100,0.04)',border:'1px solid rgba(255,220,100,0.1)',borderRadius:14,padding:'14px 16px'}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-            <div style={{fontSize:12,fontWeight:700,color:'#FFDC64',fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:0.5,textTransform:'uppercase'}}>📅 Frequência semanal</div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:20,fontWeight:800,color:'#FFDC64'}}>{totalSess}<span style={{fontSize:10,color:'rgba(255,255,255,0.25)',marginLeft:4}}>/ 4 sem</span></div>
-          </div>
-          <FreqChart weeks={weeks}/>
-        </div>
+
         {/* Strength progression */}
         {strengthPts.length>=2?(
           <div style={{background:'rgba(52,211,153,0.04)',border:'1px solid rgba(52,211,153,0.1)',borderRadius:14,padding:'14px 16px'}}>
