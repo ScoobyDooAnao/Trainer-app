@@ -1106,7 +1106,7 @@ export default function StudentDetail({ navigate, studentId }) {
     setFetchError(null)
     try {
       const [stRes, plRes, prRes, gsRes] = await Promise.all([
-        supabase.from('students').select('id,name,age,weight,height,goal,level,notes,teacher_id,birth_date,sport,sport_position,experience_years,guardian_name,guardian_phone').eq('id', studentId).single(),
+        supabase.from('students').select('id,name,age,weight,height,goal,level,notes,teacher_id,birth_date,sport,sport_position,experience_years,guardian_name,guardian_phone,parent_message,parent_message_date').eq('id', studentId).single(),
         supabase.from('workout_plans').select('*').eq('student_id', studentId).order('created_at', { ascending: false }),
         supabase.from('progress_entries').select('*').eq('student_id', studentId).order('date', { ascending: false }),
         supabase.from('student_goals').select('*').eq('student_id', studentId).order('created_at', { ascending: false }),
@@ -1151,8 +1151,10 @@ export default function StudentDetail({ navigate, studentId }) {
       experience_years: +form.experience_years || null,
       sport:            form.sport === 'custom' ? (form.sport_custom || 'outro') : (form.sport || null),
       sport_position:   form.sport_position    || null,
-      guardian_name:    form.guardian_name     || null,
-      guardian_phone:   form.guardian_phone    || null,
+      guardian_name:      form.guardian_name     || null,
+      guardian_phone:    form.guardian_phone    || null,
+      parent_message:    form.parent_message    || null,
+      parent_message_date: form.parent_message ? new Date().toISOString().slice(0,10) : null,
     }).eq('id', studentId)
     await fetchAll()
     setEditing(false)
@@ -1314,6 +1316,12 @@ export default function StudentDetail({ navigate, studentId }) {
                 <div style={{ gridColumn:'1/-1' }}>
                   <div style={lbl10}>Lesões, restrições ou observações</div>
                   <textarea style={{ ...s.input, minHeight:60, resize:'vertical' }} value={form.notes || ''} onChange={e => setForm(x => ({ ...x, notes: e.target.value }))} />
+                </div>
+                {sep('Recado para o Pai/Responsável')}
+                <div style={{ gridColumn:'1/-1' }}>
+                  <div style={lbl10}>Recado mensal — aparece na área do responsável</div>
+                  <textarea style={{ ...s.input, minHeight:80, resize:'vertical' }} placeholder="Ex: Lucas está evoluindo muito bem na resistência. O foco deste mês é a potência de membros inferiores..." value={form.parent_message || ''} onChange={e => setForm(x => ({ ...x, parent_message: e.target.value }))} />
+                  {form.parent_message && <div style={{ fontSize:10, color:'#34D399', marginTop:4 }}>💬 Será exibido na área do responsável com a data de hoje</div>}
                 </div>
 
                 <div style={{ gridColumn:'1/-1' }}>
