@@ -100,7 +100,6 @@ function GoalRow({goal}) {
           <span style={{fontSize:12,color:'rgba(255,255,255,0.3)'}}>Em andamento</span>
         )}
       </div>
-      </div>
     </div>
   )
 }
