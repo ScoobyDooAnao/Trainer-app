@@ -1332,11 +1332,21 @@ export default function StudentDetail({ navigate, studentId }) {
             </div>
           )}
 
-          {/* Share link */}
-          <div style={{ marginTop: 16 }}>
-            <div style={{ fontSize: 11, color: '#475569', marginBottom: 4 }}>🔗 Link do aluno (compartilhe para ele ver o treino):</div>
-            <div style={s.shareBox} onClick={() => { navigator.clipboard.writeText(shareLink); alert('Link copiado!') }}>
-              {shareLink} <span style={{ color: '#34D399', marginLeft: 8, cursor: 'pointer' }}>📋 Copiar</span>
+          {/* Share links */}
+          <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 11, color: '#475569', marginBottom: 4 }}>🎮 Link do <strong>aluno</strong> — para o atleta ver e registrar o treino:</div>
+              <div style={s.shareBox} onClick={() => { navigator.clipboard.writeText(shareLink); alert('Link do aluno copiado!') }}>
+                {shareLink} <span style={{ color: '#34D399', marginLeft: 8, cursor: 'pointer' }}>📋 Copiar</span>
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: '#475569', marginBottom: 4 }}>👨‍👩‍👧 Link do <strong>responsável</strong> — para o pai/mãe acompanhar a evolução:</div>
+              <div style={{ ...s.shareBox, borderColor: 'rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.05)' }}
+                onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/parent/${studentId}`); alert('Link do responsável copiado!') }}>
+                {window.location.origin}/parent/{studentId}
+                <span style={{ color: '#FBBF24', marginLeft: 8, cursor: 'pointer' }}>📋 Copiar</span>
+              </div>
             </div>
           </div>
         </div>
