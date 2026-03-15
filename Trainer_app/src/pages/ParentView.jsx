@@ -557,6 +557,7 @@ export default function ParentView({studentId}) {
           <div style={{fontSize:11,color:'rgba(255,255,255,0.13)',fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:1.5,textTransform:'uppercase'}}>{teacher?.display_name||'Personal Trainer'} · Acompanhamento Esportivo Personalizado</div>
         </div>
       </div>
+      </div>
     </div>
   )
 }
