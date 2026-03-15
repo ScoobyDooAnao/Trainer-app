@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard'
 import StudentDetail from './pages/StudentDetail'
 import WorkoutEditor from './pages/WorkoutEditor'
 import StudentView from './pages/StudentView'
+import ParentView from './pages/ParentView'
 import TeacherProfile from './pages/TeacherProfile'
 
 export default function App() {
@@ -21,10 +22,14 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       setSession(session)
     })
-    const match = window.location.pathname.match(/^\/view\/(.+)$/)
-    if (match) {
+    const matchView   = window.location.pathname.match(/^\/view\/(.+)$/)
+    const matchParent = window.location.pathname.match(/^\/parent\/(.+)$/)
+    if (matchView) {
       setPage('student-view')
-      setPageParams({ id: match[1] })
+      setPageParams({ id: matchView[1] })
+    } else if (matchParent) {
+      setPage('parent-view')
+      setPageParams({ id: matchParent[1] })
     }
     return () => subscription.unsubscribe()
   }, [])
@@ -41,6 +46,7 @@ export default function App() {
   )
 
   if (page === 'student-view') return <StudentView studentId={pageParams.id} />
+  if (page === 'parent-view')  return <ParentView  studentId={pageParams.id} />
   if (!session) return <Login onLogin={() => navigate('dashboard')} />
 
   return (
