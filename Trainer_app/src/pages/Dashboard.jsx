@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+const useIsMobile = () => { const [m,setM]=useState(()=>window.innerWidth<768); useEffect(()=>{const h=()=>setM(window.innerWidth<768);window.addEventListener('resize',h);return()=>window.removeEventListener('resize',h)},[]);return m }
 import { supabase } from '../supabase'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -563,7 +564,7 @@ function TabTreinos({ workouts, navigate }) {
 
       {/* Tabela */}
       <div style={{ background: '#FFF', borderRadius: 18, overflow: 'hidden', border: '1.5px solid rgba(245,200,66,0.25)', boxShadow: '0 4px 20px rgba(0,0,0,0.07)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', borderBottom: '2px solid #FEF3C7' }}>
+        <div className="db-week-grid"><div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', borderBottom: '2px solid #FEF3C7' }}>
           {DIAS_SEMANA.map((dia, i) => {
             const count = filtered.filter(w => (w.days || []).includes(dia)).length
             return (
@@ -590,6 +591,7 @@ function TabTreinos({ workouts, navigate }) {
       </div>
 
       {/* Legenda */}
+        </div></div>
       <div style={{ display: 'flex', gap: 14, marginTop: 14, flexWrap: 'wrap', alignItems: 'center' }}>
         {[{ emoji: '👍', label: 'Feito' }, { emoji: '⏳', label: 'Ainda dá' }, { emoji: '😓', label: 'Faltou' }, { emoji: '📅', label: 'Agendado' }].map(({ emoji, label }) => (
           <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -898,7 +900,7 @@ function TabEvolucao({ students }) {
               {/* ── PESO ── */}
               {subTab === 'peso' && (
                 <div style={GLASS_CARD}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                  <div className="db-search-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                     <div>
                       <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251' }}>⚖️ Peso ao longo do tempo</div>
                       {pesoData.length > 0 && (
@@ -1406,7 +1408,7 @@ function TabCardio({ students }) {
               </div>
 
               {/* Cards de prescrição */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 14 }}>
+              <div className="db-stats-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 14 }}>
                 {[
                   { icon: '📅', label: 'Frequência',  val: presc.sessoes  },
                   { icon: '⏱',  label: 'Duração',     val: presc.duracao  },
@@ -1626,7 +1628,7 @@ function TabCardio({ students }) {
           {sessions.length > 0 && (
             <div style={{ ...GLASS_CARD, marginBottom: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251', marginBottom: 14 }}>📊 Resumo Geral</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+              <div className="db-stats-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
                 {[
                   { label: 'Sessões',      val: totalSessoes,              unit: '',    color: '#155E8E' },
                   { label: 'Total Tempo',  val: totalMin >= 60 ? `${Math.floor(totalMin/60)}h${totalMin%60}` : totalMin, unit: totalMin < 60 ? 'min' : '', color: '#7C3AED' },
@@ -1801,7 +1803,7 @@ function NovoAlunoModal({ onSave, onClose, teacherId }) {
 
   return (
     <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100, padding:20 }}>
-      <div onClick={e=>e.stopPropagation()} style={{ background:'#fff', borderRadius:20, padding:28, width:'100%', maxWidth:500, maxHeight:'92vh', overflowY:'auto' }}>
+      <div onClick={e=>e.stopPropagation()} className="db-modal-inner" style={{ background:'#fff', borderRadius:20, padding:28, width:'100%', maxWidth:500, maxHeight:'92vh', overflowY:'auto' }}>
 
         {/* Header */}
         <div style={{ fontSize:19, fontWeight:900, color:'#0D1B2A', marginBottom:2 }}>Cadastrar Aluno</div>
@@ -1812,7 +1814,7 @@ function NovoAlunoModal({ onSave, onClose, teacherId }) {
         <label style={lbl}>Nome completo</label>
         <input style={inp} type="text" placeholder="Ex: João Silva" value={form.name} onChange={e=>f('name',e.target.value)} />
 
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+        <div className="db-grid-2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
           <div>
             <label style={lbl}>Idade</label>
             <input style={inp} type="number" placeholder="Ex: 13" value={form.age} onChange={e=>f('age',e.target.value)} />
@@ -1862,7 +1864,7 @@ function NovoAlunoModal({ onSave, onClose, teacherId }) {
             value={form.sport_custom||''} onChange={e=>f('sport_custom',e.target.value)} />
         )}
 
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+        <div className="db-grid-2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
           <div>
             <label style={lbl}>Posição / Especialidade</label>
             <input style={inp} type="text" placeholder="Ex: Meia, Goleiro..." value={form.sport_position} onChange={e=>f('sport_position',e.target.value)} />
@@ -1886,7 +1888,7 @@ function NovoAlunoModal({ onSave, onClose, teacherId }) {
 
         {/* ── Responsável — apenas para menores de 18 anos ── */}
         {sep('Responsável')}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+        <div className="db-grid-2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
           <div>
             <label style={lbl}>Nome do responsável</label>
             <input style={inp} type="text" placeholder="Ex: Maria Silva" value={form.guardian_name} onChange={e=>f('guardian_name',e.target.value)} />
@@ -1918,6 +1920,69 @@ function NovoAlunoModal({ onSave, onClose, teacherId }) {
 }
 
 // ── DASHBOARD ──────────────────────────────────────────────────────────────
+// ── Mobile CSS injection ──────────────────────────────────────────────────────
+function DashboardMobileCSS() {
+  return <style>{`
+    @media (max-width:767px){
+      .db-sidebar    { display:none !important; }
+      .db-main       { padding:16px 12px 90px !important; }
+      .db-students-grid { grid-template-columns:repeat(2,1fr) !important; gap:10px !important; }
+      .db-stats-3    { grid-template-columns:repeat(2,1fr) !important; }
+      .db-stats-4    { grid-template-columns:repeat(2,1fr) !important; }
+      .db-grid-2     { grid-template-columns:1fr !important; }
+      .db-week-grid  { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+      .db-week-grid > div { min-width:340px; }
+      .db-filter-bar { flex-wrap:nowrap !important; overflow-x:auto; padding-bottom:4px; -webkit-overflow-scrolling:touch; }
+      .db-filter-bar > button { flex-shrink:0; }
+      .db-search-row { flex-direction:column !important; gap:10px !important; }
+      .db-modal-inner { max-height:100vh !important; border-radius:20px 20px 0 0 !important; position:fixed !important; bottom:0 !important; left:0 !important; right:0 !important; max-width:100% !important; }
+      .db-modal-wrap  { align-items:flex-end !important; padding:0 !important; }
+      .db-tabs        { overflow-x:auto; -webkit-overflow-scrolling:touch; gap:6px !important; }
+      .db-avaliacao-grid  { grid-template-columns:1fr !important; }
+    }
+    @media (max-width:400px){
+      .db-students-grid { grid-template-columns:1fr !important; }
+    }
+    .db-bottom-nav{display:none}
+    @media(max-width:767px){ .db-bottom-nav{display:flex} }
+  `}</style>
+}
+
+// ── Mobile bottom nav ─────────────────────────────────────────────────────────
+function MobileBottomNav({ nav, setNav, navigate, logout }) {
+  const items = [
+    ...NAV,
+    { id: 'perfil', icon: '👤', label: 'Perfil' },
+  ]
+  return (
+    <div className="db-bottom-nav" style={{
+      position:'fixed',bottom:0,left:0,right:0,height:64,
+      background:SIDEBAR_BG,
+      borderTop:'1px solid rgba(255,255,255,0.12)',
+      zIndex:200,alignItems:'center',justifyContent:'space-around',
+      boxShadow:'0 -4px 20px rgba(0,0,0,0.25)',
+    }}>
+      {items.map(item=>{
+        const active=nav===item.id
+        return(
+          <button key={item.id} onClick={()=>{
+            if(item.id==='perfil') navigate('teacher-profile')
+            else setNav(item.id)
+          }} style={{
+            display:'flex',flexDirection:'column',alignItems:'center',gap:2,
+            background:'none',border:'none',cursor:'pointer',padding:'6px 4px',
+            flex:1,
+          }}>
+            <span style={{fontSize:20,lineHeight:1,filter:active?'drop-shadow(0 0 6px rgba(245,200,66,0.7))':'none'}}>{item.icon}</span>
+            <span style={{fontSize:9,fontWeight:active?800:500,color:active?YELLOW:'rgba(224,242,254,0.6)',textTransform:'uppercase',letterSpacing:0.5,transition:'color 0.15s'}}>{item.label}</span>
+            {active&&<div style={{position:'absolute',bottom:0,width:32,height:2.5,background:YELLOW,borderRadius:2}}/>}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function Dashboard({ navigate, session }) {
   const [nav, setNav]             = useState('alunos')
   const [students, setStudents]   = useState([])
@@ -2019,14 +2084,17 @@ export default function Dashboard({ navigate, session }) {
   const ativos   = students.filter(s => s.lastSeenDays < 5).length
   const inativos = students.length - ativos
 
+  const isMobile = useIsMobile()
+
   if (loading) return <div style={{ minHeight: '100vh', background: 'linear-gradient(175deg,#4AB8E8,#B3E5F7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFF', fontSize: 16, fontWeight: 700, fontFamily: "'DM Sans',sans-serif", textShadow: '0 1px 4px rgba(0,0,0,0.2)' }}>☀️ Carregando...</div>
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', fontFamily: "'DM Sans','Segoe UI',sans-serif", position: 'relative' }}>
+      <DashboardMobileCSS />
       <SkyBackground />
 
       {/* SIDEBAR */}
-      <div style={{ position: 'relative', flexShrink: 0, width: 220, zIndex: 2 }}>
+      <div className="db-sidebar" style={{ position: 'relative', flexShrink: 0, width: 220, zIndex: 2 }}>
         <aside style={{ width: 220, background: SIDEBAR_BG, display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh' }}>
           <div style={{ padding: '26px 18px 12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -2054,7 +2122,7 @@ export default function Dashboard({ navigate, session }) {
       </div>
 
       {/* MAIN */}
-      <main style={{ flex: 1, padding: '32px 28px', background: 'transparent', overflowY: 'auto', position: 'relative', zIndex: 1 }}>
+      <main className="db-main" style={{ flex: 1, padding: '32px 28px', background: 'transparent', overflowY: 'auto', position: 'relative', zIndex: 1 }}>
 
         {/* ABA: MEUS ALUNOS */}
         {nav === 'alunos' && (
@@ -2108,7 +2176,7 @@ export default function Dashboard({ navigate, session }) {
                 <div style={{ fontSize: 13, marginTop: 6 }}>Clique em "+ Novo Aluno" para começar</div>
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
+              <div className="db-students-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
                 {filtered.map(st => <StudentCard key={st.id} st={st} onClick={() => navigate('student-detail', { id: st.id })} onDelete={fetchAll} />)}
                 {Array.from({ length: (3 - (filtered.length % 3)) % 3 }).map((_, i) => <AddCard key={'add' + i} onClick={() => setShowModal(true)} />)}
               </div>
@@ -2135,6 +2203,7 @@ export default function Dashboard({ navigate, session }) {
       </main>
 
       {showModal && <NovoAlunoModal teacherId={session.user.id} onSave={fetchAll} onClose={() => setShowModal(false)} />}
+      <MobileBottomNav nav={nav} setNav={setNav} navigate={navigate} logout={logout} />
     </div>
   )
 }
