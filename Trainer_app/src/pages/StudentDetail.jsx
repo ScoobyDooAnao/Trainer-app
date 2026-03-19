@@ -329,29 +329,61 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
   const goal   = student.goal || ''
   const level  = student.level || 'Iniciante'
 
-  // ── Pillar 1: Volume de Força ────────────────────────────────────────────
-  // ACSM 2022: 10–20 séries/grupo muscular/semana (Schoenfeld meta-analysis 2017)
+  // ── Pillar 1: Volume ─────────────────────────────────────────────────────
   const totalSets = allExercises.reduce((sum, ex) => sum + (parseInt(ex.sets) || 3), 0)
-  let volumeScore = 0
-  let volumeMsg   = ''
-  if (totalSets === 0) {
-    volumeScore = 0
-    volumeMsg = 'Nenhum exercício cadastrado no plano ativo.'
-  } else if (totalSets < 10) {
-    volumeScore = 30
-    volumeMsg = `${totalSets} séries semanais — volume muito baixo. Mínimo recomendado: 10 séries/semana por grupo muscular (Schoenfeld 2017).`
-  } else if (totalSets < 20) {
-    volumeScore = 60
-    volumeMsg = `${totalSets} séries semanais — volume moderado. Alvo ideal: 15–25 séries para hipertrofia e performance (ACSM 2022).`
-  } else if (totalSets < 40) {
-    volumeScore = 90
-    volumeMsg = `${totalSets} séries semanais — volume adequado para o nível ${level}. Dentro da janela recomendada pelo ACSM.`
-  } else if (totalSets < 60) {
-    volumeScore = 100
-    volumeMsg = `${totalSets} séries semanais — excelente volume para atleta ${level}. Monitore sinais de overtraining.`
+  let volumeScore = 0, volumeMsg = ''
+
+  if (goal === 'Saúde e Bem-Estar') {
+    // Saúde e Bem-Estar: avalia combinação força + cardio vs diretrizes OMS/ACSM EIM
+    // OMS 2020: ≥150 min/sem aeróbio moderado + força 2x/sem
+    const now_vol = new Date()
+    const last14c = (cardioSessions||[]).filter(s => (now_vol - new Date(s.date+'T12:00:00')) < 14*864e5)
+    const weeklyCardioMin = last14c.reduce((a,s) => a+(s.duration_minutes||0), 0) / 2
+    const hasStrength = daysPerWeek >= 2 && totalSets >= 4  // pelo menos 2 dias e 4 séries
+    const cardioOk   = weeklyCardioMin >= 150
+    const cardioMod  = weeklyCardioMin >= 90
+
+    if (totalSets === 0 && last14c.length === 0) {
+      volumeScore = 0
+      volumeMsg = 'Nenhum exercício ou sessão de cardio registrado. OMS 2020: ≥150 min/sem aeróbio + força 2×/sem para saúde geral.'
+    } else if (!hasStrength && !cardioOk) {
+      volumeScore = 30
+      volumeMsg = `Volume insuficiente em ambas as modalidades. Força: ${totalSets} séries (alvo: ≥4 séries, 2×/sem). Cardio: ~${Math.round(weeklyCardioMin)} min/sem (alvo: ≥150 min). OMS 2020; ACSM Exercise is Medicine.`
+    } else if (hasStrength && !cardioMod) {
+      volumeScore = 55
+      volumeMsg = `Força adequada (${totalSets} séries, ${daysPerWeek}×/sem). Volume de cardio baixo (~${Math.round(weeklyCardioMin)} min/sem) — OMS recomenda ≥150 min/sem para saúde cardiovascular. Inclua ≥3 sessões aeróbias semanais.`
+    } else if (!hasStrength && cardioOk) {
+      volumeScore = 65
+      volumeMsg = `Cardio adequado (~${Math.round(weeklyCardioMin)} min/sem). Treino de força insuficiente (${daysPerWeek}×/sem) — ACSM EIM recomenda ≥2×/sem de força para prevenção de sarcopenia e osteoporose.`
+    } else if (hasStrength && cardioMod && !cardioOk) {
+      volumeScore = 80
+      volumeMsg = `Boa combinação de força e cardio. Volume aeróbio próximo do alvo (~${Math.round(weeklyCardioMin)}/150 min/sem). Aumentar 1–2 sessões de cardio para atingir diretriz OMS 2020.`
+    } else {
+      volumeScore = 100
+      volumeMsg = `Excelente combinação: força ${daysPerWeek}×/sem (${totalSets} séries) + ~${Math.round(weeklyCardioMin)} min/sem de cardio. Dentro das diretrizes OMS 2020 e ACSM Exercise is Medicine.`
+    }
   } else {
-    volumeScore = 55
-    volumeMsg = `${totalSets} séries semanais — volume elevado. Risco de overtraining. Considere deload semanal a cada 4–6 semanas.`
+    // Demais objetivos — lógica original (hipertrofia/performance)
+    // ACSM 2022: 10–20 séries/grupo muscular/semana (Schoenfeld 2017)
+    if (totalSets === 0) {
+      volumeScore = 0
+      volumeMsg = 'Nenhum exercício cadastrado no plano ativo.'
+    } else if (totalSets < 10) {
+      volumeScore = 30
+      volumeMsg = `${totalSets} séries semanais — volume muito baixo. Mínimo recomendado: 10 séries/semana por grupo muscular (Schoenfeld 2017).`
+    } else if (totalSets < 20) {
+      volumeScore = 60
+      volumeMsg = `${totalSets} séries semanais — volume moderado. Alvo ideal: 15–25 séries para hipertrofia e performance (ACSM 2022).`
+    } else if (totalSets < 40) {
+      volumeScore = 90
+      volumeMsg = `${totalSets} séries semanais — volume adequado para o nível ${level}. Dentro da janela recomendada pelo ACSM.`
+    } else if (totalSets < 60) {
+      volumeScore = 100
+      volumeMsg = `${totalSets} séries semanais — excelente volume para atleta ${level}. Monitore sinais de overtraining.`
+    } else {
+      volumeScore = 55
+      volumeMsg = `${totalSets} séries semanais — volume elevado. Risco de overtraining. Considere deload semanal a cada 4–6 semanas.`
+    }
   }
 
   // ── Pillar 2: Frequência Semanal ─────────────────────────────────────────
@@ -470,23 +502,84 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
     else objIssues = []
   }
 
-  // Cárdio complementar para objetivos de condicionamento/emagrecimento
-  if (goal === 'Emagrecimento' || goal === 'Condicionamento') {
-    const now = new Date()
-    const last14sessions = (cardioSessions || []).filter(s => (now - new Date(s.date)) < 14 * 864e5)
-    const weeklyCardioMin = last14sessions.reduce((sum, s) => sum + (s.duration_minutes || 0), 0) / 2
-    if (weeklyCardioMin < 90 && last14sessions.length < 2) {
-      objScore = Math.max(objScore - 15, 10)
-      objIssues.push(`volume cárdio insuficiente nas últimas 2 semanas — WHO 2020 recomenda ≥150 min/sem para ${goal}`)
-    } else if (weeklyCardioMin >= 150) {
-      objScore = Math.min(objScore + 8, 100)
+  if (goal === 'Saúde e Bem-Estar') {
+    // ── Saúde e Bem-Estar — avaliação completamente diferente ──
+    // Foco: exercícios multiarticulares funcionais + mobilidade + cardio OMS 2020
+    objScore = 70; objIssues = []
+
+    // 1. Exercícios multiarticulares funcionais (Cook 2010; ACSM EIM)
+    const FUNCTIONAL_KEYWORDS = ['agachamento','squat','leg press','terra','deadlift','afundo','lunge','step','remada','puxada','pull','supino','desenvolvimento','flexão','push']
+    const hasFunctional = allExercises.filter(ex =>
+      FUNCTIONAL_KEYWORDS.some(kw => (ex.name||'').toLowerCase().includes(kw))
+    ).length
+    const functionalPct = allExercises.length > 0 ? hasFunctional / allExercises.length : 0
+
+    if (functionalPct >= 0.6) {
+      objScore += 15
+    } else if (functionalPct >= 0.3) {
+      objScore += 5
+      objIssues.push('menos de 60% dos exercícios são multiarticulares funcionais — para saúde geral priorize padrões: agachar, empurrar, puxar, carregar (Cook 2010)')
+    } else if (allExercises.length > 0) {
+      objScore -= 10
+      objIssues.push('poucos exercícios funcionais detectados — ACSM EIM recomenda movimentos multiarticulares como base da prescrição para saúde')
+    }
+
+    // 2. Mobilidade — grupos Core e Full Body como proxy (Nelson 2007)
+    const hasMobility = allExercises.some(ex => ['Core','Full Body'].includes(ex.type))
+    if (hasMobility) {
+      objScore += 10
+    } else if (allExercises.length > 3) {
+      objIssues.push('ausência de trabalho de Core/mobilidade — para capacidade funcional inclua mobilidade de quadril, torácica e ombro (Nelson et al. 2007)')
+    }
+
+    // 3. Intensidade adequada — PSE e rep range (ACSM EIM: 40–60% 1RM, PSE 3–5)
+    const heavyCount = allExercises.filter(ex => { const m=(ex.reps||'').match(/\d+/); return m && parseInt(m[0]) < 6 }).length
+    const heavyPct   = allExercises.length > 0 ? heavyCount/allExercises.length : 0
+    if (heavyPct > 0.3) {
+      objScore -= 12
+      objIssues.push(`${Math.round(heavyPct*100)}% dos exercícios com carga pesada (<6 reps) — para saúde e bem-estar a intensidade ideal é 40–60% de 1RM (PSE 3–5), não força máxima (ACSM EIM)`)
+    }
+
+    // 4. Volume aeróbio — central para saúde cardiovascular (OMS 2020; Kodama 2009)
+    const now_obj = new Date()
+    const last14c_obj = (cardioSessions||[]).filter(s => (now_obj - new Date(s.date+'T12:00:00')) < 14*864e5)
+    const weeklyCardioMin_obj = last14c_obj.reduce((a,s) => a+(s.duration_minutes||0), 0) / 2
+    if (weeklyCardioMin_obj >= 150) {
+      objScore += 15
+    } else if (weeklyCardioMin_obj >= 90) {
+      objScore += 5
+      objIssues.push(`cardio: ~${Math.round(weeklyCardioMin_obj)} min/sem — aumentar para ≥150 min/sem para atingir diretriz OMS 2020 de saúde cardiovascular`)
+    } else {
+      objScore -= 10
+      objIssues.push(`cardio insuficiente (~${Math.round(weeklyCardioMin_obj)} min/sem) — OMS 2020 recomenda 150–300 min/sem de intensidade moderada para prevenção de doenças crônicas`)
+    }
+
+    objScore = Math.max(0, Math.min(100, objScore))
+
+  } else {
+    // Cárdio complementar para objetivos de condicionamento/emagrecimento
+    if (goal === 'Emagrecimento' || goal === 'Condicionamento') {
+      const now = new Date()
+      const last14sessions = (cardioSessions || []).filter(s => (now - new Date(s.date)) < 14 * 864e5)
+      const weeklyCardioMin = last14sessions.reduce((sum, s) => sum + (s.duration_minutes || 0), 0) / 2
+      if (weeklyCardioMin < 90 && last14sessions.length < 2) {
+        objScore = Math.max(objScore - 15, 10)
+        objIssues.push(`volume cárdio insuficiente nas últimas 2 semanas — WHO 2020 recomenda ≥150 min/sem para ${goal}`)
+      } else if (weeklyCardioMin >= 150) {
+        objScore = Math.min(objScore + 8, 100)
+      }
     }
   }
-  const objMsg = objIssues.length
-    ? objIssues.map(i => `⚠️ ${i}`).join('. ')
-    : repRange
-      ? `Faixas de repetição e volume compatíveis com objetivo "${goal}" (${repRange.label}).`
-      : 'Configure o objetivo do aluno para avaliação detalhada.'
+
+  const objMsg = goal === 'Saúde e Bem-Estar'
+    ? objIssues.length
+      ? objIssues.map(i => `⚠️ ${i}`).join('. ') + '.'
+      : `Prescrição alinhada às diretrizes de saúde: exercícios funcionais, mobilidade e volume aeróbio adequados. OMS 2020; ACSM Exercise is Medicine; Cook 2010.`
+    : objIssues.length
+      ? objIssues.map(i => `⚠️ ${i}`).join('. ')
+      : repRange
+        ? `Faixas de repetição e volume compatíveis com objetivo "${goal}" (${repRange.label}).`
+        : 'Configure o objetivo do aluno para avaliação detalhada.'
 
   // ── Pillar 6: Adequação Etária + Fase LTAD ──────────────────────────────
   // LTAD (Balyi 2013), Tanaka 2001, ACSM 2022, NSCA Youth Resistance Training 2009
@@ -634,11 +727,19 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
   } else if (allExercises.length > 0) {
     recoveryScore = 70
   }
-  const recoveryMsg = recoveryIssues.length
-    ? recoveryIssues.map(i => `⚠️ ${i}`).join('. ') + '. Insira descanso de ≥48h entre sessões do mesmo grupo (Schoenfeld 2018).'
-    : allDays && allDays.length >= 2
-      ? `Distribuição de dias adequada — sem sobreposição de grupos musculares em dias consecutivos detectada.`
-      : 'Configure os dias do plano com tipos musculares para avaliação de recuperação.'
+  // Para Saúde e Bem-Estar: recuperação entre sessões de baixa intensidade não é problema crítico
+  // O risco de overuse é muito menor — mas ausência total de dias ativos pode ser sinalizada
+  const recoveryMsg = goal === 'Saúde e Bem-Estar'
+    ? recoveryIssues.length
+      ? recoveryIssues.map(i => `⚠️ ${i}`).join('. ') + '. Para saúde geral, a intensidade moderada permite recuperação mais rápida — porém respeite ≥24h entre sessões do mesmo grupo.'
+      : allDays && allDays.length >= 2
+        ? 'Distribuição de dias adequada para saúde e bem-estar. Intensidade moderada permite recuperação em 24–48h (ACSM EIM).'
+        : 'Configure os dias do plano para avaliação de recuperação.'
+    : recoveryIssues.length
+      ? recoveryIssues.map(i => `⚠️ ${i}`).join('. ') + '. Insira descanso de ≥48h entre sessões do mesmo grupo (Schoenfeld 2018).'
+      : allDays && allDays.length >= 2
+        ? 'Distribuição de dias adequada — sem sobreposição de grupos musculares em dias consecutivos detectada.'
+        : 'Configure os dias do plano com tipos musculares para avaliação de recuperação.'
 
   // ── Pilar 9: PSE & Overtraining (ACWR) ──────────────────────────────────
   // Foster 1998: carga interna = PSE × duração. ACWR seguro: 0.8–1.3
@@ -851,7 +952,13 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
 
   // ── Score final ponderado (12 pilares) ───────────────────────────────────
   // Pesos ajustados: esporte +8%, etária +2%; volume e equilíbrio -1% cada; nível -2%
-  const W = { volume:0.11, freq:0.09, balance:0.12, progress:0.11, objective:0.09, age:0.10, monitor:0.04, recovery:0.09, overtraining:0.07, variation:0.06, levelFit:0.04, sport:0.08 }
+  // ── Pesos diferenciados por objetivo ─────────────────────────────────────
+  // Saúde e Bem-Estar: cardio e funcionalidade pesam mais; força máx e esporte pesam menos
+  const isSaude = goal === 'Saúde e Bem-Estar'
+  const W = isSaude
+    ? { volume:0.16, freq:0.10, balance:0.10, progress:0.06, objective:0.16, age:0.08, monitor:0.05, recovery:0.07, overtraining:0.10, variation:0.05, levelFit:0.04, sport:0.03 }
+    : { volume:0.11, freq:0.09, balance:0.12, progress:0.11, objective:0.09, age:0.10, monitor:0.04, recovery:0.09, overtraining:0.07, variation:0.06, levelFit:0.04, sport:0.08 }
+
   const finalScore = Math.round(
     volumeScore   * W.volume      +
     freqScore     * W.freq        +
@@ -869,19 +976,33 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
 
   return {
     finalScore,
-    pilares: [
-      { id: 'volume',      icon: '📦', name: 'Volume de Força',         score: volumeScore,   peso: '11%', msg: volumeMsg,   ref: 'Schoenfeld 2017; ACSM 2022' },
-      { id: 'balance',     icon: '⚖️', name: 'Equilíbrio Muscular',     score: balanceScore,  peso: '12%', msg: balanceMsg,  ref: 'Boyle 2016; NSCA Guidelines' },
-      { id: 'recovery',    icon: '🛌', name: 'Recuperação',             score: recoveryScore, peso: '9%',  msg: recoveryMsg, ref: 'Schoenfeld & Ogborn 2018' },
-      { id: 'progress',    icon: '📈', name: 'Progressão de Carga',     score: progressScore, peso: '11%', msg: progressMsg, ref: 'ACSM FITT-VP; Kraemer 2004' },
-      { id: 'freq',        icon: '📅', name: 'Frequência Semanal',      score: freqScore,     peso: '9%',  msg: freqMsg,     ref: 'ACSM Position Stand 2022' },
-      { id: 'objective',   icon: '🎯', name: 'Adequação ao Objetivo',   score: objScore,      peso: '9%',  msg: objMsg,      ref: 'Schoenfeld 2010; WHO 2020' },
-      { id: 'overtraining',icon: '💤', name: 'PSE & Fadiga (ACWR)',     score: overtScore,    peso: '7%',  msg: overtMsg,    ref: 'Foster 1998; NSCA 2021' },
-      { id: 'age',         icon: '🧬', name: 'Adequação Etária (LTAD)', score: ageScore,      peso: '10%', msg: ageMsg,      ref: 'Tanaka 2001; Balyi LTAD 2013; NSCA 2009' },
-      { id: 'sport',       icon: '🏆', name: 'Adequação Esportiva',     score: sportScore,    peso: '8%',  msg: sportMsg,    ref: 'Boyle 2016; NSCA Sport-Specific 2021' },
-      { id: 'variation',   icon: '🧪', name: 'Variação de Estímulo',    score: varScore,      peso: '6%',  msg: varMsg,      ref: 'Fonseca 2014; ACSM FITT-VP' },
-      { id: 'levelFit',    icon: '🏅', name: 'Adequação ao Nível',      score: levelScore,    peso: '4%',  msg: levelMsg,    ref: 'NSCA 2021; ACSM 2022' },
-      { id: 'monitor',     icon: '📊', name: 'Monitoramento',           score: monitorScore,  peso: '4%',  msg: monitorMsg,  ref: 'ACSM 2022' },
+    pilares: isSaude ? [
+      // Saúde e Bem-Estar — pilares renomeados e reordenados por relevância clínica
+      { id: 'volume',       name: 'Volume: Força + Cardio',         score: volumeScore,   peso: '16%', msg: volumeMsg,   ref: 'OMS 2020; ACSM Exercise is Medicine; Kodama 2009' },
+      { id: 'objective',    name: 'Prescrição Funcional',           score: objScore,      peso: '16%', msg: objMsg,      ref: 'Cook 2010; Nelson 2007; ACSM EIM; OMS 2020' },
+      { id: 'overtraining', name: 'Carga Interna (PSE/ACWR)',       score: overtScore,    peso: '10%', msg: overtMsg,    ref: 'Foster 1998 — intensidade moderada é central' },
+      { id: 'freq',         name: 'Consistência Semanal',           score: freqScore,     peso: '10%', msg: freqMsg,     ref: 'ACSM EIM: 3–5×/sem para saúde geral' },
+      { id: 'balance',      name: 'Equilíbrio Funcional',           score: balanceScore,  peso: '10%', msg: balanceMsg,  ref: 'Boyle 2016; Cook 2010 — prevenção de lesão' },
+      { id: 'age',          name: 'Adequação Etária',               score: ageScore,      peso: '8%',  msg: ageMsg,      ref: 'Kohrt 2004; Sherrington 2019; Tanaka 2001' },
+      { id: 'recovery',     name: 'Recuperação',                    score: recoveryScore, peso: '7%',  msg: recoveryMsg, ref: 'ACSM EIM — intensidade moderada, 24–48h' },
+      { id: 'monitor',      name: 'Monitoramento',                  score: monitorScore,  peso: '5%',  msg: monitorMsg,  ref: 'ACSM 2022' },
+      { id: 'progress',     name: 'Progressão',                     score: progressScore, peso: '6%',  msg: progressMsg, ref: 'ACSM FITT-VP — progressão conservadora' },
+      { id: 'variation',    name: 'Variação de Estímulo',           score: varScore,      peso: '5%',  msg: varMsg,      ref: 'Fonseca 2014 — variedade mantém adesão' },
+      { id: 'levelFit',     name: 'Adequação ao Nível',             score: levelScore,    peso: '4%',  msg: levelMsg,    ref: 'NSCA 2021' },
+      { id: 'sport',        name: 'Especificidade',                 score: sportScore,    peso: '3%',  msg: sportMsg,    ref: 'Menor peso — saúde geral não requer especificidade esportiva' },
+    ] : [
+      { id: 'volume',      name: 'Volume de Força',         score: volumeScore,   peso: '11%', msg: volumeMsg,   ref: 'Schoenfeld 2017; ACSM 2022' },
+      { id: 'balance',     name: 'Equilíbrio Muscular',     score: balanceScore,  peso: '12%', msg: balanceMsg,  ref: 'Boyle 2016; NSCA Guidelines' },
+      { id: 'recovery',    name: 'Recuperação',             score: recoveryScore, peso: '9%',  msg: recoveryMsg, ref: 'Schoenfeld & Ogborn 2018' },
+      { id: 'progress',    name: 'Progressão de Carga',     score: progressScore, peso: '11%', msg: progressMsg, ref: 'ACSM FITT-VP; Kraemer 2004' },
+      { id: 'freq',        name: 'Frequência Semanal',      score: freqScore,     peso: '9%',  msg: freqMsg,     ref: 'ACSM Position Stand 2022' },
+      { id: 'objective',   name: 'Adequação ao Objetivo',   score: objScore,      peso: '9%',  msg: objMsg,      ref: 'Schoenfeld 2010; WHO 2020' },
+      { id: 'overtraining',name: 'PSE & Fadiga (ACWR)',     score: overtScore,    peso: '7%',  msg: overtMsg,    ref: 'Foster 1998; NSCA 2021' },
+      { id: 'age',         name: 'Adequação Etária (LTAD)', score: ageScore,      peso: '10%', msg: ageMsg,      ref: 'Tanaka 2001; Balyi LTAD 2013; NSCA 2009' },
+      { id: 'sport',       name: 'Adequação Esportiva',     score: sportScore,    peso: '8%',  msg: sportMsg,    ref: 'Boyle 2016; NSCA Sport-Specific 2021' },
+      { id: 'variation',   name: 'Variação de Estímulo',    score: varScore,      peso: '6%',  msg: varMsg,      ref: 'Fonseca 2014; ACSM FITT-VP' },
+      { id: 'levelFit',    name: 'Adequação ao Nível',      score: levelScore,    peso: '4%',  msg: levelMsg,    ref: 'NSCA 2021; ACSM 2022' },
+      { id: 'monitor',     name: 'Monitoramento',           score: monitorScore,  peso: '4%',  msg: monitorMsg,  ref: 'ACSM 2022' },
     ],
   }
 }
