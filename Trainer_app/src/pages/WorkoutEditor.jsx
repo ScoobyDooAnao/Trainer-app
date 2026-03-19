@@ -111,7 +111,7 @@ const EXERCISE_BANK = [
   {name:'Passe e Recepção com Bola',type:'Full Body',  sets:'3', reps:'10–15', rest:'45s',  tip:'Coordenação olho-mão, padrão motor fundamental'},
   {name:'Equilíbrio Unipodal',     type:'Core',        sets:'3', reps:'20–30s',rest:'30s',  tip:'Olhos abertos → fechados para progredir'},
   {name:'Gato-Vaca (Mobilidade)',  type:'Core',        sets:'2', reps:'10–15', rest:'30s',  tip:'Mobilidade torácica e lombar'},
-  {name:'Mobilidade de Quadril',   type:'Full Body',   sets:'2', reps:'8–10',  rest:'30s',  tip:'90/90, world's greatest stretch'},
+  {name:'Mobilidade de Quadril',   type:'Full Body',   sets:'2', reps:'8–10',  rest:'30s',  tip:'90/90, world greatest stretch'},
 ]
 
 // ── Workout Templates ─────────────────────────────────────────────────────────
