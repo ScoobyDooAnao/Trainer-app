@@ -27,10 +27,10 @@ const DIAS_SEMANA = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 const DIA_JS_MAP  = { Seg: 1, Ter: 2, Qua: 3, Qui: 4, Sex: 5, Sáb: 6, Dom: 0 }
 
 const NAV = [
-  { id: 'alunos',   icon: '👥', label: 'Meus Alunos' },
-  { id: 'treinos',  icon: '🏋️', label: 'Treinos'      },
-  { id: 'evolucao', icon: '📈', label: 'Evolução'     },
-  { id: 'cardio',   icon: '❤️', label: 'Cardio'       },
+  { id: 'alunos',   icon: '⬛', label: 'Meus Alunos' },
+  { id: 'treinos',  icon: '⬛', label: 'Treinos'      },
+  { id: 'evolucao', icon: '⬛', label: 'Evolução'     },
+  { id: 'cardio',   icon: '⬛', label: 'Cardio'       },
 ]
 const GOALS  = ['Ganho de Massa', 'Emagrecimento', 'Condicionamento', 'Força e Performance', 'Saúde e Bem-Estar', 'Iniciação Esportiva', 'Desenvolvimento Atlético', 'Treinamento Competitivo']
 const LEVELS = ['Iniciante', 'Intermediário', 'Avançado', 'Atleta Jovem', 'Atleta Competitivo']
@@ -103,7 +103,7 @@ function streakStyle(days) {
   else if (days < 180) { color = '#EA580C'; glow = true }
   else if (days < 365) { color = '#DC2626'; glow = true }
   else                 { color = '#D97706'; glow = true }
-  const emoji = days >= 365 ? '👑' : days >= 180 ? '💎' : days >= 90 ? '⚡' : '🔥'
+  const emoji = days >= 365 ? '★' : days >= 180 ? '◆' : days >= 90 ? '▲' : '●'
   return { color, display: `${emoji}${days}`, glow }
 }
 
@@ -121,10 +121,10 @@ function getDayStatus(dia, attendanceDates, logDates) {
     const date = new Date(d + 'T12:00:00')
     return date.getDay() === diaJS && date >= weekStart
   })
-  if (fez)      return { bg: 'rgba(52,211,153,0.18)',  color: '#065F46', border: 'rgba(52,211,153,0.45)', label: 'Feito 👍',   emoji: '👍' }
-  if (eHoje)    return { bg: 'rgba(59,130,246,0.15)',  color: '#1E3A8A', border: 'rgba(59,130,246,0.4)',  label: 'Ainda dá ⏳', emoji: '⏳' }
-  if (jaPassou) return { bg: 'rgba(239,68,68,0.12)',   color: '#7F1D1D', border: 'rgba(239,68,68,0.38)',  label: 'Faltou 😓',  emoji: '😓' }
-  return          { bg: 'rgba(148,163,184,0.12)', color: '#475569', border: 'rgba(148,163,184,0.3)', label: 'Agendado 📅', emoji: '📅' }
+  if (fez)      return { bg: 'rgba(52,211,153,0.18)',  color: '#065F46', border: 'rgba(52,211,153,0.45)', label: 'Feito',    emoji: '' }
+  if (eHoje)    return { bg: 'rgba(59,130,246,0.15)',  color: '#1E3A8A', border: 'rgba(59,130,246,0.4)',  label: 'Ainda dá', emoji: '' }
+  if (jaPassou) return { bg: 'rgba(239,68,68,0.12)',   color: '#7F1D1D', border: 'rgba(239,68,68,0.38)',  label: 'Faltou',   emoji: '' }
+  return          { bg: 'rgba(148,163,184,0.12)', color: '#475569', border: 'rgba(148,163,184,0.3)', label: 'Agendado', emoji: '' }
 }
 
 function calcStreak(dates, plannedDays) {
@@ -224,6 +224,15 @@ function WaveDivider() {
 }
 
 // ── NavItem ────────────────────────────────────────────────────────────────
+const NAV_ICONS = {
+  alunos:   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>,
+  treinos:  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29l-1.43-1.43z"/></svg>,
+  evolucao: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>,
+  cardio:   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>,
+  perfil:   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>,
+  sair:     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>,
+}
+
 function NavItem({ item, active, onClick }) {
   const [hov, setHov] = useState(false)
   return (
@@ -231,17 +240,19 @@ function NavItem({ item, active, onClick }) {
       onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       style={{
         display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-        padding: '10px 12px', borderRadius: 10,
-        border: active ? `1px solid ${YELLOW_BORDER}` : '1px solid transparent',
+        padding: '10px 12px', borderRadius: 8,
+        border: 'none',
         cursor: 'pointer', textAlign: 'left',
-        background: active ? YELLOW_BG : hov ? 'rgba(255,255,255,0.07)' : 'transparent',
-        transition: 'all 0.18s',
+        background: active ? 'rgba(245,200,66,0.12)' : hov ? 'rgba(255,255,255,0.05)' : 'transparent',
+        boxShadow: active ? 'inset 3px 0 0 #F5C842' : 'none',
+        transition: 'all 0.15s',
       }}>
-      <span style={{ fontSize: 15, width: 22, textAlign: 'center' }}>{item.icon}</span>
-      <span style={{ fontSize: 13, fontWeight: active ? 700 : 500, color: active ? YELLOW : SIDEBAR_TEXT }}>
+      <span style={{ color: active ? YELLOW : SIDEBAR_TEXT, opacity: active ? 1 : 0.55, flexShrink: 0, lineHeight: 0 }}>
+        {NAV_ICONS[item.id] || NAV_ICONS.perfil}
+      </span>
+      <span style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? YELLOW : SIDEBAR_TEXT, letterSpacing: 0.1 }}>
         {item.label}
       </span>
-      {active && <div style={{ marginLeft: 'auto', width: 6, height: 6, borderRadius: '50%', background: YELLOW, boxShadow: `0 0 8px ${YELLOW}` }} />}
     </button>
   )
 }
@@ -259,12 +270,12 @@ function calcAgeFromStudent(st) {
 function ageBadge(age) {
   if (age === null) return null
   let emoji, color, bg, label
-  if      (age < 12)  { emoji = '🧒'; color = '#0284C7'; bg = 'rgba(2,132,199,0.12)';  label = `${age} anos · Criança`        }
-  else if (age < 18)  { emoji = '🧑'; color = '#7C3AED'; bg = 'rgba(124,58,237,0.12)'; label = `${age} anos · Adolescente`    }
-  else if (age < 30)  { emoji = '🔥'; color = '#059669'; bg = 'rgba(5,150,105,0.12)';  label = `${age} anos · Adulto Jovem`   }
-  else if (age < 45)  { emoji = '💪'; color = '#0891B2'; bg = 'rgba(8,145,178,0.12)';  label = `${age} anos · Adulto`         }
-  else if (age < 60)  { emoji = '🧠'; color = '#7C3AED'; bg = 'rgba(124,58,237,0.12)'; label = `${age} anos · Adulto Maduro`  }
-  else                { emoji = '🧓'; color = '#D97706'; bg = 'rgba(217,119,6,0.12)';  label = `${age} anos · Idoso`          }
+  if      (age < 12)  { emoji = ''; color = '#0284C7'; bg = 'rgba(2,132,199,0.12)';  label = `${age} anos · Criança`        }
+  else if (age < 18)  { emoji = ''; color = '#7C3AED'; bg = 'rgba(124,58,237,0.12)'; label = `${age} anos · Adolescente`    }
+  else if (age < 30)  { emoji = ''; color = '#059669'; bg = 'rgba(5,150,105,0.12)';  label = `${age} anos · Adulto Jovem`   }
+  else if (age < 45)  { emoji = ''; color = '#0891B2'; bg = 'rgba(8,145,178,0.12)';  label = `${age} anos · Adulto`         }
+  else if (age < 60)  { emoji = ''; color = '#7C3AED'; bg = 'rgba(124,58,237,0.12)'; label = `${age} anos · Adulto Maduro`  }
+  else                { emoji = ''; color = '#D97706'; bg = 'rgba(217,119,6,0.12)';  label = `${age} anos · Idoso`          }
   return { emoji, color, bg, label }
 }
 
@@ -1910,7 +1921,7 @@ function NovoAlunoModal({ onSave, onClose, teacherId }) {
         <textarea style={{ ...inp, minHeight:65, resize:'vertical' }} placeholder="Ex: Histórico de entorse no tornozelo direito..." value={form.notes} onChange={e=>f('notes',e.target.value)} />
 
         <button onClick={save} disabled={saving||!form.name.trim()} style={{ width:'100%', background: form.name.trim() ? 'linear-gradient(135deg,#F5C842,#D97706)' : '#F1F5F9', border:'none', borderRadius:10, padding:14, color: form.name.trim() ? '#431C00' : '#94A3B8', fontWeight:800, fontSize:15, cursor: form.name.trim() ? 'pointer' : 'default', marginTop:22 }}>
-          {saving ? 'Salvando...' : '+ Cadastrar Aluno'}
+          {saving ? 'Salvando...' : 'Cadastrar Aluno'}
         </button>
         <button onClick={onClose} style={{ width:'100%', background:'rgba(0,0,0,0.04)', border:'1px solid #E2E8F0', borderRadius:10, padding:12, color:'#64748B', fontWeight:600, fontSize:14, cursor:'pointer', marginTop:8 }}>Cancelar</button>
       </div>
