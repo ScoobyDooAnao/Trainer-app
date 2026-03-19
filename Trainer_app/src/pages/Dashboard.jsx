@@ -589,9 +589,8 @@ function TabTreinos({ workouts, navigate }) {
           })}
         </div>
       </div>
-
+      </div>{/* end db-week-grid */}
       {/* Legenda */}
-        </div></div>
       <div style={{ display: 'flex', gap: 14, marginTop: 14, flexWrap: 'wrap', alignItems: 'center' }}>
         {[{ emoji: '👍', label: 'Feito' }, { emoji: '⏳', label: 'Ainda dá' }, { emoji: '😓', label: 'Faltou' }, { emoji: '📅', label: 'Agendado' }].map(({ emoji, label }) => (
           <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
