@@ -862,8 +862,8 @@ function TabAvaliacao({ student, studentId, progress }) {
 
   if (loading) return (
     <div style={{ textAlign: 'center', padding: '60px 20px', color: '#475569' }}>
-      <div style={{ fontSize: 32, marginBottom: 10, animation: 'spin 1s linear infinite' }}>⚙️</div>
-      <div style={{ fontSize: 14 }}>Analisando prescrição com 12 pilares…</div>
+      <div style={{ width:24, height:24, border:'2px solid rgba(71,85,105,0.3)', borderTopColor:'#6366F1', borderRadius:'50%', margin:'0 auto 12px', animation:'spin 1s linear infinite' }}/>
+      <div style={{ fontSize: 13, letterSpacing:0.5 }}>Analisando prescrição…</div>
     </div>
   )
   if (!result) return null
@@ -904,26 +904,36 @@ function TabAvaliacao({ student, studentId, progress }) {
 
   return (
     <div>
-      {/* ── Header ── */}
-      <div style={{ background: 'linear-gradient(135deg,#0f172a,#0d1f35)', borderRadius: 20, padding: '24px 28px', marginBottom: 16, border: `1px solid ${final.border}`, boxShadow: `0 0 40px ${final.text}12` }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
-          <div style={{ flexShrink: 0 }}><GaugeArc score={result.finalScore} /></div>
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <div style={{ fontSize: 10, color: '#475569', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 5, fontWeight: 700 }}>Índice de Qualidade da Prescrição — 11 pilares</div>
-            <div style={{ fontSize: 22, fontWeight: 900, color: final.text, marginBottom: 4 }}>{result.finalScore}/100 — {final.label}</div>
-            {/* Confiança */}
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 12px', borderRadius: 20, background: `rgba(${confColor === '#4ADE80' ? '74,222,128' : confColor === '#FBBF24' ? '251,191,36' : '248,113,113'},0.10)`, border: `1px solid ${confColor}44`, marginBottom: 10 }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: confColor }} />
-              <span style={{ fontSize: 11, color: confColor, fontWeight: 700 }}>Confiança {confLabel}: {confidence?.pct}%</span>
-              {confidence?.pct < 60 && <span style={{ fontSize: 10, color: '#64748B' }}>— adicione mais dados para melhorar</span>}
+      {/* ── Laudo Header ── */}
+      <div style={{ background: '#0A0F1A', borderRadius: 16, marginBottom: 16, border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+        {/* Report title bar */}
+        <div style={{ background: 'rgba(99,102,241,0.12)', borderBottom: '1px solid rgba(99,102,241,0.2)', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 9, color: '#6366F1', letterSpacing: 2.5, textTransform: 'uppercase', fontWeight: 700, marginBottom: 2 }}>Relatório de Avaliação — {new Date().toLocaleDateString('pt-BR')}</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#94A3B8' }}>Índice de Qualidade da Prescrição · 12 Pilares</div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 9, color: '#475569', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 2 }}>Confiança dos dados</div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: confColor, flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: confColor, fontWeight: 700 }}>{confLabel} · {confidence?.pct}%</span>
             </div>
-            {/* Mini badges */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+          </div>
+        </div>
+        {/* Score + gauge */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 24, padding: '20px 24px', flexWrap: 'wrap' }}>
+          <div style={{ flexShrink: 0 }}><GaugeArc score={result.finalScore} /></div>
+          <div style={{ flex: 1, minWidth: 180 }}>
+            <div style={{ fontSize: 42, fontWeight: 900, color: final.text, lineHeight: 1, marginBottom: 4, fontFamily: "'DM Sans',sans-serif" }}>{result.finalScore}<span style={{ fontSize: 18, color: '#475569', fontWeight: 400 }}>/100</span></div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: final.text, marginBottom: 14, letterSpacing: 0.3 }}>{final.label}</div>
+            {/* Pillar score summary — compact table */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 4 }}>
               {result.pilares.map(p => {
                 const c = getScoreColor(p.score)
                 return (
-                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 9px', borderRadius: 20, background: c.bg, border: `1px solid ${c.border}`, fontSize: 11, fontWeight: 700, color: c.text, cursor: 'pointer' }} onClick={() => { setActiveTab('pilares'); setExpanded(p.id) }}>
-                    {p.icon} {p.score}
+                  <div key={p.id} style={{ padding: '5px 8px', borderRadius: 6, background: c.bg, border: `1px solid ${c.border}`, cursor: 'pointer', textAlign: 'center' }} onClick={() => { setActiveTab('pilares'); setExpanded(p.id) }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: c.text, lineHeight: 1 }}>{p.score}</div>
+                    <div style={{ fontSize: 8, color: c.text, opacity: 0.7, marginTop: 1, letterSpacing: 0.3, textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name.split(' ')[0]}</div>
                   </div>
                 )
               })}
@@ -935,9 +945,9 @@ function TabAvaliacao({ student, studentId, progress }) {
       {/* ── Sub-tabs ── */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         {[
-          { id: 'pilares', label: `📐 ${result.pilares.length} Pilares`, },
-          { id: 'recs',    label: `💡 ${recs.length} Recomendações`, badge: recs.filter(r=>r.score<45).length },
-          { id: 'history', label: `🔄 Histórico`, },
+          { id: 'pilares', label: `${result.pilares.length} Pilares`, },
+          { id: 'recs',    label: `${recs.length} Recomendações`, badge: recs.filter(r=>r.score<45).length },
+          { id: 'history', label: 'Histórico', },
         ].map(t => (
           <button key={t.id} onClick={() => setActiveTab(t.id)}
             style={{ flex:1, padding:'10px 12px', borderRadius:10, border:'none', background: activeTab===t.id ? 'linear-gradient(135deg,#6366F1,#8B5CF6)' : 'rgba(255,255,255,0.04)', color: activeTab===t.id ? '#fff' : '#64748B', fontWeight:700, fontSize:12, cursor:'pointer', position:'relative', boxShadow: activeTab===t.id ? '0 4px 14px rgba(99,102,241,0.35)' : 'none' }}>
@@ -957,22 +967,26 @@ function TabAvaliacao({ student, studentId, progress }) {
             return (
               <div key={p.id} style={{ marginBottom: 8 }}>
                 <div onClick={() => setExpanded(open ? null : p.id)}
-                  style={{ background: '#0D1117', border: `1px solid ${open ? c.border : 'rgba(255,255,255,0.07)'}`, borderRadius: open ? '14px 14px 0 0' : 14, padding: '14px 18px', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <div style={{ fontSize: 20, width: 32, textAlign: 'center', flexShrink: 0 }}>{p.icon}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                      <span style={{ fontSize: 14, fontWeight: 800, color: '#E2E8F0' }}>{p.name}</span>
-                      <span style={{ fontSize: 10, color: '#475569', background: 'rgba(255,255,255,0.04)', padding: '2px 8px', borderRadius: 20, border: '1px solid rgba(255,255,255,0.07)' }}>peso {p.peso}</span>
+                  style={{ background: '#0A0F1A', border: `1px solid ${open ? c.border : 'rgba(255,255,255,0.06)'}`, borderRadius: open ? '10px 10px 0 0' : 10, padding: '12px 16px', cursor: 'pointer', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  {/* Numbered index */}
+                  <div style={{ width: 28, height: 28, borderRadius: 6, background: open ? c.bg : 'rgba(255,255,255,0.04)', border: `1px solid ${open ? c.border : 'rgba(255,255,255,0.07)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: open ? c.text : '#475569' }}>{String(result.pilares.indexOf(p)+1).padStart(2,'0')}</span>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#E2E8F0', letterSpacing: 0.1 }}>{p.name}</span>
+                      <span style={{ fontSize: 9, color: '#334155', background: 'rgba(255,255,255,0.03)', padding: '1px 6px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.06)', letterSpacing: 0.5, textTransform: 'uppercase' }}>{p.peso}</span>
                     </div>
-                    <div style={{ height: 5, borderRadius: 99, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${p.score}%`, borderRadius: 99, background: `linear-gradient(90deg,${c.text}88,${c.text})`, transition: 'width 0.7s ease' }} />
+                    <div style={{ height: 4, borderRadius: 99, background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${p.score}%`, borderRadius: 99, background: `linear-gradient(90deg,${c.text}99,${c.text})`, transition: 'width 0.7s ease' }} />
                     </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.bg, border: `2px solid ${c.border}` }}>
-                      <span style={{ fontSize: 15, fontWeight: 900, color: c.text }}>{p.score}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 18, fontWeight: 900, color: c.text, lineHeight: 1 }}>{p.score}</div>
+                      <div style={{ fontSize: 8, color: '#334155', textTransform: 'uppercase', letterSpacing: 0.5 }}>/ 100</div>
                     </div>
-                    <span style={{ fontSize: 13, color: '#334155' }}>{open ? '▲' : '▼'}</span>
+                    <span style={{ fontSize: 11, color: '#334155', marginLeft: 2 }}>{open ? '▲' : '▼'}</span>
                   </div>
                 </div>
                 {open && (
@@ -980,11 +994,11 @@ function TabAvaliacao({ student, studentId, progress }) {
                     <div style={{ fontSize: 13, color: '#CBD5E1', lineHeight: 1.65, marginBottom: 12, paddingLeft: 4 }}>{p.msg}</div>
                     <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)' }}>
-                        <span style={{ fontSize: 11, color: '#818CF8', fontWeight: 600 }}>📖 {p.ref}</span>
+                        <span style={{ fontSize: 11, color: '#818CF8', fontWeight: 600 }}>{p.ref}</span>
                       </div>
                       {(RECS[p.id]?.(p.score)||[]).length > 0 && (
                         <button onClick={e => { e.stopPropagation(); setActiveTab('recs') }} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 20, background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)', fontSize: 11, color: '#FBBF24', fontWeight: 600, cursor: 'pointer' }}>
-                          💡 Ver recomendações
+                          Ver recomendações
                         </button>
                       )}
                     </div>
@@ -1001,8 +1015,8 @@ function TabAvaliacao({ student, studentId, progress }) {
         <div>
           {recs.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px 20px', color: '#4ADE80' }}>
-              <div style={{ fontSize: 36, marginBottom: 8 }}>🏆</div>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>Nenhuma recomendação crítica!</div>
+              <div style={{ width:40, height:40, borderRadius:8, background:"rgba(74,222,128,0.1)", border:"1px solid rgba(74,222,128,0.2)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 12px" }}><svg width="20" height="20" viewBox="0 0 24 24" fill="#4ADE80"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>Nenhuma recomendação crítica</div>
               <div style={{ fontSize: 12, color: '#475569', marginTop: 4 }}>Todos os pilares estão com score adequado.</div>
             </div>
           ) : (
@@ -1014,7 +1028,7 @@ function TabAvaliacao({ student, studentId, progress }) {
                 const c = getScoreColor(rec.score)
                 return (
                   <div key={i} style={{ background: '#0D1117', border: `1px solid ${c.border}`, borderRadius: 14, padding: '14px 18px', marginBottom: 10, display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: c.bg, border: `1px solid ${c.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{rec.icon}</div>
+                    <div style={{ width: 32, height: 32, borderRadius: 6, background: c.bg, border: `1px solid ${c.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: c.text, flexShrink: 0 }}>#{i+1}</div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 10, color: c.text, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{rec.pilar} — score {rec.score}</div>
                       <div style={{ fontSize: 13, color: '#CBD5E1', lineHeight: 1.6 }}>{rec.txt}</div>
@@ -1035,7 +1049,7 @@ function TabAvaliacao({ student, studentId, progress }) {
         <div>
           {history.length < 2 ? (
             <div style={{ textAlign:'center', padding:'40px 20px', color:'#475569' }}>
-              <div style={{ fontSize:32, marginBottom:8 }}>📉</div>
+              <div style={{ width:32, height:32, borderRadius:6, background:"rgba(148,163,184,0.08)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="#475569"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg></div>
               <div style={{ fontSize:14, fontWeight:700, color:'#94A3B8' }}>Histórico insuficiente</div>
               <div style={{ fontSize:12, marginTop:4 }}>São necessários pelo menos 2 semanas de registros para gerar o gráfico de evolução do índice.</div>
             </div>
@@ -1308,7 +1322,7 @@ export default function StudentDetail({ navigate, studentId }) {
                   </div>
                 ) : (
                   <div style={{ display:'flex', alignItems:'center', padding:'10px 12px', borderRadius:8, background:'rgba(255,255,255,0.03)', border:'1px dashed rgba(255,255,255,0.1)', fontSize:11, color:'#475569' }}>
-                    📱 WhatsApp do responsável — disponível para menores de 18 anos
+                    WhatsApp — disponível para menores de 18 anos
                   </div>
                 )}
 
@@ -1317,11 +1331,11 @@ export default function StudentDetail({ navigate, studentId }) {
                   <div style={lbl10}>Lesões, restrições ou observações</div>
                   <textarea style={{ ...s.input, minHeight:60, resize:'vertical' }} value={form.notes || ''} onChange={e => setForm(x => ({ ...x, notes: e.target.value }))} />
                 </div>
-                {sep('Recado para o Pai/Responsável')}
+                {sep('Recado para o Responsável')}
                 <div style={{ gridColumn:'1/-1' }}>
                   <div style={lbl10}>Recado mensal — aparece na área do responsável</div>
                   <textarea style={{ ...s.input, minHeight:80, resize:'vertical' }} placeholder="Ex: Lucas está evoluindo muito bem na resistência. O foco deste mês é a potência de membros inferiores..." value={form.parent_message || ''} onChange={e => setForm(x => ({ ...x, parent_message: e.target.value }))} />
-                  {form.parent_message && <div style={{ fontSize:10, color:'#34D399', marginTop:4 }}>💬 Será exibido na área do responsável com a data de hoje</div>}
+                  {form.parent_message && <div style={{ fontSize:10, color:'#34D399', marginTop:4 }}>Será exibido na área do responsável com a data de hoje</div>}
                 </div>
 
                 <div style={{ gridColumn:'1/-1' }}>
