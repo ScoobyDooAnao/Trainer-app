@@ -188,6 +188,82 @@ function calcAge(student) {
   return student.age ? parseInt(student.age) : null
 }
 
+// ── PHV & Tanner (apenas para <18 anos) ──────────────────────────────────
+// Tanner 1970: altura alvo genética (approximação estatística, não diagnóstico)
+function calcTargetHeight(fatherCm, motherCm, sex) {
+  if (!fatherCm || !motherCm) return null
+  const raw = sex === 'M'
+    ? (fatherCm + motherCm + 13) / 2
+    : (fatherCm + motherCm - 13) / 2
+  return { target: Math.round(raw), low: Math.round(raw - 8.5), high: Math.round(raw + 8.5) }
+}
+
+// Mirwald 2002: Maturity Offset (anos antes/depois do PHV)
+// Requer: altura (cm), peso (kg), altura sentado (cm), idade decimal
+function calcMaturityOffset(heightCm, weightKg, sittingCm, ageDecimal, sex) {
+  if (!heightCm || !weightKg || !sittingCm || !ageDecimal) return null
+  const legLength = heightCm - sittingCm
+  let offset
+  if (sex === 'M') {
+    offset = -9.236
+      + 0.0002708 * (legLength * sittingCm)
+      - 0.001663  * (ageDecimal * legLength)
+      + 0.007216  * (ageDecimal * sittingCm)
+      + 0.02292   * (weightKg / heightCm * 100)
+  } else {
+    offset = -9.376
+      + 0.0001882 * (legLength * sittingCm)
+      + 0.0022    * (ageDecimal * legLength)
+      + 0.005841  * (ageDecimal * sittingCm)
+      - 0.002658  * (ageDecimal * weightKg)
+      + 0.07693   * (weightKg / heightCm * 100)
+  }
+  return +offset.toFixed(2)
+}
+
+function offsetLabel(offset) {
+  if (offset === null) return null
+  if (offset < -2)   return { label: 'Pré-puberdade', color: '#60A5FA', desc: 'Longe do pico de crescimento — fase ideal para velocidade e habilidades motoras' }
+  if (offset < -0.5) return { label: 'Pré-PHV',       color: '#34D399', desc: 'Aproximando do pico — priorizar técnica e padrões motores, carga moderada' }
+  if (offset < 0.5)  return { label: 'No PHV',         color: '#FBBF24', desc: 'Período de vulnerabilidade — crescimento ósseo à frente do muscular, reduzir carga axial intensa' }
+  if (offset < 2)    return { label: 'Pós-PHV',        color: '#F97316', desc: 'Janela de força — resposta hormonal elevada, progressão de carga pode ser acelerada' }
+  return               { label: 'Pós-puberdade',      color: '#C084FC', desc: 'Base consolidada — periodização de atleta jovem competitivo' }
+}
+
+// TGMD-3 — 13 padrões motores (Ulrich 2019)
+const TGMD3_LOCOMOTION = [
+  { id:'corrida',    label:'Corrida',           desc:'Padrão de corrida: braços em oposição, fase aérea visível, apoio no antepé' },
+  { id:'galope',     label:'Galope',            desc:'Passo-toque rítmico lateral, corpo levemente inclinado para frente' },
+  { id:'passada',    label:'Passada (skip)',    desc:'Alternância de passo+salto, coordenação braço-perna' },
+  { id:'salto_h',    label:'Salto horizontal',  desc:'Pré-balanço de braços, impulsão bilateral, aterrissagem amortecida' },
+  { id:'salto_v',    label:'Salto vertical',    desc:'Extensão completa do corpo, alcance dos braços, aterrissagem suave' },
+  { id:'lateral',    label:'Corrida lateral',   desc:'Passos cruzados, centro de gravidade baixo, mudança de direção' },
+]
+const TGMD3_OBJECT = [
+  { id:'chutar',     label:'Chute',             desc:'Passo de aproximação, balanço de braços, contato com peito do pé, follow-through' },
+  { id:'arremesso',  label:'Arremesso (acima)', desc:'Rotação de tronco, transferência de peso, liberação acima do ombro' },
+  { id:'receber',    label:'Recepção',          desc:'Preparação das mãos, olhos no alvo, absorção do impacto com dedos' },
+  { id:'driblar',    label:'Drible',            desc:'Contato com os dedos, altura do quadril, olhos longe da bola' },
+  { id:'rebater',    label:'Rebater',           desc:'Rotação de quadril, contato na zona de strike, follow-through' },
+  { id:'rolar',      label:'Rolar (boliche)',   desc:'Abaixamento do corpo, liberação na altura do joelho, follow-through' },
+  { id:'underhand',  label:'Arremesso (abaixo)',desc:'Balanço pendular, transferência de peso, liberação na altura do quadril' },
+]
+const TGMD3_LEVELS = [
+  { val: 0, label: 'Inicial',         color: '#F87171', short: 'I' },
+  { val: 1, label: 'Elementar',       color: '#FBBF24', short: 'E' },
+  { val: 2, label: 'Maduro',          color: '#34D399', short: 'M' },
+]
+
+function tgmdScore(scores) {
+  if (!scores) return null
+  const all = [...TGMD3_LOCOMOTION, ...TGMD3_OBJECT]
+  const filled = all.filter(p => scores[p.id] !== undefined)
+  if (filled.length === 0) return null
+  const sum = filled.reduce((a, p) => a + (scores[p.id] || 0), 0)
+  const max = filled.length * 2
+  return { pct: Math.round((sum / max) * 100), filled: filled.length, total: all.length }
+}
+
 function getScoreColor(score) {
   if (score >= 80) return { text: '#4ADE80', bg: 'rgba(74,222,128,0.12)', border: 'rgba(74,222,128,0.3)', label: 'Excelente' }
   if (score >= 65) return { text: '#A3E635', bg: 'rgba(163,230,53,0.10)', border: 'rgba(163,230,53,0.25)', label: 'Bom' }
@@ -487,7 +563,35 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
     ageScore = Math.max(0, ageScore)
   }
 
-  const agePhaseLine = ltadPhase ? ` | Fase LTAD: ${ltadPhase.fase}` : ''
+  // TGMD-3 integration — add motor alerts to age pillar
+  const tgmd = student.tgmd_scores
+  if (tgmd && age && age < 18) {
+    const kickScore = tgmd.chutar
+    const jumpScore = tgmd.salto_h ?? tgmd.salto_v
+    const runScore  = tgmd.corrida
+    if (kickScore === 0) {
+      ageScore -= 10
+      ageIssues.push('padrão de chute Inicial (TGMD-3) — priorizar treino motor antes de exercícios de potência de MMII')
+    }
+    if (jumpScore === 0) {
+      ageScore -= 8
+      ageIssues.push('padrão de salto Inicial (TGMD-3) — incluir trabalho de recepção e aterrissagem antes de pliometria')
+    }
+    if (runScore === 0) {
+      ageScore -= 8
+      ageIssues.push('padrão de corrida Inicial (TGMD-3) — trabalhar mecânica de corrida antes de exercícios de velocidade')
+    }
+    ageScore = Math.max(0, ageScore)
+    const tgmdSc = tgmdScore(tgmd)
+    if (tgmdSc && tgmdSc.pct >= 75) ageOk.push('Padrões motores adequados (TGMD-3)')
+  }
+
+  // Use maturity offset if available for more precise phase
+  const matOffset = calcMaturityOffset(student.height, student.weight, student.height_sitting, (age||0)+(new Date().getMonth()/12), 'M')
+  const matLabel  = offsetLabel(matOffset)
+  const phvNote   = matLabel ? ` | ${matLabel.label}` : ''
+
+  const agePhaseLine = ltadPhase ? ` | Fase LTAD: ${ltadPhase.fase}${phvNote}` : phvNote
   const ageMsg = age === null
     ? '⚠️ Idade não cadastrada — cadastre a idade do aluno para habilitar avaliação etária completa.'
     : ageIssues.length
@@ -797,6 +901,128 @@ function computeHistoricalScores({ student, allDays, allExercises, plannedDays, 
     weeks.push({ label, score: r.finalScore })
   }
   return weeks
+}
+
+
+// ── TabDesenvolvimentoMotor ───────────────────────────────────────────────────
+function TabDesenvolvimentoMotor({ student, studentId, onUpdate }) {
+  const [scores, setScores] = useState(student.tgmd_scores || {})
+  const [saving, setSaving] = useState(false)
+  const [saved,  setSaved]  = useState(false)
+
+  const age = calcAge(student)
+  const isYouth = age && age < 18
+
+  const save = async () => {
+    setSaving(true)
+    await supabase.from('students').update({
+      tgmd_scores: scores,
+      tgmd_date:   new Date().toISOString().slice(0,10),
+    }).eq('id', studentId)
+    setSaving(false); setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+    if(onUpdate) onUpdate()
+  }
+
+  const sc = tgmdScore(scores)
+  const phvOffset = calcMaturityOffset(+student.height||null,+student.weight||null,+student.height_sitting||null,(age||0)+(new Date().getMonth()/12),'M')
+  const phvLabel  = offsetLabel(phvOffset)
+  const tgt       = calcTargetHeight(+student.parent_height_father||null,+student.parent_height_mother||null,'M')
+
+  const Section = ({ title, subtitle, items }) => (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: '#6366F1', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 2 }}>{title}</div>
+      <div style={{ fontSize: 11, color: '#475569', marginBottom: 14 }}>{subtitle}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {items.map(pattern => {
+          const val = scores[pattern.id]
+          const lv  = TGMD3_LEVELS.find(l => l.val === val)
+          return (
+            <div key={pattern.id} style={{ background: '#0A0F1A', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '12px 16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#E2E8F0', marginBottom: 3 }}>{pattern.label}</div>
+                  <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.5 }}>{pattern.desc}</div>
+                </div>
+                {lv && <div style={{ flexShrink: 0, marginLeft: 12, padding: '3px 10px', borderRadius: 6, background: lv.color + '18', border: `1px solid ${lv.color}35`, fontSize: 11, fontWeight: 700, color: lv.color }}>{lv.label}</div>}
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {TGMD3_LEVELS.map(level => (
+                  <button key={level.val} onClick={() => setScores(prev => ({ ...prev, [pattern.id]: level.val }))}
+                    style={{
+                      flex: 1, padding: '7px 4px', borderRadius: 8, border: `1px solid ${val === level.val ? level.color : 'rgba(255,255,255,0.08)'}`,
+                      background: val === level.val ? level.color + '20' : 'rgba(255,255,255,0.03)',
+                      color: val === level.val ? level.color : '#475569', fontSize: 11, fontWeight: val === level.val ? 700 : 400, cursor: 'pointer', transition: 'all 0.15s',
+                    }}>
+                    {level.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+
+  return (
+    <div>
+      {/* PHV Card — se tiver dados */}
+      {(phvLabel || tgt) && (
+        <div style={{ background: 'linear-gradient(135deg,rgba(99,102,241,0.1),rgba(99,102,241,0.04))', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 16, padding: '18px 20px', marginBottom: 20 }}>
+          <div style={{ fontSize: 10, color: '#6366F1', fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 12 }}>Maturação Biológica — Estimativa</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {tgt && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.04)' }}>
+                <span style={{ fontSize: 12, color: '#64748B' }}>Altura alvo genética <span style={{ color: '#334155', fontSize: 10 }}>(Tanner 1970)</span></span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#E2E8F0' }}>{tgt.low}–{tgt.high} cm</span>
+              </div>
+            )}
+            {phvLabel && (
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.04)' }}>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: phvLabel.color, flexShrink: 0, marginTop: 3 }}/>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: phvLabel.color }}>{phvLabel.label} <span style={{ fontWeight: 400, color: '#475569' }}>offset {phvOffset > 0 ? '+' : ''}{phvOffset} anos (Mirwald 2002)</span></div>
+                  <div style={{ fontSize: 11, color: '#475569', marginTop: 2, lineHeight: 1.5 }}>{phvLabel.desc}</div>
+                </div>
+              </div>
+            )}
+          </div>
+          <div style={{ fontSize: 10, color: '#334155', marginTop: 10, fontStyle: 'italic' }}>Estimativa estatística. Não substitui avaliação clínica. Cadastre altura dos pais e altura sentado no Editar Perfil para ativar.</div>
+        </div>
+      )}
+
+      {/* Score summary */}
+      {sc && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 20 }}>
+          {[
+            { label: 'Padrões avaliados', val: `${sc.filled}/${sc.total}`, color: '#94A3B8' },
+            { label: 'Score motor', val: `${sc.pct}%`, color: sc.pct >= 75 ? '#34D399' : sc.pct >= 50 ? '#FBBF24' : '#F87171' },
+            { label: 'Data avaliação', val: student.tgmd_date ? new Date(student.tgmd_date+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'short'}) : '—', color: '#64748B' },
+          ].map(({ label, val, color }) => (
+            <div key={label} style={{ background: '#0A0F1A', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '12px 14px', textAlign: 'center' }}>
+              <div style={{ fontSize: 9, color: '#334155', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }}>{label}</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color, fontFamily: "'DM Sans',sans-serif" }}>{val}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Instructions */}
+      <div style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', marginBottom: 20, fontSize: 11, color: '#475569', lineHeight: 1.6 }}>
+        <strong style={{ color: '#94A3B8' }}>Como aplicar o TGMD-3:</strong> observe o atleta realizando cada padrão por pelo menos 2 tentativas. Avalie com base na qualidade do movimento, não na velocidade ou distância. Registre o nível que melhor descreve o padrão atual.
+      </div>
+
+      <Section title="Habilidades de Locomoção" subtitle="Padrões de movimento que envolvem deslocamento do corpo no espaço" items={TGMD3_LOCOMOTION} />
+      <Section title="Controle de Objeto" subtitle="Padrões de manipulação e controle de implementos e bolas" items={TGMD3_OBJECT} />
+
+      <button onClick={save} disabled={saving}
+        style={{ width: '100%', padding: '13px', borderRadius: 10, border: 'none', background: saved ? 'linear-gradient(135deg,#34D399,#059669)' : 'linear-gradient(135deg,#6366F1,#4F46E5)', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', marginTop: 8, transition: 'all 0.2s' }}>
+        {saving ? 'Salvando…' : saved ? '✓ Avaliação salva' : 'Salvar Avaliação Motor'}
+      </button>
+      <div style={{ fontSize: 10, color: '#334155', textAlign: 'center', marginTop: 8 }}>TGMD-3 — Ulrich (2019). Test of Gross Motor Development, 3ª edição.</div>
+    </div>
+  )
 }
 
 // ── TabAvaliacao UI v2 ────────────────────────────────────────────────────
@@ -1120,7 +1346,7 @@ export default function StudentDetail({ navigate, studentId }) {
     setFetchError(null)
     try {
       const [stRes, plRes, prRes, gsRes] = await Promise.all([
-        supabase.from('students').select('id,name,age,weight,height,goal,level,notes,teacher_id,birth_date,sport,sport_position,experience_years,guardian_name,guardian_phone,parent_message,parent_message_date').eq('id', studentId).single(),
+        supabase.from('students').select('id,name,age,weight,height,goal,level,notes,teacher_id,birth_date,sport,sport_position,experience_years,guardian_name,guardian_phone,parent_message,parent_message_date,parent_height_father,parent_height_mother,height_sitting,tgmd_scores,tgmd_date').eq('id', studentId).single(),
         supabase.from('workout_plans').select('*').eq('student_id', studentId).order('created_at', { ascending: false }),
         supabase.from('progress_entries').select('*').eq('student_id', studentId).order('date', { ascending: false }),
         supabase.from('student_goals').select('*').eq('student_id', studentId).order('created_at', { ascending: false }),
@@ -1167,8 +1393,11 @@ export default function StudentDetail({ navigate, studentId }) {
       sport_position:   form.sport_position    || null,
       guardian_name:      form.guardian_name     || null,
       guardian_phone:    form.guardian_phone    || null,
-      parent_message:    form.parent_message    || null,
-      parent_message_date: form.parent_message ? new Date().toISOString().slice(0,10) : null,
+      parent_message:       form.parent_message    || null,
+      parent_message_date:  form.parent_message ? new Date().toISOString().slice(0,10) : null,
+      parent_height_father: +form.parent_height_father || null,
+      parent_height_mother: +form.parent_height_mother || null,
+      height_sitting:       +form.height_sitting       || null,
     }).eq('id', studentId)
     await fetchAll()
     setEditing(false)
@@ -1310,6 +1539,45 @@ export default function StudentDetail({ navigate, studentId }) {
                   </div>
                 )}
 
+                {/* PHV — só para menores de 18 */}
+                {editAge && editAge < 18 && (<>
+                  {sep('Desenvolvimento Físico — Estimativa PHV')}
+                  <div>
+                    <div style={lbl10}>Altura do pai (cm)</div>
+                    <input style={s.input} type="number" placeholder="Ex: 178" value={form.parent_height_father||''} onChange={e=>setForm(x=>({...x,parent_height_father:e.target.value}))}/>
+                  </div>
+                  <div>
+                    <div style={lbl10}>Altura da mãe (cm)</div>
+                    <input style={s.input} type="number" placeholder="Ex: 165" value={form.parent_height_mother||''} onChange={e=>setForm(x=>({...x,parent_height_mother:e.target.value}))}/>
+                  </div>
+                  <div style={{gridColumn:'1/-1'}}>
+                    <div style={lbl10}>Altura sentado (cm) — tronco + cabeça</div>
+                    <input style={s.input} type="number" placeholder="Ex: 82" value={form.height_sitting||''} onChange={e=>setForm(x=>({...x,height_sitting:e.target.value}))}/>
+                    <div style={{fontSize:10,color:'#475569',marginTop:4}}>Meça do assento ao topo da cabeça com o aluno sentado ereto</div>
+                  </div>
+                  {(()=>{
+                    const ageD = (editAge||0) + (new Date().getMonth()/12)
+                    const offset = calcMaturityOffset(+form.height||null,+form.weight||null,+form.height_sitting||null,ageD,'M')
+                    const tgt    = calcTargetHeight(+form.parent_height_father||null,+form.parent_height_mother||null,'M')
+                    const ol     = offsetLabel(offset)
+                    if(!tgt && !ol) return null
+                    return(
+                      <div style={{gridColumn:'1/-1',padding:'12px 14px',borderRadius:10,background:'rgba(99,102,241,0.06)',border:'1px solid rgba(99,102,241,0.18)',display:'flex',flexDirection:'column',gap:8}}>
+                        <div style={{fontSize:10,color:'#6366F1',fontWeight:700,letterSpacing:1.2,textTransform:'uppercase'}}>Estimativa de Desenvolvimento</div>
+                        {tgt&&<div style={{fontSize:12,color:'#94A3B8'}}>Altura alvo genética: <strong style={{color:'#E2E8F0'}}>{tgt.low}–{tgt.high} cm</strong> <span style={{color:'#475569'}}>(Tanner 1970)</span></div>}
+                        {ol&&<div style={{display:'flex',alignItems:'flex-start',gap:8}}>
+                          <div style={{width:8,height:8,borderRadius:'50%',background:ol.color,flexShrink:0,marginTop:3}}/>
+                          <div>
+                            <div style={{fontSize:12,fontWeight:700,color:ol.color}}>{ol.label}<span style={{fontWeight:400,color:'#475569',marginLeft:6}}>offset: {offset>0?'+':''}{offset} anos (Mirwald 2002)</span></div>
+                            <div style={{fontSize:11,color:'#475569',marginTop:3,lineHeight:1.5}}>{ol.desc}</div>
+                          </div>
+                        </div>}
+                        <div style={{fontSize:10,color:'#334155',fontStyle:'italic',borderTop:'1px solid rgba(255,255,255,0.06)',paddingTop:8}}>Valores são estimativas populacionais com margem de ±1 ano. Não substituem avaliação clínica especializada.</div>
+                      </div>
+                    )
+                  })()}
+                </>)}
+
                 {sep('Responsável')}
                 <div>
                   <div style={lbl10}>Nome do responsável</div>
@@ -1375,8 +1643,11 @@ export default function StudentDetail({ navigate, studentId }) {
 
         {/* Tabs */}
         <div style={s.tabs}>
-          {[['plans', '🏋️ Treinos'], ['progress', '📈 Evolução'], ['metas', '🎯 Metas'], ['avaliacao', '🔬 Avaliação'], ['notes', '📋 Obs.']].map(([id, label]) => (
-            <button key={id} style={s.tab(tab === id, id === 'avaliacao')} onClick={() => setTab(id)}>{label}</button>
+          {[['plans', 'Treinos'], ['progress', 'Evolução'], ['metas', 'Metas'], ['avaliacao', 'Avaliação'],
+            ...(student.age < 18 ? [['motor', 'Desenv. Motor']] : []),
+            ['notes', 'Obs.']
+          ].map(([id, label]) => (
+            <button key={id} style={s.tab(tab === id, id === 'avaliacao' || id === 'motor')} onClick={() => setTab(id)}>{label}</button>
           ))}
         </div>
 
@@ -1521,6 +1792,15 @@ export default function StudentDetail({ navigate, studentId }) {
             student={student}
             studentId={studentId}
             progress={progress}
+          />
+        )}
+
+        {/* MOTOR DEVELOPMENT TAB */}
+        {tab === 'motor' && student.age < 18 && (
+          <TabDesenvolvimentoMotor
+            student={student}
+            studentId={studentId}
+            onUpdate={fetchAll}
           />
         )}
 
