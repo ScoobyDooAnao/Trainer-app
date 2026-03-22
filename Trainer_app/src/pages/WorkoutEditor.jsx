@@ -780,6 +780,6 @@ export default function WorkoutEditor({ navigate, studentId, planId }) {
 
       {showTemplate && <TemplateModal student={student} ageGroup={ageGroup} onApply={applyTemplate} onClose={()=>setShowTemplate(false)}/>}
     </div>
-            </div>
+    </div>
   )
 }
