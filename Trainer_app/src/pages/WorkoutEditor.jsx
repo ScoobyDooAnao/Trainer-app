@@ -766,6 +766,28 @@ export default function WorkoutEditor({ navigate, studentId, planId }) {
               {/* Add exercise row */}
               <div style={s.addRow}>
                 <div style={{fontSize:10,color:'#334155',marginBottom:10,textTransform:'uppercase',letterSpacing:1,fontWeight:600}}>Adicionar Exercício</div>
+
+                {/* Search */}
+                <ExerciseSearch
+                  onSelect={ex=>setNewExForms(f=>({...f,[day.id]:{name:ex.name,sets:ex.sets,reps:ex.reps,rest:ex.rest,tip:ex.tip,type:ex.type}}))}
+                  suggestedTypes={suggestedTypes}
+                  ageGroup={ageGroup}
+                />
+
+                {/* Manual form */}
+                <div style={{display:'grid',gridTemplateColumns:'1fr 80px 60px 60px 60px',gap:6,marginBottom:8}}>
+                  <input style={s.smallInput} value={newEx.name} onChange={e=>setNewExField(day.id,'name',e.target.value)} placeholder="Nome do exercício *"/>
+                  <select style={s.smallSelect} value={newEx.type} onChange={e=>setNewExField(day.id,'type',e.target.value)}>
+                    {EXERCISE_TYPES.map(t=><option key={t}>{t}</option>)}
+                  </select>
+                  <input style={s.smallInput} value={newEx.sets} onChange={e=>setNewExField(day.id,'sets',e.target.value)} placeholder="3"/>
+                  <input style={s.smallInput} value={newEx.reps} onChange={e=>setNewExField(day.id,'reps',e.target.value)} placeholder="10–12"/>
+                  <input style={s.smallInput} value={newEx.rest} onChange={e=>setNewExField(day.id,'rest',e.target.value)} placeholder="60s"/>
+                </div>
+                <input style={{...s.smallInput,marginBottom:8,fontSize:11}} value={newEx.tip} onChange={e=>setNewExField(day.id,'tip',e.target.value)} placeholder="Dica de execução (opcional)"/>
+                <button style={s.btn(color)} onClick={()=>addExercise(day.id)}>+ Adicionar ao Treino</button>
+              </div>
+            </div>
           )
         })}
 
@@ -779,7 +801,7 @@ export default function WorkoutEditor({ navigate, studentId, planId }) {
       </div>
 
       {showTemplate && <TemplateModal student={student} ageGroup={ageGroup} onApply={applyTemplate} onClose={()=>setShowTemplate(false)}/>}
-    </div>
+      </div>
     </div>
   )
 }
