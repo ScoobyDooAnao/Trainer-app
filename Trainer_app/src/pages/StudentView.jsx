@@ -1294,7 +1294,9 @@ export default function StudentView({ studentId }) {
   const [cardio,     setCardio]     = useState([])
   const [tab,        setTab]        = useState('treino')
   const [showMedidaModal, setShowMedidaModal] = useState(false)
-  const [loading,    setLoading]    = useState(true)
+  const [loading,        setLoading]        = useState(true)
+  const [confirmedToday, setConfirmedToday] = useState(false)
+  const [confirming,     setConfirming]     = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -1339,6 +1341,29 @@ export default function StudentView({ studentId }) {
 
   const day   = days[activeDay]
   const color = DAY_COLORS[activeDay % DAY_COLORS.length]
+
+  // Check if already confirmed today (any exercise_log for today)
+  useEffect(() => {
+    if (!studentId) return
+    supabase.from('exercise_logs')
+      .select('id').eq('student_id', studentId).eq('date', today()).limit(1)
+      .then(({ data }) => { if (data?.length) setConfirmedToday(true) })
+  }, [studentId])
+
+  const confirmWorkout = async () => {
+    if (confirmedToday || confirming || !day) return
+    setConfirming(true)
+    // Insert a presence log — uses a sentinel exercise_id of null
+    // We insert one record per day with no exercise_id to mark attendance
+    const { error } = await supabase.from('exercise_logs').insert({
+      student_id: studentId,
+      exercise_id: day.exercises?.[0]?.id || null,
+      date: today(),
+      sets: [],
+    })
+    setConfirming(false)
+    if (!error) setConfirmedToday(true)
+  }
 
   // Tabs config
   const TABS = [
@@ -1472,8 +1497,35 @@ export default function StudentView({ studentId }) {
                         <ExerciseLogRow key={ex.id} ex={ex} studentId={studentId} dayColor={color} isMobile={isMobile} />
                       ))
                     )}
+
                   </div>
                 )}
+
+                {/* ── Botão confirmar treino — sempre visível com plano ativo ── */}
+                <div style={{ marginTop: 16 }}>
+                  {confirmedToday ? (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '16px', borderRadius: 14, background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.25)' }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="#34D399"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                      <span style={{ fontSize: 15, fontWeight: 700, color: '#34D399' }}>Treino confirmado hoje!</span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={confirmWorkout}
+                      disabled={confirming}
+                      style={{
+                        width: '100%', padding: '18px', borderRadius: 14, border: 'none',
+                        cursor: confirming ? 'not-allowed' : 'pointer',
+                        background: confirming ? 'rgba(52,211,153,0.3)' : 'linear-gradient(135deg,#34D399,#059669)',
+                        color: '#022c22', fontWeight: 800, fontSize: 16,
+                        boxShadow: confirming ? 'none' : '0 4px 24px rgba(52,211,153,0.4)',
+                        transition: 'all 0.2s',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                      {confirming ? 'Confirmando...' : 'Confirmar Treino de Hoje'}
+                    </button>
+                  )}
+                </div>
               </>
             )}
           </>
