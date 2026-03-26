@@ -1170,7 +1170,8 @@ function ExerciseLogRow({ ex, studentId, dayColor, isMobile }) {
                   <div style={{ fontSize: 9, color: '#475569', textTransform: 'uppercase', letterSpacing: 1 }}>Descanso</div>
                   <div style={{ fontSize: 12, fontWeight: 600, color: '#64748B' }}>{ex.rest}</div>
                 </div>
-              </>}
+              </>
+            }
             </div>
 
             {ex.tip && <div style={{ fontSize: 12, color: '#475569', marginBottom: 8 }}>💡 {ex.tip}</div>}
@@ -1679,7 +1680,8 @@ export default function StudentView({ studentId }) {
               }}>
                 <span style={{ fontSize: 22, lineHeight: 1, filter: active ? 'drop-shadow(0 0 6px #34D39966)' : 'none', transition: 'filter 0.15s' }}>{icon}</span>
                 <span style={{ fontSize: 10, fontWeight: active ? 800 : 600, letterSpacing: 0.3 }}>{label}</span>
-                {active && <div style={{ position: 'absolute', bottom: 0, width: 32, height: 2, borderRadius: '2px 2px 0 0', background: '#34D399' }} />}
+                {active && <div style={{ position: 'absolute', bottom: 0, width: 32, height: 2, borderRadius: '2px 2px 0 0', background: '#34D399' }} />
+              }
               </button>
             )
           })}
