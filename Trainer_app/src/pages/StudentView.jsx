@@ -1352,6 +1352,14 @@ export default function StudentView({ studentId }) {
     </div>
   )
 
+  // Check if already confirmed today — must be before any conditional return
+  useEffect(() => {
+    if (!studentId) return
+    supabase.from('exercise_logs')
+      .select('id').eq('student_id', studentId).eq('date', today()).limit(1)
+      .then(({ data }) => { if (data?.length) setConfirmedToday(true) })
+  }, [studentId])
+
   if (!student) return (
     <div style={{ minHeight: '100vh', background: '#080B12', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}>
       Aluno não encontrado.
@@ -1361,19 +1369,9 @@ export default function StudentView({ studentId }) {
   const day   = days[activeDay]
   const color = DAY_COLORS[activeDay % DAY_COLORS.length]
 
-  // Check if already confirmed today (any exercise_log for today)
-  useEffect(() => {
-    if (!studentId) return
-    supabase.from('exercise_logs')
-      .select('id').eq('student_id', studentId).eq('date', today()).limit(1)
-      .then(({ data }) => { if (data?.length) setConfirmedToday(true) })
-  }, [studentId])
-
   const confirmWorkout = async () => {
     if (confirmedToday || confirming || !day) return
     setConfirming(true)
-    // Insert a presence log — uses a sentinel exercise_id of null
-    // We insert one record per day with no exercise_id to mark attendance
     const { error } = await supabase.from('exercise_logs').insert({
       student_id: studentId,
       exercise_id: day.exercises?.[0]?.id || null,
