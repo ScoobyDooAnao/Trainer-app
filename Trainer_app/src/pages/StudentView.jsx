@@ -1300,29 +1300,34 @@ export default function StudentView({ studentId }) {
 
   useEffect(() => {
     const load = async () => {
-      const { data: st } = await supabase.from('students').select('*').eq('id', studentId).single()
-      if (st) setStudent(st)
+      try {
+        const { data: st } = await supabase.from('students').select('*').eq('id', studentId).single()
+        if (st) setStudent(st)
 
-      const { data: plans } = await supabase.from('workout_plans').select('*')
-        .eq('student_id', studentId).eq('status', 'active')
-        .order('updated_at', { ascending: false }).limit(1)
+        const { data: plans } = await supabase.from('workout_plans').select('*')
+          .eq('student_id', studentId).eq('status', 'active')
+          .order('updated_at', { ascending: false }).limit(1)
 
-      if (plans?.[0]) {
-        setActivePlan(plans[0])
-        const { data: daysData } = await supabase.from('workout_days').select('*, exercises(*)')
-          .eq('plan_id', plans[0].id).order('order_index')
-        if (daysData) setDays(daysData.map(d => ({ ...d, exercises: (d.exercises || []).sort((a, b) => a.order_index - b.order_index) })))
+        if (plans?.[0]) {
+          setActivePlan(plans[0])
+          const { data: daysData } = await supabase.from('workout_days').select('*, exercises(*)')
+            .eq('plan_id', plans[0].id).order('order_index')
+          if (daysData) setDays(daysData.map(d => ({ ...d, exercises: (d.exercises || []).sort((a, b) => a.order_index - b.order_index) })))
+        }
+
+        const [{ data: pr }, { data: gs }, { data: cs }] = await Promise.all([
+          supabase.from('progress_entries').select('*').eq('student_id', studentId).order('date', { ascending: false }).limit(10),
+          supabase.from('student_goals').select('*').eq('student_id', studentId).order('created_at', { ascending: false }),
+          supabase.from('cardio_sessions').select('*').eq('student_id', studentId).order('date', { ascending: false }).limit(120),
+        ])
+        if (pr) setProgress(pr)
+        if (gs) setGoals(gs)
+        if (cs) setCardio(cs)
+      } catch (err) {
+        console.error('StudentView load error:', err)
+      } finally {
+        setLoading(false)
       }
-
-      const [{ data: pr }, { data: gs }, { data: cs }] = await Promise.all([
-        supabase.from('progress_entries').select('*').eq('student_id', studentId).order('date', { ascending: false }).limit(10),
-        supabase.from('student_goals').select('*').eq('student_id', studentId).order('created_at', { ascending: false }),
-        supabase.from('cardio_sessions').select('*').eq('student_id', studentId).order('date', { ascending: false }).limit(120),
-      ])
-      if (pr) setProgress(pr)
-      if (gs) setGoals(gs)
-      if (cs) setCardio(cs)
-      setLoading(false)
     }
     load()
   }, [studentId])
