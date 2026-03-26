@@ -1299,33 +1299,46 @@ export default function StudentView({ studentId }) {
   const [confirming,     setConfirming]     = useState(false)
 
   useEffect(() => {
+    if (!studentId) { setLoading(false); return }
+
+    const timeout = setTimeout(() => setLoading(false), 10000)
+
     const load = async () => {
       try {
-        const { data: st } = await supabase.from('students').select('*').eq('id', studentId).single()
+        const { data: st, error: stErr } = await supabase
+          .from('students').select('*').eq('id', studentId).single()
+        if (stErr) console.error('students error:', stErr.message)
         if (st) setStudent(st)
 
-        const { data: plans } = await supabase.from('workout_plans').select('*')
+        const { data: plans } = await supabase
+          .from('workout_plans').select('*')
           .eq('student_id', studentId).eq('status', 'active')
           .order('updated_at', { ascending: false }).limit(1)
 
         if (plans?.[0]) {
           setActivePlan(plans[0])
-          const { data: daysData } = await supabase.from('workout_days').select('*, exercises(*)')
+          const { data: daysData } = await supabase
+            .from('workout_days').select('*, exercises(*)')
             .eq('plan_id', plans[0].id).order('order_index')
-          if (daysData) setDays(daysData.map(d => ({ ...d, exercises: (d.exercises || []).sort((a, b) => a.order_index - b.order_index) })))
+          if (daysData) setDays(daysData.map(d => ({
+            ...d,
+            exercises: (d.exercises || []).sort((a, b) => a.order_index - b.order_index),
+          })))
         }
 
-        const [{ data: pr }, { data: gs }, { data: cs }] = await Promise.all([
+        const results = await Promise.allSettled([
           supabase.from('progress_entries').select('*').eq('student_id', studentId).order('date', { ascending: false }).limit(10),
           supabase.from('student_goals').select('*').eq('student_id', studentId).order('created_at', { ascending: false }),
           supabase.from('cardio_sessions').select('*').eq('student_id', studentId).order('date', { ascending: false }).limit(120),
         ])
-        if (pr) setProgress(pr)
-        if (gs) setGoals(gs)
-        if (cs) setCardio(cs)
+        const [prR, gsR, csR] = results
+        if (prR.status === 'fulfilled' && prR.value.data) setProgress(prR.value.data)
+        if (gsR.status === 'fulfilled' && gsR.value.data) setGoals(gsR.value.data)
+        if (csR.status === 'fulfilled' && csR.value.data) setCardio(csR.value.data)
       } catch (err) {
         console.error('StudentView load error:', err)
       } finally {
+        clearTimeout(timeout)
         setLoading(false)
       }
     }
