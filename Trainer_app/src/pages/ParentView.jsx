@@ -327,9 +327,8 @@ function EvolutionPanel({progress,logs,cardio,exerciseLogs}){
               {(()=>{
                 const vs=strengthPts.map(p=>p.maxW), mn=Math.min(...vs)-2, mx=Math.max(...vs)+2
                {(()=>{
+  {(()=>{
   const vs=strengthPts.map(p=>p.maxW), mn=Math.min(...vs)-2, mx=Math.max(...vs)+2
-  // ✅ NOVO: Verificar se há pelo menos 2 pontos
-  if(strengthPts.length < 2) return null
   const W=280,H=60,xp=(i)=>14+i*(W-28)/(strengthPts.length-1),yp=(v)=>H-8-((v-mn)/(mx-mn))*(H-16)
   const path=strengthPts.map((p,i)=>`${i===0?'M':'L'}${xp(i)},${yp(p.maxW)}`).join(' ')
   const area=`${path} L${xp(strengthPts.length-1)},${H} L${xp(0)},${H} Z`
