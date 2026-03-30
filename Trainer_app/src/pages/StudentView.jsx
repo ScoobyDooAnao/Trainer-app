@@ -29,7 +29,6 @@ const CAT_STAR_COLOR = {
   peso:'#34D399', imc:'#60A5FA', medida:'#A78BFA',
   forca:'#FBBF24', cardio:'#F87171', habito:'#F5C842', outro:'#94A3B8',
 }
-// Tokens de estilo compartilhados pelos componentes de Metas e Cárdio
 const CARD = {
   background:'rgba(13,17,23,0.92)', backdropFilter:'blur(14px)',
   WebkitBackdropFilter:'blur(14px)',
@@ -287,7 +286,6 @@ function NovaMetaModal({ studentId, goal, goals, onSave, onClose }) {
   const [saveError, setSaveError] = useState(null)
   const salvar = async () => {
     if (!titulo.trim()) return
-    // Check duplicate category
     if (sel?.categoria && sel.categoria !== 'outro') {
       const dupl = (goals||[]).filter(g => g.status==='ativa' && g.category===sel.categoria)
       if (dupl.length > 0) {
@@ -424,7 +422,6 @@ function TabMetas({ studentId, student, goals, onUpdate }) {
       {showModal && <NovaMetaModal studentId={studentId} goal={student?.goal} goals={goals}
         onSave={onUpdate} onClose={()=>setShowModal(false)} />}
 
-      {/* Header */}
       <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20 }}>
         <div>
           <div style={{ fontSize:20,fontWeight:900,color:'#E2E8F0',fontFamily:"'Nunito',sans-serif" }}>
@@ -443,10 +440,8 @@ function TabMetas({ studentId, student, goals, onUpdate }) {
         }}>+ Nova Meta</button>
       </div>
 
-      {/* ── CONSTELAÇÃO DE CONQUISTAS ── */}
       <ConstellationDisplay goals={concluidas} />
 
-      {/* Sugestões rápidas */}
       {(() => {
         const jaAdicionadas = goals.map(g=>g.title)
         const disponiveis = sugestoes.filter(s=>!jaAdicionadas.includes(s.titulo)&&s.titulo!=='Meta personalizada')
@@ -485,7 +480,6 @@ function TabMetas({ studentId, student, goals, onUpdate }) {
         )
       })()}
 
-      {/* Metas ativas */}
       {ativas.length===0 && concluidas.length===0 ? (
         <div style={{ textAlign:'center',padding:'40px 20px' }}>
           <div style={{ fontSize:44,marginBottom:12,animation:'float 3s ease-in-out infinite' }}>🌌</div>
@@ -522,7 +516,6 @@ function TabMetas({ studentId, student, goals, onUpdate }) {
                           </span>
                         </div>
 
-                        {/* Progress bar */}
                         {g.target_value && (
                           <div style={{ marginBottom:8 }}>
                             <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:5 }}>
@@ -651,7 +644,6 @@ function StudentCardioTab({ studentId, student, sessions, onNewSession }) {
   const filtered = filter==='todos' ? sessions : sessions.filter(s=>s.type===filter)
   const totalMin = sessions.reduce((a,s)=>a+(s.duration_minutes||0),0)
   const totalKm  = sessions.reduce((a,s)=>a+(s.distance_km||0),0)
-  const avgPse   = sessions.length ? (sessions.reduce((a,s)=>a+(s.pse||0),0)/sessions.length).toFixed(1) : '—'
 
   const paceData = sessions
     .filter(s=>s.distance_km&&s.duration_minutes&&['corrida','esteira','bike'].includes(s.type))
@@ -661,7 +653,6 @@ function StudentCardioTab({ studentId, student, sessions, onNewSession }) {
     <div style={{ animation:'fadeUp 0.4s ease' }}>
       {modal && <SvCardioModal studentId={studentId} onSave={()=>{onNewSession();setModal(false)}} onClose={()=>setModal(false)} />}
 
-      {/* Header */}
       <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20 }}>
         <div>
           <div style={{ fontSize:20,fontWeight:900,color:'#E2E8F0',fontFamily:"'Nunito',sans-serif" }}>❤️ Cárdio</div>
@@ -675,7 +666,6 @@ function StudentCardioTab({ studentId, student, sessions, onNewSession }) {
         }}>+ Registrar</button>
       </div>
 
-      {/* Stats */}
       {sessions.length > 0 && (
         <div style={{ ...CARD, marginBottom:14 }}>
           <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10 }}>
@@ -697,7 +687,6 @@ function StudentCardioTab({ studentId, student, sessions, onNewSession }) {
         </div>
       )}
 
-      {/* Prescrição inteligente */}
       {presc && (
         <div style={{ ...CARD, marginBottom:14 }}>
           <div style={{ fontSize:11,color:'#A78BFA',fontWeight:800,textTransform:'uppercase',
@@ -716,7 +705,6 @@ function StudentCardioTab({ studentId, student, sessions, onNewSession }) {
               </div>
             ))}
           </div>
-          {/* PSE bar */}
           <div style={{ background:'rgba(255,255,255,0.04)',borderRadius:10,padding:'10px 14px',marginBottom:8 }}>
             <div style={{ fontSize:10,color:'#475569',fontWeight:800,textTransform:'uppercase',
               letterSpacing:1,marginBottom:6,fontFamily:"'Nunito',sans-serif" }}>🎯 PSE Alvo</div>
@@ -737,13 +725,11 @@ function StudentCardioTab({ studentId, student, sessions, onNewSession }) {
         </div>
       )}
 
-      {/* Gráfico pace — SVG puro (sem dependência) */}
       {paceData.length >= 2 && (() => {
         const W = 340, H = 140, PAD = { t:14, r:14, b:30, l:44 }
         const vals  = paceData.map(d => d.Pace)
         const minV  = Math.min(...vals), maxV = Math.max(...vals)
         const range = maxV - minV || 1
-        // pace menor = melhor, eixo Y invertido (melhor no topo)
         const cx = (i) => PAD.l + (i/(paceData.length-1))*(W-PAD.l-PAD.r)
         const cy = (v) => PAD.t + ((v-minV)/range)*(H-PAD.t-PAD.b)
         const pts = paceData.map((d,i) => `${cx(i)},${cy(d.Pace)}`).join(' ')
@@ -756,7 +742,6 @@ function StudentCardioTab({ studentId, student, sessions, onNewSession }) {
               fontFamily:"'Nunito',sans-serif" }}>🏃 Evolução do Pace</div>
             <div style={{ overflowX:'auto' }}>
               <svg width={W} height={H} style={{ display:'block', minWidth: W }}>
-                {/* grid lines */}
                 {[0,.5,1].map(t => {
                   const y = PAD.t + t*(H-PAD.t-PAD.b)
                   const labelVal = minV + (1-t)*range
@@ -768,18 +753,14 @@ function StudentCardioTab({ studentId, student, sessions, onNewSession }) {
                     </g>
                   )
                 })}
-                {/* x axis labels */}
                 {paceData.map((d,i) => (
                   (i===0 || i===paceData.length-1 || (paceData.length>4 && i===Math.floor(paceData.length/2)))
                     ? <text key={i} x={cx(i)} y={H-PAD.b+14} textAnchor="middle" fontSize={9} fill="#475569">{d.date}</text>
                     : null
                 ))}
-                {/* area fill */}
                 <path d={area} fill="rgba(167,139,250,0.08)" />
-                {/* line */}
                 <polyline points={pts} fill="none" stroke="#A78BFA" strokeWidth={2.5}
                   strokeLinejoin="round" strokeLinecap="round" />
-                {/* dots */}
                 {paceData.map((d,i) => (
                   <circle key={i} cx={cx(i)} cy={cy(d.Pace)} r={4}
                     fill="#A78BFA" stroke="#02040F" strokeWidth={2} />
@@ -794,7 +775,6 @@ function StudentCardioTab({ studentId, student, sessions, onNewSession }) {
         )
       })()}
 
-      {/* Filtro */}
       <div style={{ display:'flex',flexWrap:'wrap',gap:6,marginBottom:12 }}>
         <button onClick={()=>setFilter('todos')} style={{
           padding:'5px 14px',borderRadius:20,fontSize:11,fontWeight:800,cursor:'pointer',
@@ -810,7 +790,6 @@ function StudentCardioTab({ studentId, student, sessions, onNewSession }) {
         ))}
       </div>
 
-      {/* Histórico */}
       {filtered.length===0 ? (
         <div style={{ textAlign:'center',padding:'50px 20px',color:'#334155' }}>
           <div style={{ fontSize:36,marginBottom:10,animation:'float 3s ease-in-out infinite' }}>❤️</div>
@@ -861,7 +840,6 @@ function StudentCardioTab({ studentId, student, sessions, onNewSession }) {
     </div>
   )
 }
-
 
 // ── NOVA MEDIDA MODAL ────────────────────────────────────────────────────────
 function NovaMedidaModal({ studentId, onSave, onClose }) {
@@ -921,7 +899,6 @@ function NovaMedidaModal({ studentId, onSave, onClose }) {
         <label style={LBL}>Data</label>
         <input type="date" style={INP} value={date} onChange={e=>setDate(e.target.value)} />
 
-        {/* Grid 2 colunas para as medidas */}
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 12px' }}>
           {campos.map(({ label, unit, value, set }) => (
             <div key={label}>
@@ -1101,7 +1078,7 @@ function Toast({ msg, onDone }) {
   )
 }
 
-// ── ExerciseLogRow — responsivo ───────────────────────────────────────────────
+// ── ExerciseLogRow ────────────────────────────────────────────────────────────
 function ExerciseLogRow({ ex, studentId, dayColor, isMobile }) {
   const [open,    setOpen]    = useState(false)
   const [sets,    setSets]    = useState(parseSets(ex.sets))
@@ -1140,10 +1117,8 @@ function ExerciseLogRow({ ex, studentId, dayColor, isMobile }) {
 
       <div style={{ padding: isMobile ? '14px 16px' : '14px 20px', borderBottom: '1px solid rgba(255,255,255,0.04)', background: open ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
 
-        {/* Layout MOBILE: stack vertical */}
         {isMobile ? (
           <div>
-            {/* Nome + badge tipo */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
               {ex.type && (
                 <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, fontWeight: 700, background: `${typeColor}22`, color: typeColor, border: `1px solid ${typeColor}40` }}>
@@ -1153,7 +1128,6 @@ function ExerciseLogRow({ ex, studentId, dayColor, isMobile }) {
               <span style={{ fontWeight: 700, fontSize: 15, color: '#E2E8F0' }}>{ex.name}</span>
             </div>
 
-            {/* Séries · Reps · Descanso em linha */}
             <div style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 9, color: '#475569', textTransform: 'uppercase', letterSpacing: 1 }}>Séries</div>
@@ -1170,13 +1144,11 @@ function ExerciseLogRow({ ex, studentId, dayColor, isMobile }) {
                   <div style={{ fontSize: 9, color: '#475569', textTransform: 'uppercase', letterSpacing: 1 }}>Descanso</div>
                   <div style={{ fontSize: 12, fontWeight: 600, color: '#64748B' }}>{ex.rest}</div>
                 </div>
-              </>
-            }
+              </>}
             </div>
 
             {ex.tip && <div style={{ fontSize: 12, color: '#475569', marginBottom: 8 }}>💡 {ex.tip}</div>}
 
-            {/* Botão registrar — full width no mobile */}
             <button
               onClick={() => { setOpen(o => !o); setSaved(false) }}
               style={{
@@ -1189,7 +1161,6 @@ function ExerciseLogRow({ ex, studentId, dayColor, isMobile }) {
             </button>
           </div>
         ) : (
-          /* Layout DESKTOP: grid 4 colunas */
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 0.5fr 0.7fr 0.6fr', gap: 8, alignItems: 'start' }}>
             <div>
               {ex.type && (
@@ -1217,11 +1188,8 @@ function ExerciseLogRow({ ex, studentId, dayColor, isMobile }) {
           </div>
         )}
 
-        {/* Painel de log inline */}
         {open && (
           <div style={{ marginTop: 14, background: '#080B12', borderRadius: 14, border: `1px solid ${dayColor}25`, padding: isMobile ? 14 : 16 }}>
-
-            {/* Último registro */}
             {lastLog && (
               <div style={{ marginBottom: 12, background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.15)', borderRadius: 10, padding: '10px 14px' }}>
                 <div style={{ fontSize: 10, color: '#34D399', fontWeight: 700, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>
@@ -1240,14 +1208,12 @@ function ExerciseLogRow({ ex, studentId, dayColor, isMobile }) {
               <div style={{ fontSize: 12, color: '#334155', marginBottom: 10 }}>Nenhum registro anterior para este exercício.</div>
             )}
 
-            {/* Header colunas */}
             <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 1fr', gap: 8, marginBottom: 8 }}>
               {['Série', 'Carga (kg)', 'Reps feitas'].map(h => (
                 <div key={h} style={{ fontSize: 9, color: '#334155', textTransform: 'uppercase', letterSpacing: 1 }}>{h}</div>
               ))}
             </div>
 
-            {/* Inputs por série */}
             {sets.map((s, idx) => (
               <div key={idx} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 1fr', gap: 8, marginBottom: 8, alignItems: 'center' }}>
                 <div style={{ fontSize: 13, color: dayColor, fontWeight: 800, textAlign: 'center' }}>S{s.set}</div>
@@ -1299,6 +1265,8 @@ export default function StudentView({ studentId }) {
   const [confirmedToday, setConfirmedToday] = useState(false)
   const [confirming,     setConfirming]     = useState(false)
 
+  // ── FIX: ambos os useEffects ANTES de qualquer return condicional ──
+
   useEffect(() => {
     if (!studentId) { setLoading(false); return }
 
@@ -1346,19 +1314,21 @@ export default function StudentView({ studentId }) {
     load()
   }, [studentId])
 
-  if (loading) return (
-    <div style={{ minHeight: '100vh', background: '#080B12', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#34D399', fontSize: 18, fontFamily: 'system-ui,sans-serif' }}>
-      ⚙️ Carregando seu treino...
-    </div>
-  )
-
-  // Check if already confirmed today — must be before any conditional return
+  // ── FIX: movido para ANTES do return condicional ──
   useEffect(() => {
     if (!studentId) return
     supabase.from('exercise_logs')
       .select('id').eq('student_id', studentId).eq('date', today()).limit(1)
       .then(({ data }) => { if (data?.length) setConfirmedToday(true) })
   }, [studentId])
+
+  // ── Returns condicionais APÓS todos os hooks ──
+
+  if (loading) return (
+    <div style={{ minHeight: '100vh', background: '#080B12', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#34D399', fontSize: 18, fontFamily: 'system-ui,sans-serif' }}>
+      ⚙️ Carregando seu treino...
+    </div>
+  )
 
   if (!student) return (
     <div style={{ minHeight: '100vh', background: '#080B12', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}>
@@ -1382,7 +1352,6 @@ export default function StudentView({ studentId }) {
     if (!error) setConfirmedToday(true)
   }
 
-  // Tabs config
   const TABS = [
     { id: 'treino',   icon: '🏋️', label: 'Treino'   },
     { id: 'metas',    icon: '🎯', label: 'Metas'    },
@@ -1396,16 +1365,14 @@ export default function StudentView({ studentId }) {
       background: isMobile ? 'transparent' : '#080B12',
       fontFamily: "'Segoe UI', system-ui, sans-serif",
       color: '#E2E8F0',
-      // Espaço para a bottom nav no mobile
       paddingBottom: isMobile ? 80 : 0,
       position: 'relative',
     }}>
-      {/* ── Céu estrelado — apenas mobile ── */}
       {isMobile && <><CosmicCSS /><StarField /></>}
 
       <div style={{ maxWidth: 680, margin: '0 auto', padding: isMobile ? '16px 14px' : '24px 16px', position: 'relative', zIndex: 1 }}>
 
-        {/* ── Header ── */}
+        {/* Header */}
         <div style={{ background: 'linear-gradient(135deg,#0f2027,#203a43)', borderRadius: isMobile ? 16 : 20, padding: isMobile ? '18px 18px' : 24, marginBottom: 16, border: '1px solid rgba(52,211,153,0.15)' }}>
           <div style={{ fontSize: 10, color: '#34D399', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 4 }}>Seu Plano de Treino</div>
           <div style={{ fontSize: isMobile ? 20 : 22, fontWeight: 800, color: '#fff', marginBottom: 2 }}>
@@ -1419,7 +1386,7 @@ export default function StudentView({ studentId }) {
           )}
         </div>
 
-        {/* ── Tabs — desktop only (mobile usa bottom nav) ── */}
+        {/* Tabs — desktop only */}
         {!isMobile && (
           <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
             {TABS.map(({ id, icon, label }) => (
@@ -1432,7 +1399,7 @@ export default function StudentView({ studentId }) {
           </div>
         )}
 
-        {/* ── ABA TREINO ── */}
+        {/* ABA TREINO */}
         {tab === 'treino' && (
           <>
             {!activePlan || days.length === 0 ? (
@@ -1442,9 +1409,7 @@ export default function StudentView({ studentId }) {
               </div>
             ) : (
               <>
-                {/* ── Seletor de dias ── */}
                 {isMobile ? (
-                  /* Mobile: scroll horizontal, botões maiores */
                   <div style={{ display: 'flex', gap: 8, marginBottom: 16, overflowX: 'auto', paddingBottom: 4, WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
                     {days.map((d, i) => {
                       const c = DAY_COLORS[i % DAY_COLORS.length]
@@ -1463,7 +1428,6 @@ export default function StudentView({ studentId }) {
                     })}
                   </div>
                 ) : (
-                  /* Desktop: flex wrap */
                   <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
                     {days.map((d, i) => {
                       const c = DAY_COLORS[i % DAY_COLORS.length]
@@ -1482,10 +1446,8 @@ export default function StudentView({ studentId }) {
                   </div>
                 )}
 
-                {/* ── Card do dia ── */}
                 {day && (
                   <div style={{ background: '#0D1117', borderRadius: 16, overflow: 'hidden', border: `1px solid ${color}30` }}>
-                    {/* Header do dia */}
                     <div style={{ background: `${color}12`, padding: isMobile ? '14px 16px' : '16px 20px', borderBottom: `1px solid ${color}25` }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, boxShadow: `0 0 8px ${color}`, flexShrink: 0 }} />
@@ -1497,7 +1459,6 @@ export default function StudentView({ studentId }) {
                       </div>
                     </div>
 
-                    {/* Cabeçalho de colunas — só no desktop */}
                     {!isMobile && (
                       <div style={{ display: 'grid', gridTemplateColumns: '2fr 0.5fr 0.7fr 0.6fr', gap: 8, padding: '10px 20px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                         {['Exercício', 'Séries', 'Reps', 'Descanso'].map(h => (
@@ -1506,7 +1467,6 @@ export default function StudentView({ studentId }) {
                       </div>
                     )}
 
-                    {/* Lista de exercícios */}
                     {day.exercises.length === 0 ? (
                       <div style={{ padding: 30, textAlign: 'center', color: '#334155', fontSize: 13 }}>Nenhum exercício neste dia ainda.</div>
                     ) : (
@@ -1514,11 +1474,9 @@ export default function StudentView({ studentId }) {
                         <ExerciseLogRow key={ex.id} ex={ex} studentId={studentId} dayColor={color} isMobile={isMobile} />
                       ))
                     )}
-
                   </div>
                 )}
 
-                {/* ── Botão confirmar treino — sempre visível com plano ativo ── */}
                 <div style={{ marginTop: 16 }}>
                   {confirmedToday ? (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '16px', borderRadius: 14, background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.25)' }}>
@@ -1548,7 +1506,7 @@ export default function StudentView({ studentId }) {
           </>
         )}
 
-        {/* ── ABA METAS ── */}
+        {/* ABA METAS */}
         {tab === 'metas' && (
           <TabMetas
             studentId={studentId}
@@ -1562,7 +1520,7 @@ export default function StudentView({ studentId }) {
           />
         )}
 
-        {/* ── ABA CÁRDIO ── */}
+        {/* ABA CÁRDIO */}
         {tab === 'cardio' && (
           <StudentCardioTab
             studentId={studentId}
@@ -1576,7 +1534,7 @@ export default function StudentView({ studentId }) {
           />
         )}
 
-        {/* ── ABA EVOLUÇÃO ── */}
+        {/* ABA EVOLUÇÃO */}
         {tab === 'evolucao' && (
           <div>
             {showMedidaModal && (
@@ -1591,7 +1549,6 @@ export default function StudentView({ studentId }) {
               />
             )}
 
-            {/* Header com botão */}
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
               <div>
                 <div style={{ fontSize:18, fontWeight:800, color:'#E2E8F0' }}>📈 Evolução</div>
@@ -1653,13 +1610,12 @@ export default function StudentView({ studentId }) {
           </div>
         )}
 
-        {/* Rodapé */}
         <div style={{ marginTop: 24, textAlign: 'center', fontSize: 11, color: '#1E293B' }}>
           Trainer App · Plano gerenciado pelo seu professor
         </div>
       </div>
 
-      {/* ── Bottom Navigation — MOBILE ONLY ── */}
+      {/* Bottom Navigation — MOBILE ONLY */}
       {isMobile && (
         <nav style={{
           position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100,
@@ -1678,8 +1634,7 @@ export default function StudentView({ studentId }) {
               }}>
                 <span style={{ fontSize: 22, lineHeight: 1, filter: active ? 'drop-shadow(0 0 6px #34D39966)' : 'none', transition: 'filter 0.15s' }}>{icon}</span>
                 <span style={{ fontSize: 10, fontWeight: active ? 800 : 600, letterSpacing: 0.3 }}>{label}</span>
-                {active && <div style={{ position: 'absolute', bottom: 0, width: 32, height: 2, borderRadius: '2px 2px 0 0', background: '#34D399' }} />
-              }
+                {active && <div style={{ position: 'absolute', bottom: 0, width: 32, height: 2, borderRadius: '2px 2px 0 0', background: '#34D399' }} />}
               </button>
             )
           })}
