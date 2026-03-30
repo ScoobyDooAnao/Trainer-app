@@ -326,10 +326,14 @@ function EvolutionPanel({progress,logs,cardio,exerciseLogs}){
               <defs><linearGradient id="sGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#34D399" stopOpacity="0.25"/><stop offset="100%" stopColor="#34D399" stopOpacity="0"/></linearGradient></defs>
               {(()=>{
                 const vs=strengthPts.map(p=>p.maxW), mn=Math.min(...vs)-2, mx=Math.max(...vs)+2
-                const W=280,H=60,xp=(i)=>14+i*(W-28)/(strengthPts.length-1),yp=(v)=>H-8-((v-mn)/(mx-mn))*(H-16)
-                const path=strengthPts.map((p,i)=>`${i===0?'M':'L'}${xp(i)},${yp(p.maxW)}`).join(' ')
-                const area=`${path} L${xp(strengthPts.length-1)},${H} L${xp(0)},${H} Z`
-                return<>
+               {(()=>{
+  const vs=strengthPts.map(p=>p.maxW), mn=Math.min(...vs)-2, mx=Math.max(...vs)+2
+  // ✅ NOVO: Verificar se há pelo menos 2 pontos
+  if(strengthPts.length < 2) return null
+  const W=280,H=60,xp=(i)=>14+i*(W-28)/(strengthPts.length-1),yp=(v)=>H-8-((v-mn)/(mx-mn))*(H-16)
+  const path=strengthPts.map((p,i)=>`${i===0?'M':'L'}${xp(i)},${yp(p.maxW)}`).join(' ')
+  const area=`${path} L${xp(strengthPts.length-1)},${H} L${xp(0)},${H} Z`
+  return<>
                   <path d={area} fill="url(#sGrad)"/>
                   <path d={path} fill="none" stroke="#34D399" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   {strengthPts.map((p,i)=><circle key={i} cx={xp(i)} cy={yp(p.maxW)} r="3" fill="#34D399"/>)}
