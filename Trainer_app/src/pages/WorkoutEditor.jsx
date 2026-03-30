@@ -173,7 +173,7 @@ const EXERCISE_BANK = [
   // ── Mobilidade / Alongamento ────────────────────────────────────────────────
   { name:'Gato-Vaca',                        type:'Mobilidade', sets:'2', reps:'10-15',  rest:'30s',  tip:'Mobilidade torácica e lombar, ritmo respiratório' },
   { name:'Mobilidade de Quadril 90/90',      type:'Mobilidade', sets:'2', reps:'8-10',   rest:'30s',  tip:'Rotação interna e externa de quadril sentado' },
-  { name:'World's Greatest Stretch',         type:'Mobilidade', sets:'2', reps:'6-8',    rest:'30s',  tip:'Combinação de lunge, rotação e extensão torácica' },
+  { name:"World's Greatest Stretch", type:'Mobilidade', sets:'2', reps:'6-8', rest:'30s', tip:'Combinação de lunge, rotação e extensão torácica' },
   { name:'Hip Circle (Círculo de Quadril)',  type:'Mobilidade', sets:'2', reps:'10 cada',rest:'30s',  tip:'Circundução completa, mantém tronco estável' },
   { name:'Abertura Torácica (Thread Needle)',type:'Mobilidade', sets:'2', reps:'8-10',   rest:'30s',  tip:'Mão desliza pelo chão sob o tronco' },
   { name:'Alongamento de Isquiotibial',      type:'Mobilidade', sets:'2', reps:'30-45s', rest:'20s',  tip:'Perna estendida, flexão do tronco sem arredondar lombar' },
