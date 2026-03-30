@@ -72,14 +72,12 @@ function DuplicarPlanoModal({ plan, student, onClose }) {
     if (!selected) return
     setSaving(true)
     try {
-      // Busca plano completo com dias e exercícios
       const { data: fullPlan } = await supabase
         .from('workout_plans')
         .select('*, workout_days(*, exercises(*))')
         .eq('id', plan.id)
         .single()
 
-      // Cria novo plano para o aluno destino
       const { data: newPlan } = await supabase
         .from('workout_plans')
         .insert([{ student_id: selected, teacher_id: student.teacher_id, title: fullPlan.title + ' (cópia)', status: 'draft' }])
@@ -87,7 +85,6 @@ function DuplicarPlanoModal({ plan, student, onClose }) {
 
       if (!newPlan) throw new Error('Falha ao criar plano')
 
-      // Copia dias e exercícios sequencialmente
       for (const day of (fullPlan.workout_days || [])) {
         const { data: newDay } = await supabase
           .from('workout_days')
@@ -174,10 +171,6 @@ function DuplicarPlanoModal({ plan, student, onClose }) {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ── MOTOR DE AVALIAÇÃO CIENTÍFICA v2 ───────────────────────────────────────
-// 11 pilares ponderados + confiança + histórico + recomendações automáticas
-// Refs: ACSM 2022, Schoenfeld 2017, Kraemer 2004, Tanaka 2001,
-//       Balyi LTAD 2013, WHO 2020, Boyle 2016, Foster 1998 (ACWR),
-//       Fonseca 2014 (stimulus variation), NSCA Guidelines 2021
 // ═══════════════════════════════════════════════════════════════════════════
 
 function calcAge(student) {
@@ -188,8 +181,6 @@ function calcAge(student) {
   return student.age ? parseInt(student.age) : null
 }
 
-// ── PHV & Tanner (apenas para <18 anos) ──────────────────────────────────
-// Tanner 1970: altura alvo genética (approximação estatística, não diagnóstico)
 function calcTargetHeight(fatherCm, motherCm, sex) {
   if (!fatherCm || !motherCm) return null
   const raw = sex === 'M'
@@ -198,8 +189,6 @@ function calcTargetHeight(fatherCm, motherCm, sex) {
   return { target: Math.round(raw), low: Math.round(raw - 8.5), high: Math.round(raw + 8.5) }
 }
 
-// Mirwald 2002: Maturity Offset (anos antes/depois do PHV)
-// Requer: altura (cm), peso (kg), altura sentado (cm), idade decimal
 function calcMaturityOffset(heightCm, weightKg, sittingCm, ageDecimal, sex) {
   if (!heightCm || !weightKg || !sittingCm || !ageDecimal) return null
   const legLength = heightCm - sittingCm
@@ -230,7 +219,6 @@ function offsetLabel(offset) {
   return               { label: 'Pós-puberdade',      color: '#C084FC', desc: 'Base consolidada — periodização de atleta jovem competitivo' }
 }
 
-// TGMD-3 — 13 padrões motores (Ulrich 2019)
 const TGMD3_LOCOMOTION = [
   { id:'corrida',    label:'Corrida',           desc:'Padrão de corrida: braços em oposição, fase aérea visível, apoio no antepé' },
   { id:'galope',     label:'Galope',            desc:'Passo-toque rítmico lateral, corpo levemente inclinado para frente' },
@@ -272,7 +260,6 @@ function getScoreColor(score) {
   return { text: '#F87171', bg: 'rgba(248,113,113,0.12)', border: 'rgba(248,113,113,0.3)', label: 'Crítico' }
 }
 
-// ── Confiança da avaliação ─────────────────────────────────────────────────
 function getConfidence({ allExercises, exerciseLogs, cardioSessions, progress, student, allDays }) {
   let pts = 0
   const items = []
@@ -291,7 +278,6 @@ function getConfidence({ allExercises, exerciseLogs, cardioSessions, progress, s
   else if (progress.length === 1)                { pts += 7;  items.push('1 avaliação física') }
   if (cardioSessions.length >= 5)                { pts += 10; items.push('histórico cárdio') }
   else if (cardioSessions.length >= 1)           { pts += 5;  items.push('cárdio parcial') }
-  // Span temporal dos logs
   if (exerciseLogs.length >= 2) {
     const dates = exerciseLogs.map(l => l.date).sort()
     const spanWeeks = (new Date(dates[dates.length-1]) - new Date(dates[0])) / (7*864e5)
@@ -300,7 +286,6 @@ function getConfidence({ allExercises, exerciseLogs, cardioSessions, progress, s
   return { pct: Math.min(100, pts), items }
 }
 
-// ── Recomendações automáticas por pilar ───────────────────────────────────
 const RECS = {
   volume:     s => s >= 80 ? [] : s >= 50 ? ['Aumente gradualmente para 15–20 séries/semana por grupo muscular (ACSM 2022).'] : ['Cadastre o plano ativo com séries e grupos musculares para avaliação completa.', 'Volume atual muito baixo — considere 10+ séries/semana para resultados mínimos.'],
   freq:       s => s >= 80 ? [] : s >= 55 ? ['Ajuste a frequência semanal de acordo com o objetivo: Massa/Emagrecimento 3–5×, Força 3–4×.'] : ['Nenhum dia de treino configurado. Cadastre os dias da semana no plano ativo.'],
@@ -323,23 +308,32 @@ function generateRecommendations(pilares) {
     .slice(0, 6)
 }
 
-// ── Motor de avaliação ─────────────────────────────────────────────────────
 function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLogs, cardioSessions, progress }) {
   const age    = calcAge(student)
   const goal   = student.goal || ''
   const level  = student.level || 'Iniciante'
 
-  // ── Pillar 1: Volume ─────────────────────────────────────────────────────
   const totalSets = allExercises.reduce((sum, ex) => sum + (parseInt(ex.sets) || 3), 0)
   let volumeScore = 0, volumeMsg = ''
 
+  const FREQ = {
+    'Ganho de Massa':           { min: 3, max: 5, ideal: '3–5×/sem' },
+    'Emagrecimento':            { min: 3, max: 5, ideal: '3–5×/sem' },
+    'Condicionamento':          { min: 4, max: 5, ideal: '4–5×/sem' },
+    'Força e Performance':      { min: 3, max: 4, ideal: '3–4×/sem' },
+    'Saúde e Bem-Estar':        { min: 2, max: 4, ideal: '2–4×/sem' },
+    'Iniciação Esportiva':      { min: 2, max: 3, ideal: '2–3×/sem' },
+    'Desenvolvimento Atlético': { min: 3, max: 4, ideal: '3–4×/sem' },
+    'Treinamento Competitivo':  { min: 3, max: 5, ideal: '3–5×/sem' },
+  }
+  const freqTarget = FREQ[goal] || { min: 3, max: 5, ideal: '3–5×/sem' }
+  const daysPerWeek = plannedDays.length
+
   if (goal === 'Saúde e Bem-Estar') {
-    // Saúde e Bem-Estar: avalia combinação força + cardio vs diretrizes OMS/ACSM EIM
-    // OMS 2020: ≥150 min/sem aeróbio moderado + força 2x/sem
     const now_vol = new Date()
     const last14c = (cardioSessions||[]).filter(s => (now_vol - new Date(s.date+'T12:00:00')) < 14*864e5)
     const weeklyCardioMin = last14c.reduce((a,s) => a+(s.duration_minutes||0), 0) / 2
-    const hasStrength = daysPerWeek >= 2 && totalSets >= 4  // pelo menos 2 dias e 4 séries
+    const hasStrength = daysPerWeek >= 2 && totalSets >= 4
     const cardioOk   = weeklyCardioMin >= 150
     const cardioMod  = weeklyCardioMin >= 90
 
@@ -363,8 +357,6 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
       volumeMsg = `Excelente combinação: força ${daysPerWeek}×/sem (${totalSets} séries) + ~${Math.round(weeklyCardioMin)} min/sem de cardio. Dentro das diretrizes OMS 2020 e ACSM Exercise is Medicine.`
     }
   } else {
-    // Demais objetivos — lógica original (hipertrofia/performance)
-    // ACSM 2022: 10–20 séries/grupo muscular/semana (Schoenfeld 2017)
     if (totalSets === 0) {
       volumeScore = 0
       volumeMsg = 'Nenhum exercício cadastrado no plano ativo.'
@@ -386,20 +378,6 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
     }
   }
 
-  // ── Pillar 2: Frequência Semanal ─────────────────────────────────────────
-  // ACSM Position Stand 2022 por objetivo
-  const FREQ = {
-    'Ganho de Massa':           { min: 3, max: 5, ideal: '3–5×/sem' },
-    'Emagrecimento':            { min: 3, max: 5, ideal: '3–5×/sem' },
-    'Condicionamento':          { min: 4, max: 5, ideal: '4–5×/sem' },
-    'Força e Performance':      { min: 3, max: 4, ideal: '3–4×/sem' },
-    'Saúde e Bem-Estar':        { min: 2, max: 4, ideal: '2–4×/sem' },
-    'Iniciação Esportiva':      { min: 2, max: 3, ideal: '2–3×/sem' },
-    'Desenvolvimento Atlético': { min: 3, max: 4, ideal: '3–4×/sem' },
-    'Treinamento Competitivo':  { min: 3, max: 5, ideal: '3–5×/sem' },
-  }
-  const freqTarget = FREQ[goal] || { min: 3, max: 5, ideal: '3–5×/sem' }
-  const daysPerWeek = plannedDays.length
   let freqScore = 0, freqMsg = ''
   if (daysPerWeek === 0) {
     freqScore = 0; freqMsg = 'Nenhum dia de treino configurado no plano.'
@@ -411,8 +389,6 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
     freqScore = 65; freqMsg = `${daysPerWeek} dias/semana — frequência elevada. Verifique dias de descanso para recuperação (ACSM: ${freqTarget.ideal}).`
   }
 
-  // ── Pillar 3: Equilíbrio Muscular ────────────────────────────────────────
-  // Boyle 2016 (Functional Training Bible): razão puxada:empurrão 1:1–1.2
   const PUSH = ['Peito', 'Tríceps', 'Ombro']
   const PULL = ['Costas', 'Bíceps']
   const ANTERIOR  = ['Quadríceps']
@@ -447,8 +423,6 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
       ? `Boa distribuição push/pull detectada (${pushN} empurrão : ${pullN} puxada). Equilíbrio muscular adequado.`
       : 'Não foi possível avaliar — adicione o tipo muscular nos exercícios do plano.'
 
-  // ── Pillar 4: Progressão de Carga ────────────────────────────────────────
-  // ACSM FITT-VP: sobrecarga progressiva 2–10% por semana (Kraemer 2004)
   let progressScore = 50, progressMsg = 'Dados insuficientes para avaliar progressão (mínimo 2 registros por exercício).'
 
   if (exerciseLogs && exerciseLogs.length >= 3) {
@@ -475,8 +449,6 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
     }
   }
 
-  // ── Pillar 5: Adequação ao Objetivo ──────────────────────────────────────
-  // Rep ranges: Schoenfeld 2010 — força 1-6, hipertrofia 6-12, endurance >12
   const REP_RANGES = {
     'Ganho de Massa':           { min: 6,  max: 12, label: '6–12 reps (zona de hipertrofia)' },
     'Força e Performance':      { min: 1,  max: 6,  label: '1–6 reps (zona de força máxima)' },
@@ -503,61 +475,34 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
   }
 
   if (goal === 'Saúde e Bem-Estar') {
-    // ── Saúde e Bem-Estar — avaliação completamente diferente ──
-    // Foco: exercícios multiarticulares funcionais + mobilidade + cardio OMS 2020
     objScore = 70; objIssues = []
-
-    // 1. Exercícios multiarticulares funcionais (Cook 2010; ACSM EIM)
     const FUNCTIONAL_KEYWORDS = ['agachamento','squat','leg press','terra','deadlift','afundo','lunge','step','remada','puxada','pull','supino','desenvolvimento','flexão','push']
     const hasFunctional = allExercises.filter(ex =>
       FUNCTIONAL_KEYWORDS.some(kw => (ex.name||'').toLowerCase().includes(kw))
     ).length
     const functionalPct = allExercises.length > 0 ? hasFunctional / allExercises.length : 0
 
-    if (functionalPct >= 0.6) {
-      objScore += 15
-    } else if (functionalPct >= 0.3) {
-      objScore += 5
-      objIssues.push('menos de 60% dos exercícios são multiarticulares funcionais — para saúde geral priorize padrões: agachar, empurrar, puxar, carregar (Cook 2010)')
-    } else if (allExercises.length > 0) {
-      objScore -= 10
-      objIssues.push('poucos exercícios funcionais detectados — ACSM EIM recomenda movimentos multiarticulares como base da prescrição para saúde')
-    }
+    if (functionalPct >= 0.6) { objScore += 15 }
+    else if (functionalPct >= 0.3) { objScore += 5; objIssues.push('menos de 60% dos exercícios são multiarticulares funcionais — para saúde geral priorize padrões: agachar, empurrar, puxar, carregar (Cook 2010)') }
+    else if (allExercises.length > 0) { objScore -= 10; objIssues.push('poucos exercícios funcionais detectados — ACSM EIM recomenda movimentos multiarticulares como base da prescrição para saúde') }
 
-    // 2. Mobilidade — grupos Core e Full Body como proxy (Nelson 2007)
     const hasMobility = allExercises.some(ex => ['Core','Full Body'].includes(ex.type))
-    if (hasMobility) {
-      objScore += 10
-    } else if (allExercises.length > 3) {
-      objIssues.push('ausência de trabalho de Core/mobilidade — para capacidade funcional inclua mobilidade de quadril, torácica e ombro (Nelson et al. 2007)')
-    }
+    if (hasMobility) { objScore += 10 }
+    else if (allExercises.length > 3) { objIssues.push('ausência de trabalho de Core/mobilidade — para capacidade funcional inclua mobilidade de quadril, torácica e ombro (Nelson et al. 2007)') }
 
-    // 3. Intensidade adequada — PSE e rep range (ACSM EIM: 40–60% 1RM, PSE 3–5)
     const heavyCount = allExercises.filter(ex => { const m=(ex.reps||'').match(/\d+/); return m && parseInt(m[0]) < 6 }).length
     const heavyPct   = allExercises.length > 0 ? heavyCount/allExercises.length : 0
-    if (heavyPct > 0.3) {
-      objScore -= 12
-      objIssues.push(`${Math.round(heavyPct*100)}% dos exercícios com carga pesada (<6 reps) — para saúde e bem-estar a intensidade ideal é 40–60% de 1RM (PSE 3–5), não força máxima (ACSM EIM)`)
-    }
+    if (heavyPct > 0.3) { objScore -= 12; objIssues.push(`${Math.round(heavyPct*100)}% dos exercícios com carga pesada (<6 reps) — para saúde e bem-estar a intensidade ideal é 40–60% de 1RM (PSE 3–5), não força máxima (ACSM EIM)`) }
 
-    // 4. Volume aeróbio — central para saúde cardiovascular (OMS 2020; Kodama 2009)
     const now_obj = new Date()
     const last14c_obj = (cardioSessions||[]).filter(s => (now_obj - new Date(s.date+'T12:00:00')) < 14*864e5)
     const weeklyCardioMin_obj = last14c_obj.reduce((a,s) => a+(s.duration_minutes||0), 0) / 2
-    if (weeklyCardioMin_obj >= 150) {
-      objScore += 15
-    } else if (weeklyCardioMin_obj >= 90) {
-      objScore += 5
-      objIssues.push(`cardio: ~${Math.round(weeklyCardioMin_obj)} min/sem — aumentar para ≥150 min/sem para atingir diretriz OMS 2020 de saúde cardiovascular`)
-    } else {
-      objScore -= 10
-      objIssues.push(`cardio insuficiente (~${Math.round(weeklyCardioMin_obj)} min/sem) — OMS 2020 recomenda 150–300 min/sem de intensidade moderada para prevenção de doenças crônicas`)
-    }
+    if (weeklyCardioMin_obj >= 150) { objScore += 15 }
+    else if (weeklyCardioMin_obj >= 90) { objScore += 5; objIssues.push(`cardio: ~${Math.round(weeklyCardioMin_obj)} min/sem — aumentar para ≥150 min/sem para atingir diretriz OMS 2020 de saúde cardiovascular`) }
+    else { objScore -= 10; objIssues.push(`cardio insuficiente (~${Math.round(weeklyCardioMin_obj)} min/sem) — OMS 2020 recomenda 150–300 min/sem de intensidade moderada para prevenção de doenças crônicas`) }
 
     objScore = Math.max(0, Math.min(100, objScore))
-
   } else {
-    // Cárdio complementar para objetivos de condicionamento/emagrecimento
     if (goal === 'Emagrecimento' || goal === 'Condicionamento') {
       const now = new Date()
       const last14sessions = (cardioSessions || []).filter(s => (now - new Date(s.date)) < 14 * 864e5)
@@ -581,8 +526,6 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
         ? `Faixas de repetição e volume compatíveis com objetivo "${goal}" (${repRange.label}).`
         : 'Configure o objetivo do aluno para avaliação detalhada.'
 
-  // ── Pillar 6: Adequação Etária + Fase LTAD ──────────────────────────────
-  // LTAD (Balyi 2013), Tanaka 2001, ACSM 2022, NSCA Youth Resistance Training 2009
   let ageScore = 100, ageIssues = [], ageOk = []
   const ltadPhase = calcLTAD(age, student.experience_years, student.sport)
 
@@ -595,95 +538,67 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
     const hasUpperWork   = allExercises.some(ex => ['Peito','Costas','Ombro','Bíceps','Tríceps'].includes(ex.type))
 
     if (age >= 60) {
-      // ── Idoso 60+ ── Tanaka 2001, ACSM 2022, Sherrington 2019
       if (daysPerWeek > 4)  { ageScore -= 12; ageIssues.push('frequência >4×/sem — risco de overuse em 60+ (recomendado 3–4×/sem)') }
       if (lowRepCount > 0)  { ageScore -= 15; ageIssues.push('exercícios de força máxima (<4 reps) sem avaliação cardiovascular prévia') }
       if (!hasCoreWork)     { ageScore -= 12; ageIssues.push('ausência de Core/equilíbrio — pilar obrigatório para prevenir quedas (Sherrington 2019)') }
       else ageOk.push('✅ Core presente — prevenção de quedas contemplada')
       if (daysPerWeek >= 2 && daysPerWeek <= 4 && lowRepCount === 0) ageOk.push('✅ Frequência e intensidade adequadas para 60+')
-
     } else if (ltadPhase?.fase === 'FUNdamentals') {
-      // ── FUNdamentals (6–11 anos) ── LTAD, NSCA 2009
       if (lowRepCount > 0)       { ageScore -= 40; ageIssues.push('carga máxima contraindicada na fase FUNdamentals — risco de lesão epifisária (LTAD)') }
       if (heavyLoadPct > 0.2)    { ageScore -= 20; ageIssues.push('>20% exercícios com carga elevada (<6 reps) — fase FUNdamentals prioriza peso corporal e coordenação') }
       if (daysPerWeek > 3)       { ageScore -= 10; ageIssues.push('frequência >3×/sem excessiva para fase FUNdamentals — priorize diversificação motora') }
       if (!hasCoreWork && !hasLegsWork) { ageScore -= 10; ageIssues.push('treino deve incluir padrões motores multilaterais: saltar, correr, girar (LTAD FUNdamentals)') }
       else ageOk.push('✅ Padrões multilaterais presentes')
       if (daysPerWeek <= 3 && lowRepCount === 0) ageOk.push('✅ Frequência e intensidade corretas para FUNdamentals')
-
     } else if (ltadPhase?.fase === 'Learn to Train') {
-      // ── Learn to Train (9–15 anos) ── Faigenbaum 2009, LTAD
       if (age < 14 && lowRepCount > 0) { ageScore -= 25; ageIssues.push('1RM contraindicado antes dos 14 anos — protocolo de Epley não validado (Balyi 2013)') }
       if (heavyLoadPct > 0.3)    { ageScore -= 15; ageIssues.push('>30% exercícios com carga pesada — Learn to Train: técnica primeiro, carga depois (Faigenbaum 2009)') }
       if (!hasCoreWork)          { ageScore -= 10; ageIssues.push('Core ausente — estabilidade central é base do desenvolvimento atlético nesta fase') }
       else ageOk.push('✅ Core presente — estabilidade central contemplada')
       if (daysPerWeek >= 2 && daysPerWeek <= 4) ageOk.push('✅ Frequência adequada para Learn to Train')
       if (heavyLoadPct <= 0.3)   ageOk.push('✅ Carga compatível com fase Learn to Train')
-
     } else if (ltadPhase?.fase === 'Train to Train') {
-      // ── Train to Train (12–17 anos) ── LTAD, NSCA 2009
       if (heavyLoadPct > 0.4)    { ageScore -= 15; ageIssues.push('>40% exercícios com carga pesada — Train to Train: limite 70–75% de 1RM (NSCA 2009)') }
       if (daysPerWeek > 5)       { ageScore -= 10; ageIssues.push('frequência >5×/sem — fase Train to Train requer deload semanal para recuperação óssea') }
       if (!hasCoreWork)          { ageScore -= 8;  ageIssues.push('Core ausente — estabilização obrigatória para construção de base atlética (Train to Train)') }
       if (!hasLegsWork)          { ageScore -= 8;  ageIssues.push('Ausência de trabalho de membros inferiores — base de potência essencial nesta fase') }
       if (daysPerWeek >= 3 && daysPerWeek <= 5) ageOk.push('✅ Frequência adequada para Train to Train')
       if (heavyLoadPct <= 0.4 && hasCoreWork)  ageOk.push('✅ Intensidade e equilíbrio corretos para Train to Train')
-
     } else if (ltadPhase?.fase === 'Train to Compete') {
-      // ── Train to Compete (17–18 anos) ── LTAD, NSCA 2021
       if (daysPerWeek > 5)       { ageScore -= 10; ageIssues.push('frequência >5×/sem pode comprometer recuperação em atleta jovem em competição') }
       if (!hasCoreWork)          { ageScore -= 8;  ageIssues.push('Core ausente — integração neuromuscular crítica para performance competitiva') }
       if (daysPerWeek >= 3)      ageOk.push('✅ Frequência de treino adequada para nível competitivo')
       if (heavyLoadPct <= 0.5)   ageOk.push('✅ Distribuição de carga compatível com Train to Compete')
-
     } else if (age >= 18 && age < 30) {
-      // ── Adulto Jovem 18–29 ── sem restrições específicas de fase
       if (daysPerWeek >= 3) ageOk.push('✅ Frequência adequada para adulto jovem')
-
     } else if (age >= 30 && age < 45) {
-      // ── Adulto 30–44 ── sarcopenia subclínica
       if (!hasLegsWork && !hasUpperWork) { ageScore -= 10; ageIssues.push('treino de força incompleto — a partir dos 30 anos, 2–3×/sem de força previne sarcopenia subclínica') }
       else ageOk.push('✅ Treino de força presente — prevenção de sarcopenia contemplada')
-
     } else if (age >= 45 && age < 60) {
-      // ── Adulto Maduro 45–59 ── hormônios, ossos, CV
       if (lowRepCount > 2)       { ageScore -= 10; ageIssues.push('múltiplos exercícios de força máxima — 45+ anos: recomendável avaliação cardiovascular prévia') }
       if (!hasCoreWork)          { ageScore -= 8;  ageIssues.push('Core/equilíbrio ausente — funcional e preventivo para 45+ anos') }
       if (daysPerWeek >= 2 && daysPerWeek <= 4) ageOk.push('✅ Frequência adequada para adulto maduro')
       if (!hasLegsWork)          { ageScore -= 8;  ageIssues.push('Membros inferiores ausentes — manutenção óssea e funcional crítica para 45–59 anos (Kohrt 2004)') }
     }
-
     ageScore = Math.max(0, ageScore)
   }
 
-  // TGMD-3 integration — add motor alerts to age pillar
   const tgmd = student.tgmd_scores
   if (tgmd && age && age < 18) {
     const kickScore = tgmd.chutar
     const jumpScore = tgmd.salto_h ?? tgmd.salto_v
     const runScore  = tgmd.corrida
-    if (kickScore === 0) {
-      ageScore -= 10
-      ageIssues.push('padrão de chute Inicial (TGMD-3) — priorizar treino motor antes de exercícios de potência de MMII')
-    }
-    if (jumpScore === 0) {
-      ageScore -= 8
-      ageIssues.push('padrão de salto Inicial (TGMD-3) — incluir trabalho de recepção e aterrissagem antes de pliometria')
-    }
-    if (runScore === 0) {
-      ageScore -= 8
-      ageIssues.push('padrão de corrida Inicial (TGMD-3) — trabalhar mecânica de corrida antes de exercícios de velocidade')
-    }
+    if (kickScore === 0) { ageScore -= 10; ageIssues.push('padrão de chute Inicial (TGMD-3) — priorizar treino motor antes de exercícios de potência de MMII') }
+    if (jumpScore === 0) { ageScore -= 8;  ageIssues.push('padrão de salto Inicial (TGMD-3) — incluir trabalho de recepção e aterrissagem antes de pliometria') }
+    if (runScore === 0)  { ageScore -= 8;  ageIssues.push('padrão de corrida Inicial (TGMD-3) — trabalhar mecânica de corrida antes de exercícios de velocidade') }
     ageScore = Math.max(0, ageScore)
     const tgmdSc = tgmdScore(tgmd)
     if (tgmdSc && tgmdSc.pct >= 75) ageOk.push('Padrões motores adequados (TGMD-3)')
   }
 
-  // Use maturity offset if available for more precise phase
   const matOffset = calcMaturityOffset(student.height, student.weight, student.height_sitting, (age||0)+(new Date().getMonth()/12), 'M')
   const matLabel  = offsetLabel(matOffset)
   const phvNote   = matLabel ? ` | ${matLabel.label}` : ''
-
   const agePhaseLine = ltadPhase ? ` | Fase LTAD: ${ltadPhase.fase}${phvNote}` : phvNote
   const ageMsg = age === null
     ? '⚠️ Idade não cadastrada — cadastre a idade do aluno para habilitar avaliação etária completa.'
@@ -691,7 +606,6 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
       ? ageIssues.map(i => `⚠️ ${i}`).join(' · ') + '.'
       : `Prescrição adequada à faixa etária (${age} anos${agePhaseLine}). ${ageOk.join(' · ')}`
 
-  // ── Pillar 7: Dados & Monitoramento ──────────────────────────────────────
   const now2 = new Date()
   let monitorScore = 0, monitorItems = []
   if (student.weight) { monitorScore += 20; monitorItems.push('✅ Peso cadastrado') }
@@ -704,8 +618,6 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
   else monitorItems.push('⚠️ Sem registros de carga recentes (>14 dias)')
   const monitorMsg = monitorItems.join(' · ')
 
-  // ── Pilar 8: Recuperação ─────────────────────────────────────────────────
-  // Schoenfeld & Ogborn 2018: 48–72h entre sessões do mesmo grupo muscular
   const DIA_ORDER = { Seg:0, Ter:1, Qua:2, Qui:3, Sex:4, Sáb:5, Dom:6 }
   let recoveryScore = 100, recoveryIssues = []
   if (allDays && allDays.length >= 2) {
@@ -727,8 +639,6 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
   } else if (allExercises.length > 0) {
     recoveryScore = 70
   }
-  // Para Saúde e Bem-Estar: recuperação entre sessões de baixa intensidade não é problema crítico
-  // O risco de overuse é muito menor — mas ausência total de dias ativos pode ser sinalizada
   const recoveryMsg = goal === 'Saúde e Bem-Estar'
     ? recoveryIssues.length
       ? recoveryIssues.map(i => `⚠️ ${i}`).join('. ') + '. Para saúde geral, a intensidade moderada permite recuperação mais rápida — porém respeite ≥24h entre sessões do mesmo grupo.'
@@ -741,8 +651,6 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
         ? 'Distribuição de dias adequada — sem sobreposição de grupos musculares em dias consecutivos detectada.'
         : 'Configure os dias do plano com tipos musculares para avaliação de recuperação.'
 
-  // ── Pilar 9: PSE & Overtraining (ACWR) ──────────────────────────────────
-  // Foster 1998: carga interna = PSE × duração. ACWR seguro: 0.8–1.3
   let overtScore = 80, overtMsg = 'Dados de PSE insuficientes para calcular índice de carga interna (mínimo 4 sessões de cárdio).'
   if (cardioSessions && cardioSessions.length >= 4) {
     const now3 = new Date()
@@ -777,8 +685,6 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
     }
   }
 
-  // ── Pilar 10: Variação de Estímulo ───────────────────────────────────────
-  // Fonseca 2014; ACSM FITT-VP: variação de rep range a cada 4–6 semanas
   let varScore = 70, varMsg = 'Dados insuficientes para avaliar variação de estímulo (mínimo 3 semanas de registros).'
   if (exerciseLogs && exerciseLogs.length >= 6) {
     const now4 = new Date()
@@ -808,8 +714,6 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
     }
   }
 
-  // ── Pilar 11: Adequação ao Nível ─────────────────────────────────────────
-  // NSCA 2021; ACSM: parâmetros diferenciados por nível de treinamento
   const levelMap = { 'Iniciante': 0, 'Intermediário': 1, 'Avançado': 2 }
   const lvl = levelMap[level] ?? 0
   let levelScore = 100, levelIssues = []
@@ -822,125 +726,60 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
   const lp = LEVEL_PARAMS[lvl]
 
   if (allExercises.length > 0) {
-    // Volume vs nível
-    if (totalSets > 0 && totalSets > lp.maxSets) {
-      levelScore -= 15; levelIssues.push(`volume de ${totalSets} séries excede o recomendado para ${lp.label} (máx ~${lp.maxSets}/semana) — risco de overtraining`)
-    } else if (totalSets > 0 && totalSets < lp.minSets) {
-      levelScore -= 10; levelIssues.push(`volume de ${totalSets} séries abaixo do esperado para ${lp.label} (mín ~${lp.minSets}/semana)`)
-    }
-    // Frequência vs nível
-    if (daysPerWeek > lp.maxFreq) {
-      levelScore -= 15; levelIssues.push(`frequência de ${daysPerWeek}×/sem elevada para ${lp.label} (recomendado ${lp.minFreq}–${lp.maxFreq}×/sem)`)
-    } else if (daysPerWeek > 0 && daysPerWeek < lp.minFreq) {
-      levelScore -= 8; levelIssues.push(`frequência de ${daysPerWeek}×/sem baixa para ${lp.label}`)
-    }
-    // Complexidade para avançados: espera variação de rep range e periodização
-    if (lvl === 2 && varScore < 60) {
-      levelScore -= 15; levelIssues.push('aluno avançado sem periodização detectada — esperado variação de métodos e rep ranges (NSCA 2021)')
-    }
-    // Iniciantes: alertar sobre exercícios de força máxima
-    if (lvl === 0 && allExercises.filter(ex => parseInt(ex.reps) <= 4).length > 0) {
-      levelScore -= 20; levelIssues.push('exercícios de força máxima (<5 reps) para iniciante — risco técnico elevado sem base de movimento (NSCA 2021)')
-    }
+    if (totalSets > 0 && totalSets > lp.maxSets) { levelScore -= 15; levelIssues.push(`volume de ${totalSets} séries excede o recomendado para ${lp.label} (máx ~${lp.maxSets}/semana) — risco de overtraining`) }
+    else if (totalSets > 0 && totalSets < lp.minSets) { levelScore -= 10; levelIssues.push(`volume de ${totalSets} séries abaixo do esperado para ${lp.label} (mín ~${lp.minSets}/semana)`) }
+    if (daysPerWeek > lp.maxFreq) { levelScore -= 15; levelIssues.push(`frequência de ${daysPerWeek}×/sem elevada para ${lp.label} (recomendado ${lp.minFreq}–${lp.maxFreq}×/sem)`) }
+    else if (daysPerWeek > 0 && daysPerWeek < lp.minFreq) { levelScore -= 8; levelIssues.push(`frequência de ${daysPerWeek}×/sem baixa para ${lp.label}`) }
+    if (lvl === 2 && varScore < 60) { levelScore -= 15; levelIssues.push('aluno avançado sem periodização detectada — esperado variação de métodos e rep ranges (NSCA 2021)') }
+    if (lvl === 0 && allExercises.filter(ex => parseInt(ex.reps) <= 4).length > 0) { levelScore -= 20; levelIssues.push('exercícios de força máxima (<5 reps) para iniciante — risco técnico elevado sem base de movimento (NSCA 2021)') }
     levelScore = Math.max(0, levelScore)
-  } else {
-    levelScore = 50
-  }
+  } else { levelScore = 50 }
   const levelMsg = levelIssues.length
     ? levelIssues.map(i => `⚠️ ${i}`).join('. ') + '.'
     : `Parâmetros de volume, frequência e complexidade compatíveis com nível ${lp.label}.`
 
-  // ── Pilar 12: Adequação Esportiva ───────────────────────────────────────
-  // Verifica se os exercícios prescritos atendem às demandas da modalidade esportiva
-  // Ref: Boyle 2016 (Movement), NSCA Sport-Specific Conditioning 2021
   let sportScore = 100, sportIssues = [], sportOk = []
   const sport = student.sport
 
-  // Perfis por modalidade — grupos musculares e padrões de movimento essenciais
   const SPORT_PROFILES = {
-    futebol:   { name: 'Futebol',   needs: ['Posterior','Glúteo','Quadríceps'], core: true,  unilateral: true,  explosao: true,  pull: false, desc: 'potência de membros inferiores, core estabilizador e agilidade' },
-    futsal:    { name: 'Futsal',    needs: ['Posterior','Glúteo','Quadríceps'], core: true,  unilateral: true,  explosao: true,  pull: false, desc: 'explosão em curta distância, mudança de direção e core' },
-    natacao:   { name: 'Natação',   needs: ['Costas','Ombro'],                  core: true,  unilateral: false, explosao: false, pull: true,  desc: 'estabilidade de ombro, puxada e core rotacional' },
-    tenis:     { name: 'Tênis',     needs: ['Ombro','Costas'],                  core: true,  unilateral: true,  explosao: true,  pull: true,  desc: 'rotação de core, unilateral, ombro e cadeia posterior' },
-    basquete:  { name: 'Basquete',  needs: ['Posterior','Glúteo','Quadríceps'], core: true,  unilateral: false, explosao: true,  pull: false, desc: 'salto vertical, posterior e core' },
-    volei:     { name: 'Vôlei',     needs: ['Ombro','Posterior','Glúteo'],      core: true,  unilateral: false, explosao: true,  pull: true,  desc: 'ombro, salto vertical, core e estabilidade escapular' },
-    atletismo: { name: 'Atletismo', needs: ['Posterior','Glúteo','Panturrilha'],core: true,  unilateral: true,  explosao: true,  pull: false, desc: 'cadeia posterior, potência e core' },
-    ginastica: { name: 'Ginástica', needs: ['Core','Costas'],                   core: true,  unilateral: false, explosao: false, pull: true,  desc: 'força relativa, core e mobilidade' },
-    judo:      { name: 'Judô',      needs: ['Costas','Bíceps'],                 core: true,  unilateral: false, explosao: false, pull: true,  desc: 'puxada, força de preensão e core' },
-    ciclismo:  { name: 'Ciclismo',  needs: ['Quadríceps','Posterior','Glúteo'], core: true,  unilateral: true,  explosao: false, pull: false, desc: 'extensão de joelho, cadeia posterior e core' },
-    handebol:  { name: 'Handebol',  needs: ['Ombro','Costas'],                  core: true,  unilateral: true,  explosao: true,  pull: true,  desc: 'arremesso, core rotacional e explosão' },
-    saude:     { name: 'Saúde e Bem-Estar', needs: ['Core'],               core: true,  unilateral: false, explosao: false, pull: false, desc: 'mobilidade, equilíbrio e condicionamento geral' },
-    custom:    { name: 'Outro',     needs: [],                                  core: false, unilateral: false, explosao: false, pull: false, desc: 'modalidade personalizada' },
-    outro:     { name: 'Outro',     needs: [],                                  core: false, unilateral: false, explosao: false, pull: false, desc: 'modalidade personalizada' },
+    futebol:   { name: 'Futebol',   needs: ['Posterior','Glúteo','Quadríceps'], core: true,  unilateral: true,  explosao: true,  pull: false },
+    futsal:    { name: 'Futsal',    needs: ['Posterior','Glúteo','Quadríceps'], core: true,  unilateral: true,  explosao: true,  pull: false },
+    natacao:   { name: 'Natação',   needs: ['Costas','Ombro'],                  core: true,  unilateral: false, explosao: false, pull: true  },
+    tenis:     { name: 'Tênis',     needs: ['Ombro','Costas'],                  core: true,  unilateral: true,  explosao: true,  pull: true  },
+    basquete:  { name: 'Basquete',  needs: ['Posterior','Glúteo','Quadríceps'], core: true,  unilateral: false, explosao: true,  pull: false },
+    volei:     { name: 'Vôlei',     needs: ['Ombro','Posterior','Glúteo'],      core: true,  unilateral: false, explosao: true,  pull: true  },
+    atletismo: { name: 'Atletismo', needs: ['Posterior','Glúteo','Panturrilha'],core: true,  unilateral: true,  explosao: true,  pull: false },
+    ginastica: { name: 'Ginástica', needs: ['Core','Costas'],                   core: true,  unilateral: false, explosao: false, pull: true  },
+    judo:      { name: 'Judô',      needs: ['Costas','Bíceps'],                 core: true,  unilateral: false, explosao: false, pull: true  },
+    ciclismo:  { name: 'Ciclismo',  needs: ['Quadríceps','Posterior','Glúteo'], core: true,  unilateral: true,  explosao: false, pull: false },
+    handebol:  { name: 'Handebol',  needs: ['Ombro','Costas'],                  core: true,  unilateral: true,  explosao: true,  pull: true  },
+    saude:     { name: 'Saúde',     needs: ['Core'],                            core: true,  unilateral: false, explosao: false, pull: false },
+    custom:    { name: 'Outro',     needs: [],                                  core: false, unilateral: false, explosao: false, pull: false },
+    outro:     { name: 'Outro',     needs: [],                                  core: false, unilateral: false, explosao: false, pull: false },
   }
 
   const profile = sport ? SPORT_PROFILES[sport] : null
 
   if (!profile || sport === 'outro') {
-    // Sem esporte cadastrado: pilar neutro
     sportScore = 75
     sportIssues.push('esporte não cadastrado — adicione a modalidade no perfil para avaliação esportiva específica')
   } else {
     const exTypes = allExercises.map(ex => ex.type).filter(Boolean)
     const typeSet = new Set(exTypes)
-
-    // 1. Grupos musculares prioritários presentes?
     const missingNeeds = profile.needs.filter(n => !typeSet.has(n))
     if (missingNeeds.length > 0) {
-      const penalty = missingNeeds.length * 15
-      sportScore -= Math.min(penalty, 40)
-      sportIssues.push(`grupos ausentes para ${profile.name}: ${missingNeeds.join(', ')} — essenciais para ${profile.desc}`)
+      sportScore -= Math.min(missingNeeds.length * 15, 40)
+      sportIssues.push(`grupos ausentes para ${profile.name}: ${missingNeeds.join(', ')}`)
     } else if (profile.needs.length > 0) {
-      sportOk.push(`✅ Grupos prioritários do ${profile.name} presentes: ${profile.needs.join(', ')}`)
+      sportOk.push(`✅ Grupos prioritários presentes: ${profile.needs.join(', ')}`)
     }
-
-    // 2. Core — quase universal no esporte
-    if (profile.core && !typeSet.has('Core') && !typeSet.has('Full Body')) {
-      sportScore -= 20
-      sportIssues.push(`Core ausente — ${profile.desc} exige estabilidade de tronco (Boyle 2016)`)
-    } else if (profile.core && (typeSet.has('Core') || typeSet.has('Full Body'))) {
-      sportOk.push('✅ Core presente')
-    }
-
-    // 3. Puxada — essencial para esportes de arremesso/natação/judô
+    if (profile.core && !typeSet.has('Core') && !typeSet.has('Full Body')) { sportScore -= 20; sportIssues.push('Core ausente') }
+    else if (profile.core && (typeSet.has('Core') || typeSet.has('Full Body'))) { sportOk.push('✅ Core presente') }
     if (profile.pull) {
       const hasPull = ['Costas','Bíceps'].some(t => typeSet.has(t))
-      if (!hasPull) {
-        sportScore -= 15
-        sportIssues.push(`puxada ausente — ${profile.name} demanda força de puxada para equilíbrio e performance`)
-      } else {
-        sportOk.push('✅ Puxada presente')
-      }
+      if (!hasPull) { sportScore -= 15; sportIssues.push('puxada ausente') }
+      else { sportOk.push('✅ Puxada presente') }
     }
-
-    // 4. Exercícios unilaterais — equilíbrio e transferência motora
-    if (profile.unilateral && allExercises.length > 3) {
-      const unilateralKeywords = ['unilateral','avanço','lunge','pistol','step','afundo','single']
-      const hasUnilateral = allExercises.some(ex =>
-        unilateralKeywords.some(kw => (ex.name||'').toLowerCase().includes(kw))
-      )
-      if (!hasUnilateral) {
-        sportScore -= 10
-        sportIssues.push(`exercícios unilaterais recomendados para ${profile.name} — melhora assimetrias e transferência motora`)
-      } else {
-        sportOk.push('✅ Padrão unilateral detectado')
-      }
-    }
-
-    // 5. Explosão/potência — esportes intermitentes de alta intensidade
-    if (profile.explosao && allExercises.length > 3) {
-      const powerKeywords = ['salto','jump','agachamento','squat','power','clean','snatch','sprint','pliométrico','box']
-      const hasExplosion = allExercises.some(ex =>
-        powerKeywords.some(kw => (ex.name||'').toLowerCase().includes(kw))
-      )
-      if (!hasExplosion) {
-        sportScore -= 8
-        sportIssues.push(`potência/explosão ausente — ${profile.name} é esporte de alta intermitência: inclua agachamentos, saltos ou exercícios pliométricos`)
-      } else {
-        sportOk.push('✅ Trabalho de potência detectado')
-      }
-    }
-
     sportScore = Math.max(0, Math.min(100, sportScore))
   }
 
@@ -948,12 +787,8 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
     ? '⚠️ ' + sportIssues[0]
     : sportIssues.length
       ? sportIssues.map(i => `⚠️ ${i}`).join(' · ') + '.'
-      : `Prescrição alinhada às demandas de ${profile.name}. ${sportOk.join(' · ')}`
+      : `Prescrição alinhada. ${sportOk.join(' · ')}`
 
-  // ── Score final ponderado (12 pilares) ───────────────────────────────────
-  // Pesos ajustados: esporte +8%, etária +2%; volume e equilíbrio -1% cada; nível -2%
-  // ── Pesos diferenciados por objetivo ─────────────────────────────────────
-  // Saúde e Bem-Estar: cardio e funcionalidade pesam mais; força máx e esporte pesam menos
   const isSaude = goal === 'Saúde e Bem-Estar'
   const W = isSaude
     ? { volume:0.16, freq:0.10, balance:0.10, progress:0.06, objective:0.16, age:0.08, monitor:0.05, recovery:0.07, overtraining:0.10, variation:0.05, levelFit:0.04, sport:0.03 }
@@ -977,19 +812,18 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
   return {
     finalScore,
     pilares: isSaude ? [
-      // Saúde e Bem-Estar — pilares renomeados e reordenados por relevância clínica
-      { id: 'volume',       name: 'Volume: Força + Cardio',         score: volumeScore,   peso: '16%', msg: volumeMsg,   ref: 'OMS 2020; ACSM Exercise is Medicine; Kodama 2009' },
-      { id: 'objective',    name: 'Prescrição Funcional',           score: objScore,      peso: '16%', msg: objMsg,      ref: 'Cook 2010; Nelson 2007; ACSM EIM; OMS 2020' },
-      { id: 'overtraining', name: 'Carga Interna (PSE/ACWR)',       score: overtScore,    peso: '10%', msg: overtMsg,    ref: 'Foster 1998 — intensidade moderada é central' },
-      { id: 'freq',         name: 'Consistência Semanal',           score: freqScore,     peso: '10%', msg: freqMsg,     ref: 'ACSM EIM: 3–5×/sem para saúde geral' },
-      { id: 'balance',      name: 'Equilíbrio Funcional',           score: balanceScore,  peso: '10%', msg: balanceMsg,  ref: 'Boyle 2016; Cook 2010 — prevenção de lesão' },
-      { id: 'age',          name: 'Adequação Etária',               score: ageScore,      peso: '8%',  msg: ageMsg,      ref: 'Kohrt 2004; Sherrington 2019; Tanaka 2001' },
-      { id: 'recovery',     name: 'Recuperação',                    score: recoveryScore, peso: '7%',  msg: recoveryMsg, ref: 'ACSM EIM — intensidade moderada, 24–48h' },
+      { id: 'volume',       name: 'Volume: Força + Cardio',         score: volumeScore,   peso: '16%', msg: volumeMsg,   ref: 'OMS 2020; ACSM Exercise is Medicine' },
+      { id: 'objective',    name: 'Prescrição Funcional',           score: objScore,      peso: '16%', msg: objMsg,      ref: 'Cook 2010; Nelson 2007; ACSM EIM' },
+      { id: 'overtraining', name: 'Carga Interna (PSE/ACWR)',       score: overtScore,    peso: '10%', msg: overtMsg,    ref: 'Foster 1998' },
+      { id: 'freq',         name: 'Consistência Semanal',           score: freqScore,     peso: '10%', msg: freqMsg,     ref: 'ACSM EIM: 3–5×/sem' },
+      { id: 'balance',      name: 'Equilíbrio Funcional',           score: balanceScore,  peso: '10%', msg: balanceMsg,  ref: 'Boyle 2016; Cook 2010' },
+      { id: 'age',          name: 'Adequação Etária',               score: ageScore,      peso: '8%',  msg: ageMsg,      ref: 'Kohrt 2004; Sherrington 2019' },
+      { id: 'recovery',     name: 'Recuperação',                    score: recoveryScore, peso: '7%',  msg: recoveryMsg, ref: 'ACSM EIM' },
       { id: 'monitor',      name: 'Monitoramento',                  score: monitorScore,  peso: '5%',  msg: monitorMsg,  ref: 'ACSM 2022' },
-      { id: 'progress',     name: 'Progressão',                     score: progressScore, peso: '6%',  msg: progressMsg, ref: 'ACSM FITT-VP — progressão conservadora' },
-      { id: 'variation',    name: 'Variação de Estímulo',           score: varScore,      peso: '5%',  msg: varMsg,      ref: 'Fonseca 2014 — variedade mantém adesão' },
+      { id: 'progress',     name: 'Progressão',                     score: progressScore, peso: '6%',  msg: progressMsg, ref: 'ACSM FITT-VP' },
+      { id: 'variation',    name: 'Variação de Estímulo',           score: varScore,      peso: '5%',  msg: varMsg,      ref: 'Fonseca 2014' },
       { id: 'levelFit',     name: 'Adequação ao Nível',             score: levelScore,    peso: '4%',  msg: levelMsg,    ref: 'NSCA 2021' },
-      { id: 'sport',        name: 'Especificidade',                 score: sportScore,    peso: '3%',  msg: sportMsg,    ref: 'Menor peso — saúde geral não requer especificidade esportiva' },
+      { id: 'sport',        name: 'Especificidade',                 score: sportScore,    peso: '3%',  msg: sportMsg,    ref: 'Menor peso' },
     ] : [
       { id: 'volume',      name: 'Volume de Força',         score: volumeScore,   peso: '11%', msg: volumeMsg,   ref: 'Schoenfeld 2017; ACSM 2022' },
       { id: 'balance',     name: 'Equilíbrio Muscular',     score: balanceScore,  peso: '12%', msg: balanceMsg,  ref: 'Boyle 2016; NSCA Guidelines' },
@@ -998,8 +832,8 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
       { id: 'freq',        name: 'Frequência Semanal',      score: freqScore,     peso: '9%',  msg: freqMsg,     ref: 'ACSM Position Stand 2022' },
       { id: 'objective',   name: 'Adequação ao Objetivo',   score: objScore,      peso: '9%',  msg: objMsg,      ref: 'Schoenfeld 2010; WHO 2020' },
       { id: 'overtraining',name: 'PSE & Fadiga (ACWR)',     score: overtScore,    peso: '7%',  msg: overtMsg,    ref: 'Foster 1998; NSCA 2021' },
-      { id: 'age',         name: 'Adequação Etária (LTAD)', score: ageScore,      peso: '10%', msg: ageMsg,      ref: 'Tanaka 2001; Balyi LTAD 2013; NSCA 2009' },
-      { id: 'sport',       name: 'Adequação Esportiva',     score: sportScore,    peso: '8%',  msg: sportMsg,    ref: 'Boyle 2016; NSCA Sport-Specific 2021' },
+      { id: 'age',         name: 'Adequação Etária (LTAD)', score: ageScore,      peso: '10%', msg: ageMsg,      ref: 'Tanaka 2001; Balyi LTAD 2013' },
+      { id: 'sport',       name: 'Adequação Esportiva',     score: sportScore,    peso: '8%',  msg: sportMsg,    ref: 'Boyle 2016; NSCA 2021' },
       { id: 'variation',   name: 'Variação de Estímulo',    score: varScore,      peso: '6%',  msg: varMsg,      ref: 'Fonseca 2014; ACSM FITT-VP' },
       { id: 'levelFit',    name: 'Adequação ao Nível',      score: levelScore,    peso: '4%',  msg: levelMsg,    ref: 'NSCA 2021; ACSM 2022' },
       { id: 'monitor',     name: 'Monitoramento',           score: monitorScore,  peso: '4%',  msg: monitorMsg,  ref: 'ACSM 2022' },
@@ -1007,7 +841,6 @@ function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLo
   }
 }
 
-// ── Histórico de score (retroativo por semana) ────────────────────────────
 function computeHistoricalScores({ student, allDays, allExercises, plannedDays, exerciseLogs, cardioSessions, progress }) {
   const weeks = []
   const now = new Date()
@@ -1024,15 +857,12 @@ function computeHistoricalScores({ student, allDays, allExercises, plannedDays, 
   return weeks
 }
 
-
-// ── TabDesenvolvimentoMotor ───────────────────────────────────────────────────
 function TabDesenvolvimentoMotor({ student, studentId, onUpdate }) {
   const [scores, setScores] = useState(student.tgmd_scores || {})
   const [saving, setSaving] = useState(false)
   const [saved,  setSaved]  = useState(false)
 
   const age = calcAge(student)
-  const isYouth = age && age < 18
 
   const save = async () => {
     setSaving(true)
@@ -1088,7 +918,6 @@ function TabDesenvolvimentoMotor({ student, studentId, onUpdate }) {
 
   return (
     <div>
-      {/* PHV Card — se tiver dados */}
       {(phvLabel || tgt) && (
         <div style={{ background: 'linear-gradient(135deg,rgba(99,102,241,0.1),rgba(99,102,241,0.04))', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 16, padding: '18px 20px', marginBottom: 20 }}>
           <div style={{ fontSize: 10, color: '#6366F1', fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 12 }}>Maturação Biológica — Estimativa</div>
@@ -1109,11 +938,10 @@ function TabDesenvolvimentoMotor({ student, studentId, onUpdate }) {
               </div>
             )}
           </div>
-          <div style={{ fontSize: 10, color: '#334155', marginTop: 10, fontStyle: 'italic' }}>Estimativa estatística. Não substitui avaliação clínica. Cadastre altura dos pais e altura sentado no Editar Perfil para ativar.</div>
+          <div style={{ fontSize: 10, color: '#334155', marginTop: 10, fontStyle: 'italic' }}>Estimativa estatística. Não substitui avaliação clínica.</div>
         </div>
       )}
 
-      {/* Score summary */}
       {sc && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 20 }}>
           {[
@@ -1123,15 +951,14 @@ function TabDesenvolvimentoMotor({ student, studentId, onUpdate }) {
           ].map(({ label, val, color }) => (
             <div key={label} style={{ background: '#0A0F1A', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '12px 14px', textAlign: 'center' }}>
               <div style={{ fontSize: 9, color: '#334155', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }}>{label}</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color, fontFamily: "'DM Sans',sans-serif" }}>{val}</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color }}>{val}</div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Instructions */}
       <div style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', marginBottom: 20, fontSize: 11, color: '#475569', lineHeight: 1.6 }}>
-        <strong style={{ color: '#94A3B8' }}>Como aplicar o TGMD-3:</strong> observe o atleta realizando cada padrão por pelo menos 2 tentativas. Avalie com base na qualidade do movimento, não na velocidade ou distância. Registre o nível que melhor descreve o padrão atual.
+        <strong style={{ color: '#94A3B8' }}>Como aplicar o TGMD-3:</strong> observe o atleta realizando cada padrão por pelo menos 2 tentativas. Avalie com base na qualidade do movimento.
       </div>
 
       <Section title="Habilidades de Locomoção" subtitle="Padrões de movimento que envolvem deslocamento do corpo no espaço" items={TGMD3_LOCOMOTION} />
@@ -1141,12 +968,11 @@ function TabDesenvolvimentoMotor({ student, studentId, onUpdate }) {
         style={{ width: '100%', padding: '13px', borderRadius: 10, border: 'none', background: saved ? 'linear-gradient(135deg,#34D399,#059669)' : 'linear-gradient(135deg,#6366F1,#4F46E5)', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', marginTop: 8, transition: 'all 0.2s' }}>
         {saving ? 'Salvando…' : saved ? '✓ Avaliação salva' : 'Salvar Avaliação Motor'}
       </button>
-      <div style={{ fontSize: 10, color: '#334155', textAlign: 'center', marginTop: 8 }}>TGMD-3 — Ulrich (2019). Test of Gross Motor Development, 3ª edição.</div>
+      <div style={{ fontSize: 10, color: '#334155', textAlign: 'center', marginTop: 8 }}>TGMD-3 — Ulrich (2019).</div>
     </div>
   )
 }
 
-// ── TabAvaliacao UI v2 ────────────────────────────────────────────────────
 function TabAvaliacao({ student, studentId, progress }) {
   const [loading,   setLoading]  = useState(true)
   const [result,    setResult]   = useState(null)
@@ -1154,7 +980,7 @@ function TabAvaliacao({ student, studentId, progress }) {
   const [confidence,setConf]     = useState(null)
   const [recs,      setRecs]     = useState([])
   const [expanded,  setExpanded] = useState(null)
-  const [activeTab, setActiveTab] = useState('pilares') // 'pilares' | 'recs' | 'history'
+  const [activeTab, setActiveTab] = useState('pilares')
 
   useEffect(() => {
     const load = async () => {
@@ -1164,22 +990,9 @@ function TabAvaliacao({ student, studentId, progress }) {
         { data: exLogs },
         { data: cardio },
       ] = await Promise.all([
-        supabase.from('workout_plans')
-          .select('*, workout_days(*, exercises(*))')
-          .eq('student_id', studentId)
-          .eq('status', 'active')
-          .order('updated_at', { ascending: false })
-          .limit(1),
-        supabase.from('exercise_logs')
-          .select('*, exercises(name)')
-          .eq('student_id', studentId)
-          .order('date', { ascending: false })
-          .limit(300),
-        supabase.from('cardio_sessions')
-          .select('*')
-          .eq('student_id', studentId)
-          .order('date', { ascending: false })
-          .limit(120),
+        supabase.from('workout_plans').select('*, workout_days(*, exercises(*))').eq('student_id', studentId).eq('status', 'active').order('updated_at', { ascending: false }).limit(1),
+        supabase.from('exercise_logs').select('*, exercises(name)').eq('student_id', studentId).order('date', { ascending: false }).limit(300),
+        supabase.from('cardio_sessions').select('*').eq('student_id', studentId).order('date', { ascending: false }).limit(120),
       ])
 
       const activePlan   = plans?.[0]
@@ -1187,22 +1000,12 @@ function TabAvaliacao({ student, studentId, progress }) {
       const allExercises = allDays.flatMap(d => d.exercises || [])
       const plannedDays  = allDays.map(d => d.day_of_week).filter(Boolean)
 
-      const evalResult = runEvaluation({
-        student, allExercises, allDays, plannedDays,
-        exerciseLogs:   exLogs   || [],
-        cardioSessions: cardio   || [],
-        progress:       progress || [],
-      })
-
+      const evalResult = runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLogs: exLogs||[], cardioSessions: cardio||[], progress: progress||[] })
       const conf  = getConfidence({ allExercises, exerciseLogs: exLogs||[], cardioSessions: cardio||[], progress: progress||[], student, allDays })
       const hist  = computeHistoricalScores({ student, allDays, allExercises, plannedDays, exerciseLogs: exLogs||[], cardioSessions: cardio||[], progress: progress||[] })
       const recsList = generateRecommendations(evalResult.pilares)
 
-      setResult(evalResult)
-      setConf(conf)
-      setHistory(hist)
-      setRecs(recsList)
-      setLoading(false)
+      setResult(evalResult); setConf(conf); setHistory(hist); setRecs(recsList); setLoading(false)
     }
     load()
   }, [studentId, student, progress])
@@ -1210,7 +1013,7 @@ function TabAvaliacao({ student, studentId, progress }) {
   if (loading) return (
     <div style={{ textAlign: 'center', padding: '60px 20px', color: '#475569' }}>
       <div style={{ width:24, height:24, border:'2px solid rgba(71,85,105,0.3)', borderTopColor:'#6366F1', borderRadius:'50%', margin:'0 auto 12px', animation:'spin 1s linear infinite' }}/>
-      <div style={{ fontSize: 13, letterSpacing:0.5 }}>Analisando prescrição…</div>
+      <div style={{ fontSize: 13 }}>Analisando prescrição…</div>
     </div>
   )
   if (!result) return null
@@ -1234,26 +1037,21 @@ function TabAvaliacao({ student, studentId, progress }) {
       <svg width="180" height="130" viewBox="0 0 180 130">
         <defs>
           <linearGradient id="gaugeGrad2" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%"   stopColor="#F87171" />
-            <stop offset="40%"  stopColor="#FBBF24" />
-            <stop offset="75%"  stopColor="#A3E635" />
-            <stop offset="100%" stopColor="#4ADE80" />
+            <stop offset="0%" stopColor="#F87171" /><stop offset="40%" stopColor="#FBBF24" /><stop offset="75%" stopColor="#A3E635" /><stop offset="100%" stopColor="#4ADE80" />
           </linearGradient>
           <filter id="glow2"><feGaussianBlur stdDeviation="2.5" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
         </defs>
         <path d={`M ${start.x} ${start.y} A ${r} ${r} 0 ${large} 1 ${end.x} ${end.y}`} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="10" strokeLinecap="round" />
         <path d={`M ${start.x} ${start.y} A ${r} ${r} 0 ${sLarge} 1 ${scored.x} ${scored.y}`} fill="none" stroke="url(#gaugeGrad2)" strokeWidth="10" strokeLinecap="round" filter="url(#glow2)" />
-        <text x="90" y="82" textAnchor="middle" fontSize="32" fontWeight="900" fill={final.text} fontFamily="'DM Sans',sans-serif">{score}</text>
-        <text x="90" y="100" textAnchor="middle" fontSize="11" fontWeight="700" fill={final.text} fontFamily="'DM Sans',sans-serif" opacity="0.85">{final.label}</text>
+        <text x="90" y="82" textAnchor="middle" fontSize="32" fontWeight="900" fill={final.text}>{score}</text>
+        <text x="90" y="100" textAnchor="middle" fontSize="11" fontWeight="700" fill={final.text} opacity="0.85">{final.label}</text>
       </svg>
     )
   }
 
   return (
     <div>
-      {/* ── Laudo Header ── */}
       <div style={{ background: '#0A0F1A', borderRadius: 16, marginBottom: 16, border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-        {/* Report title bar */}
         <div style={{ background: 'rgba(99,102,241,0.12)', borderBottom: '1px solid rgba(99,102,241,0.2)', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ fontSize: 9, color: '#6366F1', letterSpacing: 2.5, textTransform: 'uppercase', fontWeight: 700, marginBottom: 2 }}>Relatório de Avaliação — {new Date().toLocaleDateString('pt-BR')}</div>
@@ -1262,25 +1060,23 @@ function TabAvaliacao({ student, studentId, progress }) {
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 9, color: '#475569', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 2 }}>Confiança dos dados</div>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: confColor, flexShrink: 0 }} />
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: confColor }} />
               <span style={{ fontSize: 12, color: confColor, fontWeight: 700 }}>{confLabel} · {confidence?.pct}%</span>
             </div>
           </div>
         </div>
-        {/* Score + gauge */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 24, padding: '20px 24px', flexWrap: 'wrap' }}>
           <div style={{ flexShrink: 0 }}><GaugeArc score={result.finalScore} /></div>
           <div style={{ flex: 1, minWidth: 180 }}>
-            <div style={{ fontSize: 42, fontWeight: 900, color: final.text, lineHeight: 1, marginBottom: 4, fontFamily: "'DM Sans',sans-serif" }}>{result.finalScore}<span style={{ fontSize: 18, color: '#475569', fontWeight: 400 }}>/100</span></div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: final.text, marginBottom: 14, letterSpacing: 0.3 }}>{final.label}</div>
-            {/* Pillar score summary — compact table */}
+            <div style={{ fontSize: 42, fontWeight: 900, color: final.text, lineHeight: 1, marginBottom: 4 }}>{result.finalScore}<span style={{ fontSize: 18, color: '#475569', fontWeight: 400 }}>/100</span></div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: final.text, marginBottom: 14 }}>{final.label}</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 4 }}>
               {result.pilares.map(p => {
                 const c = getScoreColor(p.score)
                 return (
                   <div key={p.id} style={{ padding: '5px 8px', borderRadius: 6, background: c.bg, border: `1px solid ${c.border}`, cursor: 'pointer', textAlign: 'center' }} onClick={() => { setActiveTab('pilares'); setExpanded(p.id) }}>
                     <div style={{ fontSize: 13, fontWeight: 800, color: c.text, lineHeight: 1 }}>{p.score}</div>
-                    <div style={{ fontSize: 8, color: c.text, opacity: 0.7, marginTop: 1, letterSpacing: 0.3, textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name.split(' ')[0]}</div>
+                    <div style={{ fontSize: 8, color: c.text, opacity: 0.7, marginTop: 1, textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name.split(' ')[0]}</div>
                   </div>
                 )
               })}
@@ -1289,12 +1085,11 @@ function TabAvaliacao({ student, studentId, progress }) {
         </div>
       </div>
 
-      {/* ── Sub-tabs ── */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         {[
-          { id: 'pilares', label: `${result.pilares.length} Pilares`, },
+          { id: 'pilares', label: `${result.pilares.length} Pilares` },
           { id: 'recs',    label: `${recs.length} Recomendações`, badge: recs.filter(r=>r.score<45).length },
-          { id: 'history', label: 'Histórico', },
+          { id: 'history', label: 'Histórico' },
         ].map(t => (
           <button key={t.id} onClick={() => setActiveTab(t.id)}
             style={{ flex:1, padding:'10px 12px', borderRadius:10, border:'none', background: activeTab===t.id ? 'linear-gradient(135deg,#6366F1,#8B5CF6)' : 'rgba(255,255,255,0.04)', color: activeTab===t.id ? '#fff' : '#64748B', fontWeight:700, fontSize:12, cursor:'pointer', position:'relative', boxShadow: activeTab===t.id ? '0 4px 14px rgba(99,102,241,0.35)' : 'none' }}>
@@ -1304,7 +1099,6 @@ function TabAvaliacao({ student, studentId, progress }) {
         ))}
       </div>
 
-      {/* ── Tab: Pilares ── */}
       {activeTab === 'pilares' && (
         <div>
           <div style={{ marginBottom: 8, fontSize: 11, color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>Clique em cada pilar para expandir</div>
@@ -1314,15 +1108,14 @@ function TabAvaliacao({ student, studentId, progress }) {
             return (
               <div key={p.id} style={{ marginBottom: 8 }}>
                 <div onClick={() => setExpanded(open ? null : p.id)}
-                  style={{ background: '#0A0F1A', border: `1px solid ${open ? c.border : 'rgba(255,255,255,0.06)'}`, borderRadius: open ? '10px 10px 0 0' : 10, padding: '12px 16px', cursor: 'pointer', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 12 }}>
-                  {/* Numbered index */}
+                  style={{ background: '#0A0F1A', border: `1px solid ${open ? c.border : 'rgba(255,255,255,0.06)'}`, borderRadius: open ? '10px 10px 0 0' : 10, padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ width: 28, height: 28, borderRadius: 6, background: open ? c.bg : 'rgba(255,255,255,0.04)', border: `1px solid ${open ? c.border : 'rgba(255,255,255,0.07)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <span style={{ fontSize: 11, fontWeight: 800, color: open ? c.text : '#475569' }}>{String(result.pilares.indexOf(p)+1).padStart(2,'0')}</span>
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#E2E8F0', letterSpacing: 0.1 }}>{p.name}</span>
-                      <span style={{ fontSize: 9, color: '#334155', background: 'rgba(255,255,255,0.03)', padding: '1px 6px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.06)', letterSpacing: 0.5, textTransform: 'uppercase' }}>{p.peso}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#E2E8F0' }}>{p.name}</span>
+                      <span style={{ fontSize: 9, color: '#334155', background: 'rgba(255,255,255,0.03)', padding: '1px 6px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.06)', textTransform: 'uppercase' }}>{p.peso}</span>
                     </div>
                     <div style={{ height: 4, borderRadius: 99, background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${p.score}%`, borderRadius: 99, background: `linear-gradient(90deg,${c.text}99,${c.text})`, transition: 'width 0.7s ease' }} />
@@ -1331,23 +1124,18 @@ function TabAvaliacao({ student, studentId, progress }) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: 18, fontWeight: 900, color: c.text, lineHeight: 1 }}>{p.score}</div>
-                      <div style={{ fontSize: 8, color: '#334155', textTransform: 'uppercase', letterSpacing: 0.5 }}>/ 100</div>
+                      <div style={{ fontSize: 8, color: '#334155', textTransform: 'uppercase' }}>/ 100</div>
                     </div>
-                    <span style={{ fontSize: 11, color: '#334155', marginLeft: 2 }}>{open ? '▲' : '▼'}</span>
+                    <span style={{ fontSize: 11, color: '#334155' }}>{open ? '▲' : '▼'}</span>
                   </div>
                 </div>
                 {open && (
                   <div style={{ background: '#080B12', border: `1px solid ${c.border}`, borderTop: 'none', borderRadius: '0 0 14px 14px', padding: '16px 18px' }}>
-                    <div style={{ fontSize: 13, color: '#CBD5E1', lineHeight: 1.65, marginBottom: 12, paddingLeft: 4 }}>{p.msg}</div>
+                    <div style={{ fontSize: 13, color: '#CBD5E1', lineHeight: 1.65, marginBottom: 12 }}>{p.msg}</div>
                     <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)' }}>
                         <span style={{ fontSize: 11, color: '#818CF8', fontWeight: 600 }}>{p.ref}</span>
                       </div>
-                      {(RECS[p.id]?.(p.score)||[]).length > 0 && (
-                        <button onClick={e => { e.stopPropagation(); setActiveTab('recs') }} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 20, background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)', fontSize: 11, color: '#FBBF24', fontWeight: 600, cursor: 'pointer' }}>
-                          Ver recomendações
-                        </button>
-                      )}
                     </div>
                   </div>
                 )}
@@ -1357,20 +1145,14 @@ function TabAvaliacao({ student, studentId, progress }) {
         </div>
       )}
 
-      {/* ── Tab: Recomendações ── */}
       {activeTab === 'recs' && (
         <div>
           {recs.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px 20px', color: '#4ADE80' }}>
-              <div style={{ width:40, height:40, borderRadius:8, background:"rgba(74,222,128,0.1)", border:"1px solid rgba(74,222,128,0.2)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 12px" }}><svg width="20" height="20" viewBox="0 0 24 24" fill="#4ADE80"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
               <div style={{ fontSize: 14, fontWeight: 700 }}>Nenhuma recomendação crítica</div>
-              <div style={{ fontSize: 12, color: '#475569', marginTop: 4 }}>Todos os pilares estão com score adequado.</div>
             </div>
           ) : (
             <div>
-              <div style={{ fontSize: 11, color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
-                {recs.length} ação{recs.length > 1 ? 'ões' : ''} sugerida{recs.length > 1 ? 's' : ''} — ordenadas por prioridade
-              </div>
               {recs.map((rec, i) => {
                 const c = getScoreColor(rec.score)
                 return (
@@ -1380,9 +1162,6 @@ function TabAvaliacao({ student, studentId, progress }) {
                       <div style={{ fontSize: 10, color: c.text, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{rec.pilar} — score {rec.score}</div>
                       <div style={{ fontSize: 13, color: '#CBD5E1', lineHeight: 1.6 }}>{rec.txt}</div>
                     </div>
-                    <div style={{ flexShrink: 0, fontSize: 11, color: '#334155', fontWeight: 700, background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '4px 8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                      #{i+1}
-                    </div>
                   </div>
                 )
               })}
@@ -1391,14 +1170,12 @@ function TabAvaliacao({ student, studentId, progress }) {
         </div>
       )}
 
-      {/* ── Tab: Histórico ── */}
       {activeTab === 'history' && (
         <div>
           {history.length < 2 ? (
             <div style={{ textAlign:'center', padding:'40px 20px', color:'#475569' }}>
-              <div style={{ width:32, height:32, borderRadius:6, background:"rgba(148,163,184,0.08)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="#475569"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg></div>
               <div style={{ fontSize:14, fontWeight:700, color:'#94A3B8' }}>Histórico insuficiente</div>
-              <div style={{ fontSize:12, marginTop:4 }}>São necessários pelo menos 2 semanas de registros para gerar o gráfico de evolução do índice.</div>
+              <div style={{ fontSize:12, marginTop:4 }}>São necessários pelo menos 2 semanas de registros.</div>
             </div>
           ) : (
             <div style={{ background:'#0D1117', borderRadius:16, padding:'20px 16px', border:'1px solid rgba(255,255,255,0.07)' }}>
@@ -1407,33 +1184,19 @@ function TabAvaliacao({ student, studentId, progress }) {
                 <LineChart data={history}>
                   <XAxis dataKey="label" tick={{ fill:'#475569', fontSize:11 }} axisLine={false} tickLine={false} />
                   <YAxis domain={[0,100]} tick={{ fill:'#475569', fontSize:11 }} axisLine={false} tickLine={false} width={30} />
-                  <Tooltip
-                    contentStyle={{ background:'rgba(4,8,32,0.97)', border:'1px solid rgba(99,102,241,0.3)', borderRadius:10, fontSize:12, color:'#E2E8F0' }}
-                    formatter={v => [`${v}/100`, 'Score']}
-                  />
+                  <Tooltip contentStyle={{ background:'rgba(4,8,32,0.97)', border:'1px solid rgba(99,102,241,0.3)', borderRadius:10, fontSize:12, color:'#E2E8F0' }} formatter={v => [`${v}/100`, 'Score']} />
                   <Line type="monotone" dataKey="score" stroke="#6366F1" strokeWidth={3} dot={{ fill:'#818CF8', r:4, strokeWidth:2, stroke:'#6366F1' }} activeDot={{ r:6, fill:'#A78BFA' }} />
                 </LineChart>
               </ResponsiveContainer>
-              <div style={{ marginTop:12, display:'flex', gap:16, justifyContent:'center', flexWrap:'wrap' }}>
-                {history.length >= 2 && (() => {
-                  const delta = history[history.length-1].score - history[0].score
-                  const col = delta > 0 ? '#4ADE80' : delta < 0 ? '#F87171' : '#94A3B8'
-                  return <div style={{ fontSize:12, color:col, fontWeight:700 }}>{delta > 0 ? '↑' : delta < 0 ? '↓' : '→'} {Math.abs(delta)} pontos nas últimas {history.length - 1} semanas</div>
-                })()}
-              </div>
             </div>
           )}
-          <div style={{ marginTop:12, padding:'10px 14px', background:'rgba(99,102,241,0.04)', borderRadius:10, border:'1px solid rgba(99,102,241,0.10)', fontSize:11, color:'#475569', lineHeight:1.6 }}>
-            O histórico é calculado retroativamente usando os dados de cargas e cárdio registrados. Reflete a qualidade da prescrição ao longo do tempo com base nos dados disponíveis em cada período.
-          </div>
         </div>
       )}
 
-      {/* ── Rodapé ── */}
       <div style={{ marginTop: 20, padding: '14px 18px', background: 'rgba(99,102,241,0.05)', borderRadius: 12, border: '1px solid rgba(99,102,241,0.12)' }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: '#6366F1', marginBottom: 5 }}>🔬 Sobre este avaliador v2</div>
         <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.7 }}>
-          12 pilares ponderados com confiança baseada em dados disponíveis. Referências: ACSM 2022, Schoenfeld 2017, Foster 1998 (ACWR), Boyle 2016, Balyi LTAD 2013, Faigenbaum 2009, Fonseca 2014, WHO 2020, NSCA 2021, Kohrt 2004, Sherrington 2019. Ferramenta de suporte ao julgamento clínico — não substitui avaliação presencial.
+          12 pilares ponderados. Refs: ACSM 2022, Schoenfeld 2017, Foster 1998, Boyle 2016, Balyi LTAD 2013, WHO 2020, NSCA 2021. Ferramenta de suporte — não substitui avaliação presencial.
         </div>
       </div>
     </div>
@@ -1473,7 +1236,6 @@ export default function StudentDetail({ navigate, studentId }) {
         supabase.from('student_goals').select('*').eq('student_id', studentId).order('created_at', { ascending: false }),
       ])
 
-      // Se a query de student falhar por coluna nova inexistente, tenta com colunas básicas
       let st = stRes.data
       if (stRes.error) {
         console.warn('fetch with new cols failed, retrying basic:', stRes.error.message)
@@ -1536,7 +1298,6 @@ export default function StudentDetail({ navigate, studentId }) {
     const ops = [
       supabase.from('progress_entries').insert([{ student_id: studentId, date: newProgress.date, weight: +newProgress.weight || null, notes: newProgress.notes, measurements }])
     ]
-    // Sincroniza peso nos dados pessoais do aluno
     if (newProgress.weight) {
       ops.push(supabase.from('students').update({ weight: +newProgress.weight }).eq('id', studentId))
     }
@@ -1566,6 +1327,10 @@ export default function StudentDetail({ navigate, studentId }) {
       <button onClick={() => navigate('dashboard')} style={{ marginTop: 8, padding: '10px 24px', borderRadius: 10, border: 'none', background: '#1E293B', color: '#94A3B8', cursor: 'pointer', fontSize: 14 }}>← Voltar ao Painel</button>
     </div>
   )
+
+  // ── Calcula idade para decisões condicionais ──
+  const studentAge = calcAge(student) || parseInt(student.age) || 0
+  const isMinor = studentAge < 21  // ← menor de 21 anos
 
   const imc = student.weight && student.height ? (student.weight / ((student.height / 100) ** 2)).toFixed(1) : '—'
 
@@ -1649,7 +1414,6 @@ export default function StudentDetail({ navigate, studentId }) {
                   <input style={s.input} type="text" placeholder="Ex: Meia, Goleiro..." value={form.sport_position || ''} onChange={e => setForm(x => ({ ...x, sport_position: e.target.value }))} />
                 </div>
 
-                {/* Preview LTAD */}
                 {editLTAD && (
                   <div style={{ gridColumn:'1/-1', padding:'10px 14px', borderRadius:10, background: editLTAD.bg, border:`1px solid ${editLTAD.cor}33`, display:'flex', alignItems:'center', gap:10 }}>
                     <span style={{ fontSize:18 }}>{editLTAD.icon}</span>
@@ -1660,7 +1424,6 @@ export default function StudentDetail({ navigate, studentId }) {
                   </div>
                 )}
 
-                {/* PHV — só para menores de 18 */}
                 {editAge && editAge < 18 && (<>
                   {sep('Desenvolvimento Físico — Estimativa PHV')}
                   <div>
@@ -1672,31 +1435,9 @@ export default function StudentDetail({ navigate, studentId }) {
                     <input style={s.input} type="number" placeholder="Ex: 165" value={form.parent_height_mother||''} onChange={e=>setForm(x=>({...x,parent_height_mother:e.target.value}))}/>
                   </div>
                   <div style={{gridColumn:'1/-1'}}>
-                    <div style={lbl10}>Altura sentado (cm) — tronco + cabeça</div>
+                    <div style={lbl10}>Altura sentado (cm)</div>
                     <input style={s.input} type="number" placeholder="Ex: 82" value={form.height_sitting||''} onChange={e=>setForm(x=>({...x,height_sitting:e.target.value}))}/>
-                    <div style={{fontSize:10,color:'#475569',marginTop:4}}>Meça do assento ao topo da cabeça com o aluno sentado ereto</div>
                   </div>
-                  {(()=>{
-                    const ageD = (editAge||0) + (new Date().getMonth()/12)
-                    const offset = calcMaturityOffset(+form.height||null,+form.weight||null,+form.height_sitting||null,ageD,'M')
-                    const tgt    = calcTargetHeight(+form.parent_height_father||null,+form.parent_height_mother||null,'M')
-                    const ol     = offsetLabel(offset)
-                    if(!tgt && !ol) return null
-                    return(
-                      <div style={{gridColumn:'1/-1',padding:'12px 14px',borderRadius:10,background:'rgba(99,102,241,0.06)',border:'1px solid rgba(99,102,241,0.18)',display:'flex',flexDirection:'column',gap:8}}>
-                        <div style={{fontSize:10,color:'#6366F1',fontWeight:700,letterSpacing:1.2,textTransform:'uppercase'}}>Estimativa de Desenvolvimento</div>
-                        {tgt&&<div style={{fontSize:12,color:'#94A3B8'}}>Altura alvo genética: <strong style={{color:'#E2E8F0'}}>{tgt.low}–{tgt.high} cm</strong> <span style={{color:'#475569'}}>(Tanner 1970)</span></div>}
-                        {ol&&<div style={{display:'flex',alignItems:'flex-start',gap:8}}>
-                          <div style={{width:8,height:8,borderRadius:'50%',background:ol.color,flexShrink:0,marginTop:3}}/>
-                          <div>
-                            <div style={{fontSize:12,fontWeight:700,color:ol.color}}>{ol.label}<span style={{fontWeight:400,color:'#475569',marginLeft:6}}>offset: {offset>0?'+':''}{offset} anos (Mirwald 2002)</span></div>
-                            <div style={{fontSize:11,color:'#475569',marginTop:3,lineHeight:1.5}}>{ol.desc}</div>
-                          </div>
-                        </div>}
-                        <div style={{fontSize:10,color:'#334155',fontStyle:'italic',borderTop:'1px solid rgba(255,255,255,0.06)',paddingTop:8}}>Valores são estimativas populacionais com margem de ±1 ano. Não substituem avaliação clínica especializada.</div>
-                      </div>
-                    )
-                  })()}
                 </>)}
 
                 {sep('Responsável')}
@@ -1704,14 +1445,15 @@ export default function StudentDetail({ navigate, studentId }) {
                   <div style={lbl10}>Nome do responsável</div>
                   <input style={s.input} type="text" placeholder="Ex: Maria Silva" value={form.guardian_name || ''} onChange={e => setForm(x => ({ ...x, guardian_name: e.target.value }))} />
                 </div>
-                {editAge && editAge < 18 ? (
+                {/* WhatsApp só aparece no formulário para menores de 21 */}
+                {editAge && editAge < 21 ? (
                   <div>
                     <div style={lbl10}>WhatsApp do responsável</div>
                     <input style={s.input} type="text" placeholder="Ex: (41) 99999-9999" value={form.guardian_phone || ''} onChange={e => setForm(x => ({ ...x, guardian_phone: e.target.value }))} />
                   </div>
                 ) : (
                   <div style={{ display:'flex', alignItems:'center', padding:'10px 12px', borderRadius:8, background:'rgba(255,255,255,0.03)', border:'1px dashed rgba(255,255,255,0.1)', fontSize:11, color:'#475569' }}>
-                    WhatsApp — disponível para menores de 18 anos
+                    WhatsApp — disponível para menores de 21 anos
                   </div>
                 )}
 
@@ -1723,7 +1465,7 @@ export default function StudentDetail({ navigate, studentId }) {
                 {sep('Recado para o Responsável')}
                 <div style={{ gridColumn:'1/-1' }}>
                   <div style={lbl10}>Recado mensal — aparece na área do responsável</div>
-                  <textarea style={{ ...s.input, minHeight:80, resize:'vertical' }} placeholder="Ex: Lucas está evoluindo muito bem na resistência. O foco deste mês é a potência de membros inferiores..." value={form.parent_message || ''} onChange={e => setForm(x => ({ ...x, parent_message: e.target.value }))} />
+                  <textarea style={{ ...s.input, minHeight:80, resize:'vertical' }} placeholder="Ex: Lucas está evoluindo muito bem..." value={form.parent_message || ''} onChange={e => setForm(x => ({ ...x, parent_message: e.target.value }))} />
                   {form.parent_message && <div style={{ fontSize:10, color:'#34D399', marginTop:4 }}>Será exibido na área do responsável com a data de hoje</div>}
                 </div>
 
@@ -1743,29 +1485,34 @@ export default function StudentDetail({ navigate, studentId }) {
             </div>
           )}
 
-          {/* Share links */}
+          {/* ── Share links ── */}
           <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* Link do aluno — sempre visível */}
             <div>
               <div style={{ fontSize: 11, color: '#475569', marginBottom: 4 }}>🎮 Link do <strong>aluno</strong> — para o atleta ver e registrar o treino:</div>
               <div style={s.shareBox} onClick={() => { navigator.clipboard.writeText(shareLink); alert('Link do aluno copiado!') }}>
                 {shareLink} <span style={{ color: '#34D399', marginLeft: 8, cursor: 'pointer' }}>📋 Copiar</span>
               </div>
             </div>
-            <div>
-              <div style={{ fontSize: 11, color: '#475569', marginBottom: 4 }}>👨‍👩‍👧 Link do <strong>responsável</strong> — para o pai/mãe acompanhar a evolução:</div>
-              <div style={{ ...s.shareBox, borderColor: 'rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.05)' }}
-                onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/parent/${studentId}`); alert('Link do responsável copiado!') }}>
-                {window.location.origin}/parent/{studentId}
-                <span style={{ color: '#FBBF24', marginLeft: 8, cursor: 'pointer' }}>📋 Copiar</span>
+
+            {/* ── FIX: link do responsável só para menores de 21 anos ── */}
+            {isMinor && (
+              <div>
+                <div style={{ fontSize: 11, color: '#475569', marginBottom: 4 }}>👨‍👩‍👧 Link do <strong>responsável</strong> — para o pai/mãe acompanhar a evolução:</div>
+                <div style={{ ...s.shareBox, borderColor: 'rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.05)' }}
+                  onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/parent/${studentId}`); alert('Link do responsável copiado!') }}>
+                  {window.location.origin}/parent/{studentId}
+                  <span style={{ color: '#FBBF24', marginLeft: 8, cursor: 'pointer' }}>📋 Copiar</span>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
         {/* Tabs */}
         <div style={s.tabs}>
           {[['plans', 'Treinos'], ['progress', 'Evolução'], ['metas', 'Metas'], ['avaliacao', 'Avaliação'],
-            ...(student.age < 18 ? [['motor', 'Desenv. Motor']] : []),
+            ...(studentAge > 0 && studentAge < 18 ? [['motor', 'Desenv. Motor']] : []),
             ['notes', 'Obs.']
           ].map(([id, label]) => (
             <button key={id} style={s.tab(tab === id, id === 'avaliacao' || id === 'motor')} onClick={() => setTab(id)}>{label}</button>
@@ -1790,12 +1537,8 @@ export default function StudentDetail({ navigate, studentId }) {
                   <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>{plan.title}</div>
                   <div style={{ fontSize: 12, color: '#475569' }}>Criado em {new Date(plan.created_at).toLocaleDateString('pt-BR')}</div>
                 </div>
-                <button style={s.btn('#00C9FF')} onClick={() => navigate('workout-editor', { studentId, planId: plan.id })}>
-                  ✏️ Editar Treino
-                </button>
-                <button style={{ ...s.outlineBtn, fontSize: 12 }} onClick={() => setDuplicarPlan(plan)}>
-                  📋 Duplicar
-                </button>
+                <button style={s.btn('#00C9FF')} onClick={() => navigate('workout-editor', { studentId, planId: plan.id })}>✏️ Editar Treino</button>
+                <button style={{ ...s.outlineBtn, fontSize: 12 }} onClick={() => setDuplicarPlan(plan)}>📋 Duplicar</button>
               </div>
             ))}
           </div>
@@ -1807,7 +1550,6 @@ export default function StudentDetail({ navigate, studentId }) {
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
               <button style={s.btn()} onClick={() => setShowProgressForm(!showProgressForm)}>+ Registrar Evolução</button>
             </div>
-
             {showProgressForm && (
               <div style={{ ...s.card, marginBottom: 16 }}>
                 <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 16 }}>Novo Registro</div>
@@ -1826,7 +1568,6 @@ export default function StudentDetail({ navigate, studentId }) {
                 <button style={s.btn()} onClick={addProgress} disabled={saving}>{saving ? 'Salvando...' : 'Salvar Registro'}</button>
               </div>
             )}
-
             {progress.length === 0 && <div style={{ textAlign: 'center', padding: 60, color: '#334155' }}>Nenhum registro ainda</div>}
             {progress.map((p, i) => (
               <div key={p.id} style={{ ...s.card, marginBottom: 10 }}>
@@ -1852,8 +1593,7 @@ export default function StudentDetail({ navigate, studentId }) {
           </div>
         )}
 
-
-        {/* METAS TAB — read-only para o professor */}
+        {/* METAS TAB */}
         {tab === 'metas' && (
           <div>
             <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1909,31 +1649,22 @@ export default function StudentDetail({ navigate, studentId }) {
 
         {/* AVALIACAO TAB */}
         {tab === 'avaliacao' && (
-          <TabAvaliacao
-            student={student}
-            studentId={studentId}
-            progress={progress}
-          />
+          <TabAvaliacao student={student} studentId={studentId} progress={progress} />
         )}
 
-        {/* MOTOR DEVELOPMENT TAB */}
-        {tab === 'motor' && student.age < 18 && (
-          <TabDesenvolvimentoMotor
-            student={student}
-            studentId={studentId}
-            onUpdate={fetchAll}
-          />
+        {/* MOTOR TAB */}
+        {tab === 'motor' && studentAge > 0 && studentAge < 18 && (
+          <TabDesenvolvimentoMotor student={student} studentId={studentId} onUpdate={fetchAll} />
         )}
 
         {/* NOTES TAB */}
         {tab === 'notes' && (
           <div style={s.card}>
             <div style={{ fontSize: 14, fontWeight: 600, color: '#94A3B8', marginBottom: 8 }}>Observações do Aluno</div>
-            {editing ? null : (
-              student.notes
-                ? <div style={{ fontSize: 14, color: '#CBD5E1', lineHeight: 1.7 }}>{student.notes}</div>
-                : <div style={{ color: '#334155', fontSize: 14 }}>Nenhuma observação registrada. Clique em "Editar Perfil" para adicionar.</div>
-            )}
+            {student.notes
+              ? <div style={{ fontSize: 14, color: '#CBD5E1', lineHeight: 1.7 }}>{student.notes}</div>
+              : <div style={{ color: '#334155', fontSize: 14 }}>Nenhuma observação registrada. Clique em "Editar Perfil" para adicionar.</div>
+            }
           </div>
         )}
       </div>
