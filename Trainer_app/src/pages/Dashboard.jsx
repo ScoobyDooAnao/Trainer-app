@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import TabEscolinha from './TabEscolinha'
 const useIsMobile = () => { const [m,setM]=useState(()=>window.innerWidth<768); useEffect(()=>{const h=()=>setM(window.innerWidth<768);window.addEventListener('resize',h);return()=>window.removeEventListener('resize',h)},[]);return m }
 import { supabase } from '../supabase'
 import {
@@ -27,10 +28,11 @@ const DIAS_SEMANA = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 const DIA_JS_MAP  = { Seg: 1, Ter: 2, Qua: 3, Qui: 4, Sex: 5, Sáb: 6, Dom: 0 }
 
 const NAV = [
-  { id: 'alunos',   icon: '⬛', label: 'Meus Alunos' },
-  { id: 'treinos',  icon: '⬛', label: 'Treinos'      },
-  { id: 'evolucao', icon: '⬛', label: 'Evolução'     },
-  { id: 'cardio',   icon: '⬛', label: 'Cardio'       },
+  { id: 'alunos',    icon: '⬛', label: 'Meus Alunos' },
+  { id: 'treinos',   icon: '⬛', label: 'Treinos'      },
+  { id: 'evolucao',  icon: '⬛', label: 'Evolução'     },
+  { id: 'cardio',    icon: '⬛', label: 'Cardio'       },
+  { id: 'escolinha', icon: '⬛', label: 'Escolinha'    },
 ]
 const GOALS  = ['Ganho de Massa', 'Emagrecimento', 'Condicionamento', 'Força e Performance', 'Saúde e Bem-Estar', 'Iniciação Esportiva', 'Desenvolvimento Atlético', 'Treinamento Competitivo']
 const LEVELS = ['Iniciante', 'Intermediário', 'Avançado', 'Atleta Jovem', 'Atleta Competitivo']
@@ -230,6 +232,7 @@ const NAV_ICONS = {
   evolucao: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>,
   cardio:   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>,
   perfil:   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>,
+  escolinha: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3L1 9l4 2.18V15c0 3 3.58 6 7 6s7-3 7-6v-3.82L22 9 12 3zm6 10.99l-1 .55V15c0 1.76-2.69 4-5 4s-5-2.24-5-4v-1.46l-1-.55V9.7l6-3.27 6 3.27v4.29z"/></svg>,
   sair:     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>,
 }
 
@@ -2203,8 +2206,12 @@ export default function Dashboard({ navigate, session }) {
         {/* ABA: CÁRDIO */}
         {nav === 'cardio' && <TabCardio students={students} />}
 
+        {nav === 'escolinha' && (
+          <TabEscolinha session={session} students={students} />
+        )}
+
         {/* OUTRAS ABAS */}
-        {nav !== 'alunos' && nav !== 'treinos' && nav !== 'evolucao' && nav !== 'cardio' && (
+        {nav !== 'alunos' && nav !== 'treinos' && nav !== 'evolucao' && nav !== 'cardio' && nav !== 'escolinha' && (
           <div style={{ padding: '80px 20px', textAlign: 'center', color: '#0C4A6E', opacity: 0.5 }}>
             <div style={{ fontSize: 48, marginBottom: 14 }}>🚧</div>
             <div style={{ fontSize: 18, fontWeight: 700 }}>Em desenvolvimento</div>
