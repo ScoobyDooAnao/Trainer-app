@@ -1,1003 +1,760 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
-import MotorSkillsSection from './MotorSkillsSection'
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-const MUSCLE_TYPES = [
-  'Peito','Costas','Bíceps','Tríceps','Ombro',
-  'Quadríceps','Posterior','Glúteo','Panturrilha','Core','Cardio','Full Body',
-]
-const NEW_TYPES = ['Funcional','Elástico','Peso Corporal','Mobilidade']
-const EXERCISE_TYPES = [...MUSCLE_TYPES, ...NEW_TYPES]
-
-const MODALITY_MAP = {
-  'Musculação': MUSCLE_TYPES,
-  'Funcional':  ['Funcional','Full Body','Core','Cardio'],
-  'Elástico':   ['Elástico'],
-  'Corpo':      ['Peso Corporal','Mobilidade'],
-}
-const MODALITY_COLORS = {
-  'Musculação': '#A78BFA',
-  'Funcional':  '#34D399',
-  'Elástico':   '#FBBF24',
-  'Corpo':      '#60A5FA',
-}
-
-const STATUS_OPTIONS = ['draft','active','archived']
-const STATUS_LABEL   = { draft:'Rascunho', active:'Ativo', archived:'Arquivado' }
-const DAY_COLORS     = ['#00C9FF','#FF6B6B','#A78BFA','#FBBF24','#34D399','#F97316']
-const emptyEx        = { name:'', sets:'3', reps:'10-12', rest:'60s', tip:'', type:'Peito' }
-
-const getAgeGroup = (birthDate, age) => {
-  const a = birthDate
-    ? Math.floor((Date.now() - new Date(birthDate)) / (365.25 * 24 * 3600 * 1000))
-    : age ? parseInt(age) : null
-  if (!a) return 'adulto_jovem'
-  if (a < 13) return 'crianca'
-  if (a < 18) return 'adolescente'
-  if (a < 40) return 'adulto_jovem'
-  if (a < 60) return 'adulto_maduro'
-  return 'idoso'
-}
-
-const AGE_GROUP_LABEL = {
-  crianca:'Criança', adolescente:'Adolescente',
-  adulto_jovem:'Adulto', adulto_maduro:'Adulto Maduro', idoso:'Idoso 60+',
-}
-const AGE_GROUP_COLOR = {
-  crianca:'#34D399', adolescente:'#60A5FA',
-  adulto_jovem:'#A78BFA', adulto_maduro:'#FBBF24', idoso:'#F97316',
-}
-const AGE_RESTRICTIONS = {
-  crianca:      { maxPct:60,  warning:'Criança: sem carga máxima. Prescrever por PSE e peso corporal.',     blockedZones:['Força Máxima','Hipertrofia'] },
-  adolescente:  { maxPct:70,  warning:'Adolescente: limitar a 70% 1RM durante fase de crescimento ósseo.', blockedZones:['Força Máxima'] },
-  adulto_jovem: { maxPct:100, warning:null,                                                                 blockedZones:[] },
-  adulto_maduro:{ maxPct:100, warning:'Adulto maduro: aumentar descanso entre séries (48-72h por grupo).', blockedZones:[] },
-  idoso:        { maxPct:75,  warning:'60+: iniciar com 40-50% 1RM. Avaliação médica recomendada.',        blockedZones:['Força Máxima'] },
-}
-const ZONES = [
-  { label:'Força Máxima',      pct:[85,100], reps:'1-5',   rest:'3-5min',  color:'#EF4444' },
-  { label:'Hipertrofia',       pct:[65,85],  reps:'6-12',  rest:'60-120s', color:'#A78BFA' },
-  { label:'Resistência Musc.', pct:[40,65],  reps:'15-30', rest:'30-60s',  color:'#34D399' },
+// ── Constantes ────────────────────────────────────────────────────────────────
+const SPORTS = [
+  { id: 'futebol', label: 'Futebol', icon: '⚽' },
+  { id: 'futsal',  label: 'Futsal',  icon: '🥅' },
+  { id: 'natacao', label: 'Natação', icon: '🏊' },
+  { id: 'basquete',label: 'Basquete',icon: '🏀' },
+  { id: 'volei',   label: 'Vôlei',   icon: '🏐' },
+  { id: 'tenis',   label: 'Tênis',   icon: '🎾' },
+  { id: 'judo',    label: 'Judô',    icon: '🥋' },
+  { id: 'handebol',label: 'Handebol',icon: '🤾' },
+  { id: 'atletismo',label:'Atletismo',icon:'🏃' },
+  { id: 'outro',   label: 'Outro',   icon: '🏅' },
 ]
 
-// ── Exercise Bank ─────────────────────────────────────────────────────────────
-const EXERCISE_BANK = [
-  { name:'Supino Reto (Barra)',         type:'Peito',      sets:'4', reps:'8-10',    rest:'90s',  tip:'Escápulas retraídas, barra desce até o peito' },
-  { name:'Supino Inclinado (Halter)',   type:'Peito',      sets:'3', reps:'10-12',   rest:'75s',  tip:'Ângulo de 30-45°, cotovelos a 45° do tronco' },
-  { name:'Crucifixo (Halter)',          type:'Peito',      sets:'3', reps:'12-15',   rest:'60s',  tip:'Leve flexão dos cotovelos, amplitude controlada' },
-  { name:'Peck Deck',                  type:'Peito',      sets:'3', reps:'12-15',   rest:'60s',  tip:'Adução horizontal controlada, sem hiperestender' },
-  { name:'Barra Fixa',                 type:'Costas',     sets:'4', reps:'6-10',    rest:'90s',  tip:'Escápulas deprimidas na fase excêntrica' },
-  { name:'Remada Curvada (Barra)',     type:'Costas',     sets:'4', reps:'8-10',    rest:'90s',  tip:'Tronco a 45°, cotovelos próximos ao corpo' },
-  { name:'Puxada Frontal (Polia)',     type:'Costas',     sets:'3', reps:'10-12',   rest:'75s',  tip:'Puxar até a clavícula, não atrás da nuca' },
-  { name:'Remada Baixa (Polia)',       type:'Costas',     sets:'3', reps:'10-12',   rest:'75s',  tip:'Peito ereto, escápulas se aproximam no final' },
-  { name:'Remada Unilateral (Halter)', type:'Costas',     sets:'3', reps:'10-12',   rest:'60s',  tip:'Rotação mínima de quadril, cotovelo alto' },
-  { name:'Remada TRX',                type:'Costas',     sets:'3', reps:'10-15',   rest:'60s',  tip:'Corpo em prancha, cotovelos passam o tronco' },
-  { name:'Rosca Direta (Barra)',       type:'Bíceps',     sets:'3', reps:'10-12',   rest:'60s',  tip:'Cotovelos fixos ao lado do tronco' },
-  { name:'Rosca Alternada (Halter)',   type:'Bíceps',     sets:'3', reps:'10-12',   rest:'60s',  tip:'Supinação completa no topo do movimento' },
-  { name:'Rosca Martelo',             type:'Bíceps',     sets:'3', reps:'12-15',   rest:'60s',  tip:'Neutro, treina braquial e braquiorradial' },
-  { name:'Rosca Scott',               type:'Bíceps',     sets:'3', reps:'10-12',   rest:'60s',  tip:'Isola o bíceps, evita compensação de ombro' },
-  { name:'Tríceps Pulley (Polia)',     type:'Tríceps',    sets:'3', reps:'12-15',   rest:'60s',  tip:'Cotovelos fixos, extensão completa' },
-  { name:'Tríceps Testa (Barra EZ)',   type:'Tríceps',    sets:'3', reps:'10-12',   rest:'60s',  tip:'Cotovelos apontados para o teto' },
-  { name:'Tríceps Francês (Halter)',   type:'Tríceps',    sets:'3', reps:'12-15',   rest:'60s',  tip:'Controle na fase excêntrica' },
-  { name:'Desenvolvimento (Halter)',   type:'Ombro',      sets:'4', reps:'10-12',   rest:'75s',  tip:'Cotovelos a 90° na posição inicial' },
-  { name:'Elevação Lateral',          type:'Ombro',      sets:'3', reps:'12-15',   rest:'60s',  tip:'Leve flexão do cotovelo, evita trapézio' },
-  { name:'Elevação Frontal',          type:'Ombro',      sets:'3', reps:'12-15',   rest:'60s',  tip:'Até a altura dos ombros, movimento lento' },
-  { name:'Desenvolvimento Arnold',    type:'Ombro',      sets:'3', reps:'10-12',   rest:'75s',  tip:'Rotação completa, ativa todas as porções' },
-  { name:'Agachamento Livre',         type:'Quadríceps', sets:'4', reps:'8-12',    rest:'90s',  tip:'Joelhos na linha dos pés, tronco ereto' },
-  { name:'Agachamento Goblet',        type:'Quadríceps', sets:'3', reps:'12-15',   rest:'75s',  tip:'Ótimo para iniciantes e crianças' },
-  { name:'Leg Press',                 type:'Quadríceps', sets:'4', reps:'10-15',   rest:'75s',  tip:'Não travar os joelhos na extensão' },
-  { name:'Afundo (Lunge)',            type:'Quadríceps', sets:'3', reps:'10-12',   rest:'60s',  tip:'Joelho traseiro próximo ao chão, tronco ereto' },
-  { name:'Cadeira Extensora',         type:'Quadríceps', sets:'3', reps:'12-15',   rest:'60s',  tip:'Extensão completa, fase excêntrica 3s' },
-  { name:'Levantamento Terra',        type:'Posterior',  sets:'4', reps:'6-8',     rest:'120s', tip:'Barra sobre os pés, empurre o chão' },
-  { name:'Mesa Flexora',              type:'Posterior',  sets:'3', reps:'10-12',   rest:'75s',  tip:'Quadril levemente inclinado, fase excêntrica lenta' },
-  { name:'Stiff (Terra Romeno)',       type:'Posterior',  sets:'4', reps:'8-12',    rest:'90s',  tip:'Joelhos semiflexionados, barra próxima ao corpo' },
-  { name:'Cadeira Flexora',           type:'Posterior',  sets:'3', reps:'12-15',   rest:'60s',  tip:'Evitar compensação de quadril' },
-  { name:'Hip Thrust (Barra)',         type:'Glúteo',     sets:'4', reps:'10-12',   rest:'75s',  tip:'Queixo no peito, extensão completa de quadril' },
-  { name:'Agachamento Sumô',          type:'Glúteo',     sets:'3', reps:'12-15',   rest:'75s',  tip:'Pés mais abertos, joelhos seguem os pés' },
-  { name:'Panturrilha em Pé',         type:'Panturrilha',sets:'4', reps:'15-20',   rest:'45s',  tip:'Amplitude total, pausa no topo' },
-  { name:'Panturrilha Sentado',       type:'Panturrilha',sets:'3', reps:'15-20',   rest:'45s',  tip:'Sóleo dominante, joelhos a 90°' },
-  { name:'Prancha Frontal',           type:'Core',       sets:'3', reps:'30-60s',  rest:'45s',  tip:'Quadril neutro, não elevar o quadril' },
-  { name:'Prancha Lateral',           type:'Core',       sets:'3', reps:'20-40s',  rest:'45s',  tip:'Corpo em linha reta, apoio no antebraço' },
-  { name:'Abdominal Crunch',          type:'Core',       sets:'3', reps:'15-20',   rest:'45s',  tip:'Cervical neutra, foco na contração' },
-  { name:'Dead Bug',                  type:'Core',       sets:'3', reps:'8-10',    rest:'45s',  tip:'Lombar no chão, extensão contralateral' },
-  { name:'Pallof Press',              type:'Core',       sets:'3', reps:'10-12',   rest:'45s',  tip:'Resistência à rotação, excelente para esporte' },
-  { name:'Rotação de Tronco',         type:'Core',       sets:'3', reps:'12-15',   rest:'45s',  tip:'Movimento controlado, não usar impulso' },
-  { name:'Kettlebell Swing',          type:'Full Body',  sets:'4', reps:'12-15',   rest:'60s',  tip:'Impulsão de quadril, não é um agachamento' },
-  { name:'Pular Corda',               type:'Cardio',     sets:'3', reps:'2-3min',  rest:'60s',  tip:'Pulos baixos, aterrissagem no antepé' },
-  { name:'Corrida (Esteira)',         type:'Cardio',     sets:'1', reps:'20-40min',rest:'-',    tip:'PSE 3-5, conversa possível' },
-  { name:'Bicicleta Ergométrica',     type:'Cardio',     sets:'1', reps:'20-40min',rest:'-',    tip:'RPM 70-90, resistência moderada' },
-  { name:'Flexão de Braço',              type:'Funcional',    sets:'3', reps:'10-15',  rest:'60s',  tip:'Corpo rígido, peito toca o chão' },
-  { name:'Flexão de Braço Declinada',    type:'Funcional',    sets:'3', reps:'10-12',  rest:'60s',  tip:'Pés elevados, ativa porção superior do peito' },
-  { name:'Flexão de Braço Diamante',     type:'Funcional',    sets:'3', reps:'8-12',   rest:'60s',  tip:'Mãos formam diamante, foco no tríceps' },
-  { name:'Flexão de Braço Arqueiro',     type:'Funcional',    sets:'3', reps:'6-8',    rest:'75s',  tip:'Progride para o unilateral — pistol de braço' },
-  { name:'Burpee',                       type:'Funcional',    sets:'3', reps:'8-12',   rest:'90s',  tip:'Movimento completo, ritmo controlado' },
-  { name:'Burpee com Salto',             type:'Funcional',    sets:'3', reps:'6-10',   rest:'90s',  tip:'Salto explosivo no topo, aterrissagem suave' },
-  { name:'Mountain Climber',             type:'Funcional',    sets:'3', reps:'20-30',  rest:'45s',  tip:'Quadril estável, não rodar o tronco' },
-  { name:'Abdominal Bicicleta',          type:'Funcional',    sets:'3', reps:'15-20',  rest:'45s',  tip:'Cotovelo toca o joelho oposto' },
-  { name:'Abdominal V-Sit',              type:'Funcional',    sets:'3', reps:'10-15',  rest:'45s',  tip:'Suba simultâneo de tronco e pernas' },
-  { name:'Abdominal Infra (Pernas)',     type:'Funcional',    sets:'3', reps:'15-20',  rest:'45s',  tip:'Lombar no chão, pernas sobem e descem' },
-  { name:'Agachamento com Salto',        type:'Funcional',    sets:'3', reps:'8-10',   rest:'90s',  tip:'Aterrissagem suave com joelhos levemente flexionados' },
-  { name:'Afundo com Salto (Lunge Jump)',type:'Funcional',    sets:'3', reps:'8-10',   rest:'90s',  tip:'Troca de perna no ar, explosão de quadríceps' },
-  { name:'Step Up (Caixote/Escada)',     type:'Funcional',    sets:'3', reps:'10-12',  rest:'60s',  tip:'Empurrar pelo calcanhar do pé apoiado' },
-  { name:'Corrida Lateral (Shuffle)',    type:'Funcional',    sets:'4', reps:'10-15m', rest:'60s',  tip:'Futebol: agilidade e mudança de direção' },
-  { name:'Salto Vertical',              type:'Funcional',    sets:'4', reps:'6-8',    rest:'90s',  tip:'LTAD: desenvolve potência e coordenação' },
-  { name:'Box Jump',                    type:'Funcional',    sets:'4', reps:'5-8',    rest:'90s',  tip:'Aterrissagem em flexão, absorção do impacto' },
-  { name:'Bear Crawl',                  type:'Funcional',    sets:'3', reps:'20m',    rest:'60s',  tip:'Joelhos a 2cm do chão, core ativado' },
-  { name:'Crab Walk',                   type:'Funcional',    sets:'3', reps:'15m',    rest:'60s',  tip:'Quadril elevado, ativa ombro e glúteo' },
-  { name:'Inchworm',                    type:'Funcional',    sets:'3', reps:'8-10',   rest:'45s',  tip:'Caminhada de mãos, mantém pernas estendidas' },
-  { name:'Polichinelo',                 type:'Funcional',    sets:'3', reps:'30-45s', rest:'30s',  tip:'Ritmo constante, ótimo para aquecimento' },
-  { name:'Corrida no Lugar (High Knee)', type:'Funcional',   sets:'3', reps:'30s',    rest:'30s',  tip:'Joelhos na altura do quadril, braços em ritmo' },
-  { name:'Remada com Elástico',          type:'Elástico',    sets:'3', reps:'12-15',  rest:'60s',  tip:'Elástico preso à frente, cotovelos passam o tronco' },
-  { name:'Puxada com Elástico',          type:'Elástico',    sets:'3', reps:'12-15',  rest:'60s',  tip:'Elástico preso acima, puxar para o peito' },
-  { name:'Rosca Bíceps com Elástico',    type:'Elástico',    sets:'3', reps:'12-15',  rest:'45s',  tip:'Pisar no elástico, supinação completa' },
-  { name:'Extensão Tríceps com Elástico',type:'Elástico',    sets:'3', reps:'12-15',  rest:'45s',  tip:'Elástico preso acima, extensão completa' },
-  { name:'Elevação Lateral com Elástico',type:'Elástico',    sets:'3', reps:'15-20',  rest:'45s',  tip:'Elástico sob os pés, cotovelos levemente flexionados' },
-  { name:'Agachamento com Elástico',     type:'Elástico',    sets:'3', reps:'15-20',  rest:'60s',  tip:'Elástico sobre os ombros ou sob os pés' },
-  { name:'Hip Thrust com Elástico',      type:'Elástico',    sets:'3', reps:'15-20',  rest:'45s',  tip:'Elástico sobre os quadris, extensão completa' },
-  { name:'Abdução de Quadril (Elástico)',type:'Elástico',    sets:'3', reps:'15-20',  rest:'45s',  tip:'Elástico nos joelhos, abre e fecha controlado' },
-  { name:'Afundo com Elástico',          type:'Elástico',    sets:'3', reps:'12',     rest:'60s',  tip:'Elástico sobre os ombros, postura ereta' },
-  { name:'Pallof Press (Elástico)',      type:'Elástico',    sets:'3', reps:'10-12',  rest:'45s',  tip:'Resistência à rotação, core antirotacional' },
-  { name:'Agachamento com Peso Corporal',type:'Peso Corporal',sets:'3',reps:'15-20',  rest:'45s',  tip:'Sem carga, foco em técnica perfeita' },
-  { name:'Afundo (Peso Corporal)',        type:'Peso Corporal',sets:'3',reps:'12',     rest:'45s',  tip:'Tronco ereto, joelho traseiro quase no chão' },
-  { name:'Elevação Pélvica (Glúteo Bridge)',type:'Peso Corporal',sets:'3',reps:'20-25',rest:'30s', tip:'Extensão completa de quadril, glúteo contraído' },
-  { name:'Glúteo 4 Apoios',              type:'Peso Corporal',sets:'3',reps:'15-20',  rest:'30s',  tip:'Joelho a 90°, empurra o calcanhar para o teto' },
-  { name:'Superman',                     type:'Peso Corporal',sets:'3',reps:'12-15',  rest:'30s',  tip:'Extensão simultânea de braço e perna opostos' },
-  { name:'Equilíbrio Unipodal',          type:'Peso Corporal',sets:'3',reps:'20-30s', rest:'30s',  tip:'Olhos abertos depois fechados para progredir' },
-  { name:'Prancha com Elevação de Braço',type:'Peso Corporal',sets:'3',reps:'8-10',   rest:'45s',  tip:'Anti-rotação, core profundo' },
-  { name:'Puxada Inverted Row',          type:'Peso Corporal',sets:'3',reps:'10-15',  rest:'60s',  tip:'Barra baixa, corpo inclinado — remada corporal' },
-  { name:'Tríceps Banco (Dip)',          type:'Peso Corporal',sets:'3',reps:'10-15',  rest:'60s',  tip:'Apoio em cadeira ou banco, cotovelos atrás' },
-  { name:'Gato-Vaca',                    type:'Mobilidade',  sets:'2', reps:'10-15',  rest:'30s',  tip:'Mobilidade torácica e lombar, ritmo respiratório' },
-  { name:'Mobilidade de Quadril 90/90',  type:'Mobilidade',  sets:'2', reps:'8-10',   rest:'30s',  tip:'Rotação interna e externa de quadril sentado' },
-  { name:'World\'s Greatest Stretch',    type:'Mobilidade',  sets:'2', reps:'6-8',    rest:'30s',  tip:'Combinação de lunge, rotação e extensão torácica' },
-  { name:'Alongamento de Isquiotibial',  type:'Mobilidade',  sets:'2', reps:'30-45s', rest:'20s',  tip:'Perna estendida, flexão do tronco sem arredondar lombar' },
-  { name:'Rotação Torácica em 4 Apoios', type:'Mobilidade',  sets:'2', reps:'8-10',   rest:'30s',  tip:'Mão atrás da cabeça, cotovelo sobe ao teto' },
-  { name:'Mobilidade de Tornozelo',      type:'Mobilidade',  sets:'2', reps:'10-12',  rest:'20s',  tip:'Joelho ultrapassa o pé, mantém calcanhar no chão' },
+const TIPO_FOCO = [
+  { id: 'Físico',       color: '#EF4444', bg: 'rgba(239,68,68,0.12)' },
+  { id: 'Técnico',      color: '#3B82F6', bg: 'rgba(59,130,246,0.12)' },
+  { id: 'Lúdico',       color: '#A78BFA', bg: 'rgba(167,139,250,0.12)' },
+  { id: 'Competitivo',  color: '#F59E0B', bg: 'rgba(245,158,11,0.12)' },
+  { id: 'Progressão',   color: '#10B981', bg: 'rgba(16,185,129,0.12)' },
+  { id: 'Misto',        color: '#64748B', bg: 'rgba(100,116,139,0.12)' },
 ]
 
-// ── Templates ─────────────────────────────────────────────────────────────────
-const T = {
-  futebol_crianca: {
-    label:'Futebol - FUNdamentals (6-12 anos)', color:'#34D399', semAcademia:false,
-    days:[
-      { name:'Treino A - Multilateral', focus:'Full Body + Coordenação', day_of_week:'Ter', exercises:[
-        { name:'Agachamento com Peso Corporal', type:'Peso Corporal', sets:'3', reps:'15',   rest:'45s', tip:'Foco em técnica' },
-        { name:'Flexão de Braço',               type:'Funcional',     sets:'3', reps:'10',   rest:'45s', tip:'Apoio nos joelhos se necessário' },
-        { name:'Salto Vertical',                type:'Funcional',     sets:'3', reps:'6',    rest:'60s', tip:'Aterrissagem suave' },
-        { name:'Corrida Lateral (Shuffle)',     type:'Funcional',     sets:'4', reps:'10m',  rest:'45s', tip:'Agilidade' },
-        { name:'Prancha Frontal',               type:'Core',          sets:'3', reps:'20s',  rest:'30s', tip:'Core estável' },
-        { name:'Equilíbrio Unipodal',           type:'Peso Corporal', sets:'3', reps:'20s',  rest:'30s', tip:'Olhos abertos' },
-      ]},
-      { name:'Treino B - Coordenação', focus:'Habilidades Motoras + Core', day_of_week:'Qui', exercises:[
-        { name:'Corrida Lateral (Shuffle)',  type:'Funcional',    sets:'4', reps:'15m',  rest:'45s', tip:'Mudança de direção' },
-        { name:'Afundo (Peso Corporal)',     type:'Peso Corporal',sets:'3', reps:'10',   rest:'45s', tip:'Sem carga extra' },
-        { name:'Abdominal Bicicleta',        type:'Funcional',    sets:'3', reps:'15',   rest:'30s', tip:'Coordenação contralateral' },
-        { name:'Step Up (Caixote/Escada)',   type:'Funcional',    sets:'3', reps:'10',   rest:'45s', tip:'Empurrar pelo calcanhar' },
-        { name:'Superman',                   type:'Peso Corporal',sets:'3', reps:'12',   rest:'30s', tip:'Extensão controlada' },
-        { name:'Pular Corda',                type:'Cardio',       sets:'3', reps:'2min', rest:'60s', tip:'Coordenação ritmo' },
-      ]},
-    ],
-  },
-  futebol_adolescente: {
-    label:'Futebol - Train to Train (12-17 anos)', color:'#60A5FA', semAcademia:false,
-    days:[
-      { name:'Treino A - Membros Inferiores', focus:'Posterior + Glúteo + Core', day_of_week:'Seg', exercises:[
-        { name:'Agachamento Livre',        type:'Quadríceps',   sets:'4', reps:'10-12', rest:'75s', tip:'Foco em técnica, até 70% 1RM' },
-        { name:'Stiff (Terra Romeno)',      type:'Posterior',    sets:'3', reps:'10-12', rest:'75s', tip:'Cadeia posterior do futebol' },
-        { name:'Afundo com Salto (Lunge Jump)', type:'Funcional',sets:'3',reps:'10',   rest:'60s', tip:'Transferência esportiva' },
-        { name:'Hip Thrust (Barra)',        type:'Glúteo',       sets:'3', reps:'12',   rest:'60s', tip:'Potência de chute' },
-        { name:'Prancha Frontal',           type:'Core',         sets:'3', reps:'40s',  rest:'30s', tip:'Estabilizador central' },
-        { name:'Pallof Press',             type:'Core',         sets:'3', reps:'10',   rest:'45s', tip:'Resistência à rotação' },
-      ]},
-      { name:'Treino B - Membros Superiores', focus:'Empurrão + Puxada', day_of_week:'Qua', exercises:[
-        { name:'Supino Reto (Barra)',       type:'Peito',  sets:'4', reps:'10-12', rest:'75s', tip:'70% 1RM máx adolescente' },
-        { name:'Puxada Frontal (Polia)',    type:'Costas', sets:'4', reps:'10-12', rest:'75s', tip:'Equilíbrio pull/push' },
-        { name:'Desenvolvimento (Halter)', type:'Ombro',  sets:'3', reps:'10-12', rest:'60s', tip:'Estabilidade escapular' },
-        { name:'Remada Curvada (Barra)',    type:'Costas', sets:'3', reps:'10-12', rest:'75s', tip:'Postura futebol' },
-        { name:'Dead Bug',                 type:'Core',   sets:'3', reps:'8',     rest:'45s', tip:'Coordenação contralateral' },
-      ]},
-      { name:'Treino C - Potência + Agilidade', focus:'Explosão + Velocidade', day_of_week:'Sex', exercises:[
-        { name:'Agachamento com Salto',     type:'Funcional', sets:'4', reps:'6-8',  rest:'90s', tip:'Pliometria - base do futebol' },
-        { name:'Corrida Lateral (Shuffle)', type:'Funcional', sets:'4', reps:'15m',  rest:'60s', tip:'Agilidade e mudança de direção' },
-        { name:'Box Jump',                  type:'Funcional', sets:'3', reps:'5-8',  rest:'90s', tip:'Potência de membros inferiores' },
-        { name:'Kettlebell Swing',          type:'Full Body', sets:'3', reps:'12',   rest:'75s', tip:'Potência de quadril' },
-        { name:'Corrida (Esteira)',         type:'Cardio',   sets:'1', reps:'20min', rest:'-',   tip:'PSE 5-6, resistência aeróbia' },
-      ]},
-    ],
-  },
-  saude: {
-    label:'Saúde e Bem-Estar - Funcional', color:'#34D399', semAcademia:false,
-    days:[
-      { name:'Treino A - Funcional Inferior', focus:'Quadril + Core + Equilíbrio', day_of_week:'Seg', exercises:[
-        { name:'Agachamento Goblet',             type:'Quadríceps',  sets:'3', reps:'12-15', rest:'60s', tip:'Multiarticular, padrão funcional' },
-        { name:'Stiff (Terra Romeno)',            type:'Posterior',   sets:'3', reps:'12-15', rest:'60s', tip:'Mobilidade de quadril' },
-        { name:'Elevação Pélvica (Glúteo Bridge)',type:'Peso Corporal',sets:'3',reps:'15-20', rest:'45s', tip:'Sem carga, foco em ativação' },
-        { name:'Afundo (Peso Corporal)',          type:'Peso Corporal',sets:'3',reps:'12',    rest:'60s', tip:'Equilíbrio e funcionalidade' },
-        { name:'Panturrilha em Pé',              type:'Panturrilha', sets:'3', reps:'15-20', rest:'45s', tip:'Amplitude total' },
-        { name:'Prancha Frontal',                type:'Core',        sets:'3', reps:'30s',   rest:'30s', tip:'Core estabilizador' },
-      ]},
-      { name:'Treino B - Funcional Superior', focus:'Puxada + Empurrão + Mobilidade', day_of_week:'Qua', exercises:[
-        { name:'Flexão de Braço',             type:'Funcional',  sets:'3', reps:'10-15', rest:'60s', tip:'Peso corporal, funcional' },
-        { name:'Remada Unilateral (Halter)',   type:'Costas',     sets:'3', reps:'12-15', rest:'60s', tip:'Equilíbrio pull/push' },
-        { name:'Desenvolvimento (Halter)',     type:'Ombro',      sets:'3', reps:'12-15', rest:'60s', tip:'Carga leve, padrão funcional' },
-        { name:'Gato-Vaca',                   type:'Mobilidade', sets:'2', reps:'12',    rest:'30s', tip:'Mobilidade torácica' },
-        { name:'Mobilidade de Quadril 90/90', type:'Mobilidade', sets:'2', reps:'8',     rest:'30s', tip:'Prevenção de lesão' },
-        { name:'Dead Bug',                    type:'Core',       sets:'3', reps:'8',     rest:'45s', tip:'Core funcional profundo' },
-      ]},
-      { name:'Cardio + Mobilidade', focus:'Saúde Cardiovascular', day_of_week:'Sex', exercises:[
-        { name:'Bicicleta Ergométrica', type:'Cardio',       sets:'1', reps:'30min', rest:'-',  tip:'PSE 3-4, zona de saúde cardiovascular' },
-        { name:'Corrida (Esteira)',     type:'Cardio',       sets:'1', reps:'20min', rest:'-',  tip:'Alternativa: caminhada rápida PSE 3' },
-        { name:'Prancha Lateral',      type:'Peso Corporal',sets:'3', reps:'25s',   rest:'30s', tip:'Estabilidade lateral' },
-        { name:'Equilíbrio Unipodal',  type:'Peso Corporal',sets:'3', reps:'25s',   rest:'30s', tip:'Prevenção de quedas' },
-      ]},
-    ],
-  },
-  massa: {
-    label:'Ganho de Massa - Hipertrofia', color:'#A78BFA', semAcademia:false,
-    days:[
-      { name:'Treino A - Peito + Tríceps', focus:'Push', day_of_week:'Seg', exercises:[
-        { name:'Supino Reto (Barra)',       type:'Peito',   sets:'4', reps:'6-10',  rest:'90s', tip:'Tensão mecânica - hipertrofia' },
-        { name:'Supino Inclinado (Halter)', type:'Peito',   sets:'3', reps:'10-12', rest:'75s', tip:'Porção clavicular' },
-        { name:'Crucifixo (Halter)',        type:'Peito',   sets:'3', reps:'12-15', rest:'60s', tip:'Estresse metabólico' },
-        { name:'Tríceps Pulley (Polia)',    type:'Tríceps', sets:'3', reps:'12-15', rest:'60s', tip:'Isolamento final' },
-        { name:'Tríceps Testa (Barra EZ)', type:'Tríceps', sets:'3', reps:'10-12', rest:'60s', tip:'Cabeça longa do tríceps' },
-      ]},
-      { name:'Treino B - Costas + Bíceps', focus:'Pull', day_of_week:'Ter', exercises:[
-        { name:'Barra Fixa',             type:'Costas', sets:'4', reps:'6-10',  rest:'90s', tip:'Amplitude completa' },
-        { name:'Remada Curvada (Barra)', type:'Costas', sets:'4', reps:'8-10',  rest:'90s', tip:'Volume de costas' },
-        { name:'Puxada Frontal (Polia)', type:'Costas', sets:'3', reps:'10-12', rest:'75s', tip:'Pre-exaustão' },
-        { name:'Rosca Direta (Barra)',   type:'Bíceps', sets:'3', reps:'10-12', rest:'60s', tip:'Curl clássico' },
-        { name:'Rosca Martelo',          type:'Bíceps', sets:'3', reps:'12-15', rest:'60s', tip:'Braquial + braquiorradial' },
-      ]},
-      { name:'Treino C - Membros Inferiores', focus:'Quadríceps + Posterior + Glúteo', day_of_week:'Qui', exercises:[
-        { name:'Agachamento Livre',    type:'Quadríceps',  sets:'5', reps:'6-10',  rest:'120s', tip:'Rainha dos exercícios' },
-        { name:'Leg Press',            type:'Quadríceps',  sets:'4', reps:'10-12', rest:'90s',  tip:'Volume adicional' },
-        { name:'Stiff (Terra Romeno)', type:'Posterior',   sets:'4', reps:'8-12',  rest:'90s',  tip:'Cadeia posterior' },
-        { name:'Mesa Flexora',         type:'Posterior',   sets:'3', reps:'10-12', rest:'75s',  tip:'Isolamento isquiotibial' },
-        { name:'Panturrilha em Pé',   type:'Panturrilha', sets:'4', reps:'15-20', rest:'45s',  tip:'Amplitude total' },
-      ]},
-      { name:'Treino D - Ombros + Core', focus:'Deltoide + Estabilidade', day_of_week:'Sex', exercises:[
-        { name:'Desenvolvimento (Halter)', type:'Ombro', sets:'4', reps:'10-12', rest:'75s', tip:'Volume de ombro' },
-        { name:'Elevação Lateral',        type:'Ombro', sets:'4', reps:'12-15', rest:'60s', tip:'Porção medial' },
-        { name:'Elevação Frontal',        type:'Ombro', sets:'3', reps:'12-15', rest:'60s', tip:'Porção anterior' },
-        { name:'Prancha Frontal',         type:'Core',  sets:'3', reps:'45s',   rest:'30s', tip:'Core forte = mais força' },
-        { name:'Rotação de Tronco',       type:'Core',  sets:'3', reps:'15',    rest:'30s', tip:'Oblíquos' },
-      ]},
-    ],
-  },
-  forca: {
-    label:'Força e Performance', color:'#EF4444', semAcademia:false,
-    days:[
-      { name:'Treino A - Empurrão', focus:'Força Máxima Peito', day_of_week:'Seg', exercises:[
-        { name:'Supino Reto (Barra)',       type:'Peito',        sets:'5', reps:'3-5', rest:'3min', tip:'85-90% 1RM, força máxima' },
-        { name:'Supino Inclinado (Halter)', type:'Peito',        sets:'3', reps:'6-8', rest:'2min', tip:'Volume acessório' },
-        { name:'Tríceps Testa (Barra EZ)', type:'Tríceps',      sets:'3', reps:'6-8', rest:'90s',  tip:'Acessório de força' },
-        { name:'Prancha Frontal',           type:'Peso Corporal',sets:'3', reps:'45s', rest:'30s',  tip:'Transferência de força' },
-      ]},
-      { name:'Treino B - Puxão + Posterior', focus:'Costas + Deadlift', day_of_week:'Qua', exercises:[
-        { name:'Levantamento Terra',     type:'Posterior', sets:'5', reps:'3-5', rest:'3min', tip:'Rei dos exercícios compostos' },
-        { name:'Barra Fixa',             type:'Costas',    sets:'4', reps:'5-6', rest:'2min', tip:'Adição de carga externa' },
-        { name:'Remada Curvada (Barra)', type:'Costas',    sets:'4', reps:'6-8', rest:'2min', tip:'Volume posterior' },
-        { name:'Rosca Direta (Barra)',   type:'Bíceps',    sets:'3', reps:'6-8', rest:'90s',  tip:'Bíceps forte = pull mais forte' },
-      ]},
-      { name:'Treino C - Agachamento', focus:'Força Membros Inferiores', day_of_week:'Sex', exercises:[
-        { name:'Agachamento Livre',    type:'Quadríceps',  sets:'5', reps:'3-5',  rest:'3min', tip:'85-90% 1RM, força máxima' },
-        { name:'Leg Press',            type:'Quadríceps',  sets:'3', reps:'6-8',  rest:'2min', tip:'Acessório' },
-        { name:'Stiff (Terra Romeno)', type:'Posterior',   sets:'4', reps:'6-8',  rest:'90s',  tip:'Força de cadeia posterior' },
-        { name:'Panturrilha em Pé',   type:'Panturrilha', sets:'4', reps:'12-15', rest:'60s',  tip:'Força de panturrilha' },
-      ]},
-    ],
-  },
-  condicionamento: {
-    label:'Condicionamento Físico', color:'#FBBF24', semAcademia:false,
-    days:[
-      { name:'Treino A - Circuito Full Body', focus:'Resistência Muscular + Cardio', day_of_week:'Seg', exercises:[
-        { name:'Agachamento Goblet',  type:'Quadríceps',  sets:'3', reps:'15-20', rest:'30s', tip:'Alta repetição, pouco descanso' },
-        { name:'Flexão de Braço',     type:'Funcional',   sets:'3', reps:'15-20', rest:'30s', tip:'Circuito' },
-        { name:'Hip Thrust (Barra)',  type:'Glúteo',      sets:'3', reps:'15-20', rest:'30s', tip:'Cadeia posterior' },
-        { name:'Remada TRX',          type:'Costas',      sets:'3', reps:'15-20', rest:'30s', tip:'Pull funcional' },
-        { name:'Burpee',              type:'Funcional',   sets:'3', reps:'10',    rest:'60s', tip:'Condicionamento total' },
-        { name:'Prancha Frontal',     type:'Peso Corporal',sets:'3',reps:'30s',   rest:'30s', tip:'Estabilidade' },
-      ]},
-      { name:'Treino B - Intervalado', focus:'HIIT + Resistência', day_of_week:'Qua', exercises:[
-        { name:'Kettlebell Swing',      type:'Full Body', sets:'4', reps:'15',   rest:'45s', tip:'Potência e cardio' },
-        { name:'Agachamento com Salto', type:'Funcional', sets:'4', reps:'10',   rest:'45s', tip:'Pliometria' },
-        { name:'Mountain Climber',      type:'Funcional', sets:'3', reps:'25',   rest:'45s', tip:'Core + cardio' },
-        { name:'Corrida (Esteira)',     type:'Cardio',   sets:'1', reps:'20min', rest:'-',   tip:'PSE 6-7, zona de condicionamento' },
-      ]},
-      { name:'Treino C - Cardio + Core', focus:'Aeróbio + Estabilidade', day_of_week:'Sex', exercises:[
-        { name:'Bicicleta Ergométrica',   type:'Cardio',       sets:'1', reps:'30min', rest:'-',  tip:'Zona 2 - 150 min OMS/semana' },
-        { name:'Prancha Lateral',         type:'Peso Corporal',sets:'3', reps:'30s',   rest:'30s', tip:'Estabilidade lateral' },
-        { name:'Rotação de Tronco',       type:'Core',         sets:'3', reps:'15',    rest:'30s', tip:'Força rotacional' },
-        { name:'Step Up (Caixote/Escada)',type:'Funcional',    sets:'3', reps:'12',    rest:'45s', tip:'Funcional' },
-      ]},
-    ],
-  },
-  funcional_casa: {
-    label:'Funcional em Casa - Sem Equipamento', color:'#34D399', semAcademia:true,
-    days:[
-      { name:'Treino A - Superior', focus:'Peito + Costas + Ombro', day_of_week:'Seg', exercises:[
-        { name:'Flexão de Braço',           type:'Funcional',    sets:'4', reps:'10-15', rest:'60s', tip:'Base de empurrão' },
-        { name:'Flexão de Braço Diamante',  type:'Funcional',    sets:'3', reps:'8-12',  rest:'60s', tip:'Ativa tríceps e porção interna do peito' },
-        { name:'Flexão de Braço Declinada', type:'Funcional',    sets:'3', reps:'8-12',  rest:'60s', tip:'Pés elevados ativam porção clavicular' },
-        { name:'Puxada Inverted Row',       type:'Peso Corporal',sets:'3', reps:'10-15', rest:'60s', tip:'Barra ou mesa — puxada em casa' },
-        { name:'Tríceps Banco (Dip)',       type:'Peso Corporal',sets:'3', reps:'10-15', rest:'60s', tip:'Apoio em cadeira ou banco' },
-      ]},
-      { name:'Treino B - Inferior + Core', focus:'Membros Inferiores + Abdômen', day_of_week:'Qua', exercises:[
-        { name:'Agachamento com Peso Corporal',   type:'Peso Corporal',sets:'4',reps:'20-25', rest:'45s', tip:'Volume alto para hipertrofia' },
-        { name:'Afundo (Peso Corporal)',           type:'Peso Corporal',sets:'3',reps:'12-15', rest:'45s', tip:'Tronco ereto, joelho traseiro quase no chão' },
-        { name:'Elevação Pélvica (Glúteo Bridge)',type:'Peso Corporal',sets:'4',reps:'20-25', rest:'30s', tip:'Extensão completa de quadril' },
-        { name:'Abdominal V-Sit',                 type:'Funcional',    sets:'3',reps:'12-15', rest:'45s', tip:'Tronco e pernas sobem simultâneos' },
-        { name:'Mountain Climber',                type:'Funcional',    sets:'3',reps:'25-30', rest:'45s', tip:'Core e cardio combinados' },
-        { name:'Prancha com Elevação de Braço',   type:'Peso Corporal',sets:'3',reps:'8-10',  rest:'45s', tip:'Anti-rotação — core profundo' },
-      ]},
-      { name:'Treino C - Full Body + Cardio', focus:'Circuito Sem Pausa', day_of_week:'Sex', exercises:[
-        { name:'Burpee',                     type:'Funcional', sets:'4', reps:'8-10', rest:'60s', tip:'Condicionamento total' },
-        { name:'Agachamento com Salto',      type:'Funcional', sets:'3', reps:'10',   rest:'60s', tip:'Potência de membros inferiores' },
-        { name:'Mountain Climber',           type:'Funcional', sets:'3', reps:'30',   rest:'45s', tip:'Core + cardio' },
-        { name:'Flexão de Braço',            type:'Funcional', sets:'3', reps:'12',   rest:'45s', tip:'Manter no circuito' },
-        { name:'Corrida no Lugar (High Knee)',type:'Funcional',sets:'3', reps:'40s',  rest:'30s', tip:'Joelhos na altura do quadril' },
-      ]},
-      { name:'Mobilidade + Recuperação', focus:'Mobilidade Ativa', day_of_week:'Dom', exercises:[
-        { name:'Gato-Vaca',                   type:'Mobilidade',   sets:'2', reps:'12',   rest:'20s', tip:'Mobilidade lombar e torácica' },
-        { name:'Mobilidade de Quadril 90/90', type:'Mobilidade',   sets:'2', reps:'8-10', rest:'20s', tip:'Rotação interna e externa' },
-        { name:'Alongamento de Isquiotibial', type:'Mobilidade',   sets:'2', reps:'40s',  rest:'15s', tip:'Perna estendida, flexão do tronco' },
-        { name:'Equilíbrio Unipodal',         type:'Peso Corporal',sets:'2', reps:'30s',  rest:'15s', tip:'Treino proprioceptivo' },
-      ]},
-    ],
-  },
-  elastico_casa: {
-    label:'Elástico em Casa - Treino Completo', color:'#FBBF24', semAcademia:true,
-    days:[
-      { name:'Treino A - Superior (Elástico)', focus:'Peito + Costas + Ombro', day_of_week:'Seg', exercises:[
-        { name:'Remada com Elástico',              type:'Elástico', sets:'4', reps:'12-15', rest:'60s', tip:'Elástico preso à frente, cotovelos passam o tronco' },
-        { name:'Puxada com Elástico',              type:'Elástico', sets:'3', reps:'12-15', rest:'60s', tip:'Elástico preso acima, puxar para o peito' },
-        { name:'Elevação Lateral com Elástico',    type:'Elástico', sets:'3', reps:'15-20', rest:'45s', tip:'Elástico sob os pés' },
-      ]},
-      { name:'Treino B - Inferior (Elástico)', focus:'Pernas + Glúteo', day_of_week:'Qui', exercises:[
-        { name:'Agachamento com Elástico',      type:'Elástico',    sets:'4', reps:'15-20', rest:'60s', tip:'Elástico sobre os ombros ou sob os pés' },
-        { name:'Hip Thrust com Elástico',       type:'Elástico',    sets:'4', reps:'15-20', rest:'45s', tip:'Elástico sobre os quadris' },
-        { name:'Abdução de Quadril (Elástico)', type:'Elástico',    sets:'3', reps:'15-20', rest:'45s', tip:'Elástico nos joelhos, abre e fecha' },
-        { name:'Afundo com Elástico',           type:'Elástico',    sets:'3', reps:'12',    rest:'60s', tip:'Elástico sobre os ombros, postura ereta' },
-      ]},
-      { name:'Treino C - Full Body + Mobilidade', focus:'Circuito + Recuperação', day_of_week:'Sáb', exercises:[
-        { name:'Burpee',                      type:'Funcional', sets:'3', reps:'8-10', rest:'60s', tip:'Condicionamento sem equipamento' },
-        { name:'Agachamento com Elástico',    type:'Elástico',  sets:'3', reps:'15',   rest:'45s', tip:'Manter tensão no elástico' },
-        { name:'Remada com Elástico',         type:'Elástico',  sets:'3', reps:'15',   rest:'45s', tip:'Circuito — pouco descanso' },
-        { name:'Mountain Climber',            type:'Funcional', sets:'3', reps:'25',   rest:'30s', tip:'Core + cardio' },
-        { name:'Gato-Vaca',                   type:'Mobilidade',sets:'2', reps:'10',   rest:'20s', tip:'Descompressão lombar' },
-      ]},
-    ],
-  },
-}
+const TIPO_BLOCO_AULA = [
+  { id: 'Aquecimento',    color: '#F97316' },
+  { id: 'Físico',         color: '#EF4444' },
+  { id: 'Técnico',        color: '#3B82F6' },
+  { id: 'Lúdico',         color: '#A78BFA' },
+  { id: 'Competitivo',    color: '#F59E0B' },
+  { id: 'Progressão',     color: '#10B981' },
+  { id: 'Volta à calma',  color: '#06B6D4' },
+]
 
-const getTemplate = (goal, ageGroup, sport, semAcademia) => {
-  if (semAcademia) return T.funcional_casa
-  const s = sport || ''
-  if (s === 'futebol' || s === 'futsal') {
-    if (ageGroup === 'crianca')     return T.futebol_crianca
-    if (ageGroup === 'adolescente') return T.futebol_adolescente
-  }
-  if (goal === 'Saúde e Bem-Estar')  return T.saude
-  if (goal === 'Ganho de Massa')      return T.massa
-  if (goal === 'Força e Performance') return T.forca
-  if (goal === 'Condicionamento')     return T.condicionamento
-  if (goal === 'Iniciação Esportiva' || goal === 'Desenvolvimento Atlético')
-    return ageGroup === 'crianca' ? T.futebol_crianca : T.futebol_adolescente
-  return T.massa
-}
+const DIAS = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
 
-const getSuggestedTypes = (goal, sport) => {
-  const s = sport || ''
-  if (s === 'futebol' || s === 'futsal') return ['Posterior','Glúteo','Quadríceps','Core','Funcional']
-  if (s === 'natacao')   return ['Costas','Ombro','Core','Funcional']
-  if (s === 'basquete')  return ['Quadríceps','Glúteo','Core','Funcional']
-  if (goal === 'Saúde e Bem-Estar')  return ['Funcional','Peso Corporal','Mobilidade','Core','Cardio']
-  if (goal === 'Ganho de Massa')      return ['Peito','Costas','Quadríceps','Ombro','Bíceps']
-  if (goal === 'Força e Performance') return ['Quadríceps','Posterior','Peito','Costas','Core']
-  if (goal === 'Condicionamento')     return ['Funcional','Cardio','Core','Elástico','Peso Corporal']
-  return EXERCISE_TYPES.slice(0, 5)
-}
-
-const calc1RM = (carga, reps) => {
-  if (!carga || !reps || reps < 1 || carga <= 0) return null
-  const r = Number(reps), c = Number(carga)
-  if (r === 1) return c
-  if (r > 15)  return null
-  const epley    = c * (1 + r / 30)
-  const brzycki  = r > 10 ? null : c / (1.0278 - 0.0278 * r)
-  const lombardi = c * Math.pow(r, 0.10)
-  const valid    = [epley, brzycki, lombardi].filter(v => v !== null && v > 0)
-  return Math.round(valid.reduce((a, b) => a + b, 0) / valid.length)
-}
+const getFoco = (id) => TIPO_FOCO.find(t => t.id === id) || TIPO_FOCO[5]
+const getBloco = (id) => TIPO_BLOCO_AULA.find(t => t.id === id) || { color: '#64748B' }
+const getSport = (id) => SPORTS.find(s => s.id === id)
 
 // ── Styles ────────────────────────────────────────────────────────────────────
-const s = {
-  wrap:       { minHeight:'100vh', background:'#080B12', padding:'24px 20px' },
-  inner:      { maxWidth:860, margin:'0 auto' },
-  back:       { background:'none', border:'none', color:'#475569', fontSize:14, cursor:'pointer', marginBottom:20, display:'flex', alignItems:'center', gap:6 },
-  header:     { background:'#0D1117', borderRadius:16, padding:20, border:'1px solid rgba(255,255,255,0.07)', marginBottom:20, display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' },
-  input:      { background:'#161B27', border:'1px solid rgba(255,255,255,0.08)', borderRadius:8, padding:'9px 12px', color:'#E2E8F0', fontSize:14, outline:'none' },
-  select:     { background:'#161B27', border:'1px solid rgba(255,255,255,0.08)', borderRadius:8, padding:'9px 12px', color:'#E2E8F0', fontSize:14, outline:'none' },
-  btn:        (c) => ({ background:'linear-gradient(135deg,'+(c||'#34D399')+','+(c||'#34D399')+'bb)', border:'none', borderRadius:8, padding:'9px 16px', color:'#fff', fontWeight:700, fontSize:13, cursor:'pointer' }),
-  outlineBtn: { background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'9px 14px', color:'#94A3B8', fontWeight:600, fontSize:13, cursor:'pointer' },
-  dayCard:    (c) => ({ background:'#0D1117', borderRadius:16, border:'1px solid '+c+'35', overflow:'hidden', marginBottom:14 }),
-  dayHeader:  (c) => ({ background:c+'12', padding:'14px 20px', borderBottom:'1px solid '+c+'25', display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10 }),
-  addRow:     { padding:'16px 20px', background:'rgba(255,255,255,0.02)' },
-  exRow:      { padding:'10px 16px', borderBottom:'1px solid rgba(255,255,255,0.04)', display:'flex', gap:8, alignItems:'flex-start' },
-  delBtn:     { background:'none', border:'none', color:'#334155', cursor:'pointer', fontSize:14, padding:'2px 6px', flexShrink:0 },
-  smallInput: { background:'#161B27', border:'1px solid rgba(255,255,255,0.07)', borderRadius:6, padding:'7px 10px', color:'#E2E8F0', fontSize:12, outline:'none', width:'100%' },
-  smallSel:   { background:'#161B27', border:'1px solid rgba(255,255,255,0.07)', borderRadius:6, padding:'7px 10px', color:'#E2E8F0', fontSize:12, outline:'none', width:'100%' },
+const S = {
+  card:    { background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(255,255,255,0.8)', borderRadius: 16, padding: 20 },
+  label:   { fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 5, textTransform: 'uppercase', letterSpacing: 0.5 },
+  input:   { width: '100%', background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.9)', borderRadius: 8, padding: '9px 12px', color: '#0D1B2A', fontSize: 13, outline: 'none', boxSizing: 'border-box' },
+  btn:     (c = '#0C4A6E') => ({ background: c, border: 'none', borderRadius: 8, padding: '9px 18px', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }),
+  ghost:   { background: 'transparent', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 8, padding: '8px 14px', color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer' },
+  tag:     (color, bg) => ({ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 20, background: bg, color, fontSize: 11, fontWeight: 700 }),
+  row:     { display: 'flex', gap: 10, alignItems: 'flex-start' },
+  divider: { height: 1, background: 'rgba(0,0,0,0.07)', margin: '18px 0' },
 }
 
-const TYPE_COLOR = {
-  'Funcional':    '#34D399',
-  'Elástico':     '#FBBF24',
-  'Peso Corporal':'#60A5FA',
-  'Mobilidade':   '#F472B6',
-  'Core':         '#34D399',
-  'Full Body':    '#6EE7B7',
-  'Cardio':       '#F87171',
-}
-const getTypeColor = (type) => TYPE_COLOR[type] || '#A78BFA'
+// ── Modal Nova Turma ──────────────────────────────────────────────────────────
+function ModalNovaTurma({ teacherId, students, onSave, onClose }) {
+  const [form, setForm] = useState({
+    nome: '', esporte: 'futebol', posicao: '',
+    dias_semana: [], data_inicio: '', data_fim: '', objetivo_final: '',
+  })
+  const [selectedAlunos, setSelectedAlunos] = useState([])
+  const [saving, setSaving] = useState(false)
 
-// ── 1RM Calculator ────────────────────────────────────────────────────────────
-function OneRMCalc({ ageGroup, onApply, onClose }) {
-  const [carga, setCarga] = useState('')
-  const [reps,  setReps]  = useState('')
-  const oneRM = calc1RM(carga, reps)
-  const rest  = AGE_RESTRICTIONS[ageGroup] || AGE_RESTRICTIONS.adulto_jovem
+  const f = (k, v) => setForm(x => ({ ...x, [k]: v }))
+  const toggleDia = (d) => f('dias_semana', form.dias_semana.includes(d) ? form.dias_semana.filter(x => x !== d) : [...form.dias_semana, d])
+  const toggleAluno = (id) => setSelectedAlunos(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
 
-  return (
-    <div style={{ background:'#0A0F1E', border:'1px solid #1E293B', borderRadius:12, padding:16, margin:'8px 0' }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
-        <span style={{ fontSize:13, fontWeight:700, color:'#E2E8F0' }}>Calculadora 1RM</span>
-        <button onClick={onClose} style={{ background:'none', border:'none', color:'#475569', cursor:'pointer', fontSize:16 }}>x</button>
-      </div>
-      {rest.warning && (
-        <div style={{ background:'rgba(251,191,36,0.08)', border:'1px solid rgba(251,191,36,0.2)', borderRadius:8, padding:'8px 12px', fontSize:11, color:'#FBBF24', marginBottom:12 }}>
-          {rest.warning}
-        </div>
-      )}
-      <div style={{ display:'flex', gap:8, marginBottom:12, flexWrap:'wrap' }}>
-        <div style={{ flex:1, minWidth:100 }}>
-          <div style={{ fontSize:9, color:'#475569', marginBottom:3, textTransform:'uppercase', letterSpacing:1 }}>Carga (kg)</div>
-          <input type="number" style={{ ...s.smallInput, fontSize:15, fontWeight:700, textAlign:'center' }} value={carga} onChange={e => setCarga(e.target.value)} placeholder="ex: 80" />
-        </div>
-        <div style={{ flex:1, minWidth:100 }}>
-          <div style={{ fontSize:9, color:'#475569', marginBottom:3, textTransform:'uppercase', letterSpacing:1 }}>Reps (1-15)</div>
-          <input type="number" style={{ ...s.smallInput, fontSize:15, fontWeight:700, textAlign:'center' }} value={reps} onChange={e => setReps(e.target.value)} placeholder="ex: 8" />
-        </div>
-        <div style={{ flex:1, minWidth:100, display:'flex', flexDirection:'column', justifyContent:'flex-end' }}>
-          <div style={{ fontSize:9, color:'#475569', marginBottom:3, textTransform:'uppercase', letterSpacing:1 }}>1RM Estimado</div>
-          <div style={{ background: oneRM ? 'rgba(167,139,250,0.12)' : '#161B27', border:'1px solid '+(oneRM ? '#A78BFA40':'rgba(255,255,255,0.07)'), borderRadius:6, padding:'7px', textAlign:'center', fontSize:18, fontWeight:900, color: oneRM ? '#A78BFA':'#334155' }}>
-            {oneRM ? oneRM+' kg' : '-'}
-          </div>
-        </div>
-      </div>
-      {oneRM && (
-        <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-          {ZONES.map(zone => {
-            const blocked    = rest.blockedZones.includes(zone.label)
-            const maxAllowed = Math.round(oneRM * rest.maxPct / 100)
-            const lo         = Math.round(oneRM * zone.pct[0] / 100)
-            const hi         = Math.round(Math.min(oneRM * zone.pct[1] / 100, maxAllowed))
-            const load       = lo <= maxAllowed ? { lo, hi } : null
-            return (
-              <div key={zone.label} style={{ display:'flex', alignItems:'center', gap:8, background: blocked ? 'rgba(255,255,255,0.02)' : zone.color+'10', border:'1px solid '+(blocked ? 'rgba(255,255,255,0.05)':zone.color+'30'), borderRadius:8, padding:'7px 10px', opacity: blocked ? 0.4 : 1 }}>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:11, fontWeight:700, color: blocked ? '#334155':zone.color }}>{blocked ? 'Restrito - ':''}{zone.label}</div>
-                  <div style={{ fontSize:9, color:'#475569' }}>{zone.reps} reps · {zone.rest}</div>
-                </div>
-                {load && !blocked ? (
-                  <div style={{ textAlign:'right' }}>
-                    <div style={{ fontSize:13, fontWeight:900, color:zone.color }}>{load.lo}-{load.hi}kg</div>
-                    <button onClick={() => onApply({ reps:zone.reps, rest:zone.rest })} style={{ fontSize:9, background:zone.color+'20', border:'1px solid '+zone.color+'40', borderRadius:5, padding:'2px 7px', color:zone.color, cursor:'pointer', fontWeight:700 }}>Usar</button>
-                  </div>
-                ) : (
-                  <div style={{ fontSize:10, color:'#1E293B' }}>{blocked ? 'Restrito':'-'}</div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
+  // Sugestão de alunos pelo esporte selecionado
+  const sugeridos = students.filter(s => s.sport === form.esporte)
+  const outros    = students.filter(s => s.sport !== form.esporte)
 
-// ── Exercise Search ───────────────────────────────────────────────────────────
-function ExerciseSearch({ onSelect, suggestedTypes, ageGroup }) {
-  const [query,      setQuery]      = useState('')
-  const [filterType, setFilterType] = useState('')
-  const [modality,   setModality]   = useState('')
-
-  const allowedTypes = modality ? MODALITY_MAP[modality] : null
-
-  const results = EXERCISE_BANK.filter(ex => {
-    const matchQ = !query       || ex.name.toLowerCase().includes(query.toLowerCase())
-    const matchT = !filterType  || ex.type === filterType
-    const matchM = !allowedTypes || allowedTypes.includes(ex.type)
-    if (ageGroup === 'crianca' && (ex.sets === '5' || ex.reps === '3-5' || ex.reps === '1-5')) return false
-    return matchQ && matchT && matchM
-  }).slice(0, 10)
-
-  return (
-    <div style={{ marginBottom:8 }}>
-      <div style={{ display:'flex', gap:5, flexWrap:'wrap', marginBottom:8 }}>
-        {Object.keys(MODALITY_MAP).map(mod => (
-          <button key={mod} onClick={() => { setModality(modality === mod ? '' : mod); setFilterType('') }}
-            style={{ padding:'4px 12px', borderRadius:20, border:'1px solid '+(modality===mod ? MODALITY_COLORS[mod]:'rgba(255,255,255,0.1)'), background: modality===mod ? MODALITY_COLORS[mod]+'18':'transparent', color: modality===mod ? MODALITY_COLORS[mod]:'#475569', fontSize:11, cursor:'pointer', fontWeight: modality===mod ? 700:400 }}>
-            {mod}
-          </button>
-        ))}
-        {(modality || filterType) && (
-          <button onClick={() => { setModality(''); setFilterType('') }} style={{ padding:'4px 8px', borderRadius:20, border:'1px solid rgba(255,255,255,0.06)', background:'transparent', color:'#334155', fontSize:10, cursor:'pointer' }}>
-            x Limpar
-          </button>
-        )}
-      </div>
-      {suggestedTypes.length > 0 && (
-        <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginBottom:6 }}>
-          <span style={{ fontSize:9, color:'#334155', textTransform:'uppercase', letterSpacing:1, alignSelf:'center' }}>Sugerido:</span>
-          {suggestedTypes.filter(t => !allowedTypes || allowedTypes.includes(t)).map(t => (
-            <button key={t} onClick={() => setFilterType(filterType === t ? '' : t)}
-              style={{ padding:'3px 10px', borderRadius:20, border:'1px solid '+(filterType===t ? getTypeColor(t):'rgba(255,255,255,0.1)'), background: filterType===t ? getTypeColor(t)+'18':'transparent', color: filterType===t ? getTypeColor(t):'#475569', fontSize:11, cursor:'pointer', fontWeight: filterType===t ? 700:400 }}>
-              {t}
-            </button>
-          ))}
-        </div>
-      )}
-      <input style={s.smallInput} value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar exercício... (ex: flexão, elástico, mobilidade)" />
-      {(query || filterType || modality) && results.length > 0 && (
-        <div style={{ background:'#0D1117', border:'1px solid rgba(255,255,255,0.1)', borderRadius:10, overflow:'hidden', marginTop:4 }}>
-          {results.map((ex, i) => {
-            const tc = getTypeColor(ex.type)
-            return (
-              <div key={i} onClick={() => { onSelect(ex); setQuery(''); setFilterType(''); setModality('') }}
-                style={{ padding:'9px 14px', borderBottom:'1px solid rgba(255,255,255,0.04)', cursor:'pointer', display:'flex', gap:10, alignItems:'flex-start' }}
-                onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,0.04)'}
-                onMouseLeave={e => e.currentTarget.style.background='transparent'}>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:13, fontWeight:600, color:'#E2E8F0' }}>{ex.name}</div>
-                  <div style={{ fontSize:10, color:'#475569', marginTop:2 }}>{ex.tip}</div>
-                </div>
-                <div style={{ flexShrink:0, display:'flex', gap:5, alignItems:'center' }}>
-                  <span style={{ fontSize:9, background:tc+'18', padding:'2px 7px', borderRadius:20, color:tc, border:'1px solid '+tc+'35', fontWeight:700 }}>{ex.type}</span>
-                  <span style={{ fontSize:9, color:'#334155' }}>{ex.sets}x{ex.reps}</span>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-      {(query || filterType || modality) && results.length === 0 && (
-        <div style={{ padding:'8px 12px', fontSize:12, color:'#334155', marginTop:4 }}>Nenhum resultado — preencha manualmente abaixo</div>
-      )}
-    </div>
-  )
-}
-
-// ── Template Modal ────────────────────────────────────────────────────────────
-function TemplateModal({ student, ageGroup, semAcademia, onApply, onClose }) {
-  const goal      = student?.goal  || ''
-  const sport     = student?.sport || ''
-  const suggested = getTemplate(goal, ageGroup, sport, semAcademia)
-  const keys      = Object.keys(T)
-  const initKey   = keys.find(k => T[k] === suggested) || 'massa'
-  const [selected,    setSelected]    = useState(initKey)
-  const [showSemAcad, setShowSemAcad] = useState(semAcademia)
-  const tpl         = T[selected]
-  const visibleKeys = keys.filter(k => showSemAcad ? T[k].semAcademia : !T[k].semAcademia)
-
-  return (
-    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:16 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background:'#0D1117', borderRadius:20, padding:24, width:'100%', maxWidth:560, maxHeight:'90vh', overflowY:'auto', border:'1px solid rgba(255,255,255,0.08)' }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
-          <div>
-            <div style={{ fontSize:16, fontWeight:700, color:'#E2E8F0' }}>Gerar Estrutura do Treino</div>
-            <div style={{ fontSize:11, color:'#475569', marginTop:2 }}>Selecione um template e personalize depois</div>
-          </div>
-          <button onClick={onClose} style={{ background:'none', border:'none', color:'#475569', cursor:'pointer', fontSize:18 }}>x</button>
-        </div>
-        <div style={{ display:'flex', gap:6, marginBottom:18, background:'rgba(255,255,255,0.04)', borderRadius:10, padding:4 }}>
-          <button onClick={() => { setShowSemAcad(false); setSelected('massa') }}
-            style={{ flex:1, padding:'8px', borderRadius:8, border:'none', background: !showSemAcad ? 'linear-gradient(135deg,#A78BFA,#7C3AED)':'transparent', color: !showSemAcad ? '#fff':'#475569', fontWeight:700, fontSize:12, cursor:'pointer' }}>
-            🏋️ Com Academia
-          </button>
-          <button onClick={() => { setShowSemAcad(true); setSelected('funcional_casa') }}
-            style={{ flex:1, padding:'8px', borderRadius:8, border:'none', background: showSemAcad ? 'linear-gradient(135deg,#34D399,#059669)':'transparent', color: showSemAcad ? '#fff':'#475569', fontWeight:700, fontSize:12, cursor:'pointer' }}>
-            🏠 Sem Academia
-          </button>
-        </div>
-        <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:18 }}>
-          {visibleKeys.map(key => (
-            <div key={key} onClick={() => setSelected(key)}
-              style={{ padding:'10px 14px', borderRadius:10, border:'1px solid '+(selected===key ? T[key].color+'60':'rgba(255,255,255,0.06)'), background: selected===key ? T[key].color+'10':'transparent', cursor:'pointer', display:'flex', alignItems:'center', gap:10 }}>
-              <div style={{ width:10, height:10, borderRadius:'50%', background:T[key].color, flexShrink:0 }} />
-              <span style={{ fontSize:13, fontWeight: selected===key ? 700:400, color: selected===key ? T[key].color:'#94A3B8' }}>{T[key].label}</span>
-              {T[key] === suggested && <span style={{ fontSize:9, background:'rgba(52,211,153,0.12)', color:'#34D399', border:'1px solid rgba(52,211,153,0.2)', borderRadius:20, padding:'1px 7px', marginLeft:'auto' }}>Sugerido</span>}
-            </div>
-          ))}
-        </div>
-        {tpl && (
-          <div style={{ background:'rgba(255,255,255,0.03)', borderRadius:12, padding:14, marginBottom:18 }}>
-            <div style={{ fontSize:10, color:'#475569', fontWeight:700, letterSpacing:1, textTransform:'uppercase', marginBottom:10 }}>Preview — {tpl.days.length} dias</div>
-            {tpl.days.map((day, i) => (
-              <div key={i} style={{ marginBottom:8, padding:'8px 12px', borderRadius:8, background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.05)' }}>
-                <div style={{ fontSize:12, fontWeight:700, color:'#E2E8F0', marginBottom:2 }}>{day.name} <span style={{ color:'#475569', fontWeight:400 }}>- {day.day_of_week}</span></div>
-                <div style={{ fontSize:10, color:'#64748B' }}>{day.exercises.length} exercícios · {day.focus}</div>
-              </div>
-            ))}
-          </div>
-        )}
-        <div style={{ display:'flex', gap:8 }}>
-          <button onClick={() => onApply(tpl)} style={{ ...s.btn(tpl?.color), flex:1, padding:'12px' }}>Aplicar Template</button>
-          <button onClick={onClose} style={s.outlineBtn}>Cancelar</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Seção rápida sem equipamento ──────────────────────────────────────────────
-function NoEquipmentSection({ onAddExercise }) {
-  const [open, setOpen] = useState(false)
-  const QUICK = [
-    { label:'Flexão de Braço',    type:'Funcional',     sets:'3', reps:'10-15', rest:'60s', tip:'Corpo rígido, peito toca o chão' },
-    { label:'Agachamento Corpo',  type:'Peso Corporal', sets:'3', reps:'20',    rest:'45s', tip:'Sem carga, foco em técnica' },
-    { label:'Burpee',             type:'Funcional',     sets:'3', reps:'8-10',  rest:'90s', tip:'Movimento completo' },
-    { label:'Prancha Frontal',    type:'Peso Corporal', sets:'3', reps:'40s',   rest:'30s', tip:'Quadril neutro' },
-    { label:'Abdominal Bicicleta',type:'Funcional',     sets:'3', reps:'15-20', rest:'45s', tip:'Cotovelo toca joelho oposto' },
-    { label:'Mountain Climber',   type:'Funcional',     sets:'3', reps:'25-30', rest:'45s', tip:'Core ativado, quadril estável' },
-    { label:'Elevação Pélvica',   type:'Peso Corporal', sets:'3', reps:'20',    rest:'30s', tip:'Extensão completa de quadril' },
-    { label:'Gato-Vaca',          type:'Mobilidade',    sets:'2', reps:'12',    rest:'20s', tip:'Mobilidade torácica e lombar' },
-    { label:'Equilíbrio Unipodal',type:'Peso Corporal', sets:'2', reps:'30s',   rest:'20s', tip:'Propriocepção' },
-    { label:'Superman',           type:'Peso Corporal', sets:'3', reps:'12',    rest:'30s', tip:'Extensão bilateral' },
-  ]
-
-  if (!open) {
-    return (
-      <button onClick={() => setOpen(true)} style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(96,165,250,0.06)', border:'1px solid rgba(96,165,250,0.15)', borderRadius:8, padding:'7px 12px', color:'#60A5FA', fontSize:11, fontWeight:700, cursor:'pointer', marginTop:6 }}>
-        🏠 + Adicionar exercício sem equipamento
-      </button>
-    )
-  }
-
-  return (
-    <div style={{ marginTop:8, background:'rgba(96,165,250,0.04)', border:'1px solid rgba(96,165,250,0.12)', borderRadius:10, padding:'12px 14px' }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-        <span style={{ fontSize:11, fontWeight:700, color:'#60A5FA', textTransform:'uppercase', letterSpacing:1 }}>🏠 Sem equipamento</span>
-        <button onClick={() => setOpen(false)} style={{ background:'none', border:'none', color:'#475569', cursor:'pointer', fontSize:14 }}>x</button>
-      </div>
-      <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-        {QUICK.map((ex, i) => {
-          const tc = getTypeColor(ex.type)
-          return (
-            <button key={i} onClick={() => onAddExercise({ name:ex.label, type:ex.type, sets:ex.sets, reps:ex.reps, rest:ex.rest, tip:ex.tip })}
-              style={{ padding:'6px 12px', borderRadius:20, border:`1px solid ${tc}35`, background:`${tc}10`, color:tc, fontSize:11, fontWeight:700, cursor:'pointer' }}>
-              {ex.label}
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-// ── Main WorkoutEditor ────────────────────────────────────────────────────────
-export default function WorkoutEditor({ navigate, studentId, planId }) {
-  const [plan,         setPlan]         = useState(null)
-  const [days,         setDays]         = useState([])
-  const [student,      setStudent]      = useState(null)
-  const [loading,      setLoading]      = useState(true)
-  const [saving,       setSaving]       = useState(false)
-  const [newExForms,   setNewExForms]   = useState({})
-  const [openCalc,     setOpenCalc]     = useState(null)
-  const [showTemplate, setShowTemplate] = useState(false)
-  const [semAcademia,  setSemAcademia]  = useState(false)
-
-  const ageGroup   = getAgeGroup(student?.birth_date, student?.age)
-  const studentAge = student?.birth_date
-    ? Math.floor((Date.now() - new Date(student.birth_date)) / (365.25 * 24 * 3600 * 1000))
-    : student?.age ? parseInt(student.age) : null
-  const suggestedTypes = getSuggestedTypes(student?.goal || '', student?.sport || '')
-
-  useEffect(() => { fetchAll() }, [planId])
-
-  const fetchAll = async () => {
-    setLoading(true)
-    const [{ data:planData }, { data:daysData }, { data:studentData }] = await Promise.all([
-      supabase.from('workout_plans').select('*').eq('id', planId).single(),
-      supabase.from('workout_days').select('*, exercises(*)').eq('plan_id', planId).order('order_index'),
-      supabase.from('students').select('id,name,birth_date,age,goal,sport').eq('id', studentId).single(),
-    ])
-    if (planData)    setPlan(planData)
-    if (daysData)    setDays(daysData.map(d => ({ ...d, exercises:(d.exercises||[]).sort((a,b) => a.order_index - b.order_index) })))
-    if (studentData) setStudent(studentData)
-    setLoading(false)
-  }
-
-  const savePlanTitle = async () => {
+  const save = async () => {
+    if (!form.nome.trim()) return
     setSaving(true)
-    await supabase.from('workout_plans').update({ title:plan.title, status:plan.status, updated_at:new Date().toISOString() }).eq('id', planId)
+    const { data: turma } = await supabase.from('turmas').insert([{
+      teacher_id: teacherId, nome: form.nome, esporte: form.esporte,
+      posicao: form.posicao || null, dias_semana: form.dias_semana,
+      data_inicio: form.data_inicio || null, data_fim: form.data_fim || null,
+      objetivo_final: form.objetivo_final || null,
+    }]).select().single()
+
+    if (turma && selectedAlunos.length) {
+      await supabase.from('turma_alunos').insert(selectedAlunos.map(sid => ({ turma_id: turma.id, student_id: sid })))
+    }
+    setSaving(false)
+    onSave()
+    onClose()
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 20, width: '100%', maxWidth: 540, maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,0.2)' }}>
+
+        {/* Header */}
+        <div style={{ background: 'linear-gradient(135deg,#0C4A6E,#155E8E)', padding: '20px 24px' }}>
+          <div style={{ fontSize: 18, fontWeight: 800, color: '#fff' }}>Nova Turma</div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>Escolinha Esportiva</div>
+        </div>
+
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+          {/* Nome */}
+          <div>
+            <div style={S.label}>Nome da Turma *</div>
+            <input style={S.input} placeholder="Ex: Sub-13 Futebol Goleiros" value={form.nome} onChange={e => f('nome', e.target.value)} />
+          </div>
+
+          {/* Esporte + Posição */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <div style={S.label}>Esporte</div>
+              <select style={S.input} value={form.esporte} onChange={e => f('esporte', e.target.value)}>
+                {SPORTS.map(s => <option key={s.id} value={s.id}>{s.icon} {s.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={S.label}>Posição / Categoria</div>
+              <input style={S.input} placeholder="Ex: Goleiro, Ala, Sub-13" value={form.posicao} onChange={e => f('posicao', e.target.value)} />
+            </div>
+          </div>
+
+          {/* Dias da semana */}
+          <div>
+            <div style={S.label}>Dias de Treino</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {DIAS.map(d => (
+                <button key={d} onClick={() => toggleDia(d)} style={{
+                  padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                  background: form.dias_semana.includes(d) ? '#0C4A6E' : 'rgba(0,0,0,0.05)',
+                  color: form.dias_semana.includes(d) ? '#fff' : '#64748B',
+                  border: 'none',
+                }}>
+                  {d}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Datas */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <div style={S.label}>Início</div>
+              <input style={S.input} type="date" value={form.data_inicio} onChange={e => f('data_inicio', e.target.value)} />
+            </div>
+            <div>
+              <div style={S.label}>Fim</div>
+              <input style={S.input} type="date" value={form.data_fim} onChange={e => f('data_fim', e.target.value)} />
+            </div>
+          </div>
+
+          {/* Objetivo final */}
+          <div>
+            <div style={S.label}>Objetivo Final (Competição / Peneira)</div>
+            <input style={S.input} placeholder="Ex: Peneira Athletico Paranaense Sub-15 — Jun 2026" value={form.objetivo_final} onChange={e => f('objetivo_final', e.target.value)} />
+          </div>
+
+          {/* Alunos */}
+          <div>
+            <div style={S.label}>Adicionar Alunos</div>
+            {sugeridos.length > 0 && (
+              <div style={{ fontSize: 11, color: '#059669', fontWeight: 600, marginBottom: 6 }}>
+                Sugeridos — praticam {getSport(form.esporte)?.label || form.esporte}
+              </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 180, overflowY: 'auto' }}>
+              {[...sugeridos, ...outros].map(s => (
+                <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, background: selectedAlunos.includes(s.id) ? 'rgba(12,74,110,0.08)' : 'rgba(0,0,0,0.03)', cursor: 'pointer', border: `1px solid ${selectedAlunos.includes(s.id) ? 'rgba(12,74,110,0.2)' : 'transparent'}` }}>
+                  <input type="checkbox" checked={selectedAlunos.includes(s.id)} onChange={() => toggleAluno(s.id)} style={{ width: 14, height: 14 }} />
+                  <span style={{ fontSize: 13, fontWeight: 500, color: '#0D1B2A' }}>{s.name}</span>
+                  {s.sport === form.esporte && <span style={{ fontSize: 10, color: '#059669', marginLeft: 'auto' }}>{getSport(s.sport)?.icon}</span>}
+                  {s.sport_position && <span style={{ fontSize: 10, color: '#94A3B8' }}>{s.sport_position}</span>}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Botões */}
+          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+            <button onClick={save} disabled={saving} style={S.btn()}>
+              {saving ? 'Salvando...' : 'Criar Turma'}
+            </button>
+            <button onClick={onClose} style={S.ghost}>Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Modal Novo Planejamento ───────────────────────────────────────────────────
+function ModalNovoPlanejamento({ turmaId, turma, onSave, onClose }) {
+  const [form, setForm] = useState({
+    titulo: '', total_semanas: 12,
+    data_inicio: turma.data_inicio || '', data_fim: turma.data_fim || '',
+  })
+  const [saving, setSaving] = useState(false)
+  const f = (k, v) => setForm(x => ({ ...x, [k]: v }))
+
+  const save = async () => {
+    if (!form.titulo.trim()) return
+    setSaving(true)
+    const { data: plan } = await supabase.from('planejamentos').insert([{
+      turma_id: turmaId, titulo: form.titulo,
+      total_semanas: +form.total_semanas,
+      data_inicio: form.data_inicio || null,
+      data_fim: form.data_fim || null,
+    }]).select().single()
+
+    // Criar blocos de semana vazios
+    if (plan) {
+      const blocos = Array.from({ length: +form.total_semanas }, (_, i) => ({
+        planejamento_id: plan.id,
+        semana_numero: i + 1,
+        tipo_foco: 'Misto',
+        descricao_geral: '',
+      }))
+      await supabase.from('blocos_semana').insert(blocos)
+    }
+    setSaving(false)
+    onSave()
+    onClose()
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 20, width: '100%', maxWidth: 440, padding: 28, boxShadow: '0 24px 60px rgba(0,0,0,0.2)' }}>
+        <div style={{ fontSize: 17, fontWeight: 800, color: '#0C4A6E', marginBottom: 18 }}>Novo Planejamento</div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <div style={S.label}>Título</div>
+            <input style={S.input} placeholder="Ex: Temporada 2026 — Peneira Sub-15" value={form.titulo} onChange={e => f('titulo', e.target.value)} />
+          </div>
+          <div>
+            <div style={S.label}>Total de Semanas</div>
+            <input style={S.input} type="number" min="1" max="52" value={form.total_semanas} onChange={e => f('total_semanas', e.target.value)} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <div style={S.label}>Início</div>
+              <input style={S.input} type="date" value={form.data_inicio} onChange={e => f('data_inicio', e.target.value)} />
+            </div>
+            <div>
+              <div style={S.label}>Fim</div>
+              <input style={S.input} type="date" value={form.data_fim} onChange={e => f('data_fim', e.target.value)} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={save} disabled={saving} style={S.btn()}>{saving ? 'Criando...' : 'Criar Planejamento'}</button>
+            <button onClick={onClose} style={S.ghost}>Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Visualizador de Planejamento ──────────────────────────────────────────────
+function PlanejamentoView({ turma, planejamentos, students, teacherId, onRefresh }) {
+  const [selectedPlan, setSelectedPlan]       = useState(null)
+  const [blocos, setBlocos]                   = useState([])
+  const [showModalPlan, setShowModalPlan]     = useState(false)
+  const [editingBloco, setEditingBloco]       = useState(null) // { id, tipo_foco, descricao_geral }
+  const [viewMode, setViewMode]               = useState('semanas') // 'semanas' | 'mensal'
+  const [saving, setSaving]                   = useState(false)
+
+  useEffect(() => {
+    if (planejamentos.length && !selectedPlan) setSelectedPlan(planejamentos[0].id)
+  }, [planejamentos])
+
+  useEffect(() => {
+    if (!selectedPlan) return
+    supabase.from('blocos_semana').select('*')
+      .eq('planejamento_id', selectedPlan)
+      .order('semana_numero')
+      .then(({ data }) => setBlocos(data || []))
+  }, [selectedPlan])
+
+  const plan = planejamentos.find(p => p.id === selectedPlan)
+
+  // Progresso
+  const totalSemanas  = plan?.total_semanas || 0
+  const semanasFeitas = blocos.filter(b => b.tipo_foco !== 'Misto' || b.descricao_geral).length
+  const pct           = totalSemanas > 0 ? Math.round((semanasFeitas / totalSemanas) * 100) : 0
+
+  // Semanas por mês (para visão mensal)
+  const semanasComData = plan?.data_inicio
+    ? blocos.map(b => {
+        const d = new Date(plan.data_inicio)
+        d.setDate(d.getDate() + (b.semana_numero - 1) * 7)
+        return { ...b, dataInicio: new Date(d) }
+      })
+    : blocos.map(b => ({ ...b, dataInicio: null }))
+
+  const meses = {}
+  semanasComData.forEach(b => {
+    const key = b.dataInicio
+      ? b.dataInicio.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+      : `Bloco ${Math.ceil(b.semana_numero / 4)}`
+    if (!meses[key]) meses[key] = []
+    meses[key].push(b)
+  })
+
+  const saveBloco = async (bloco) => {
+    setSaving(true)
+    await supabase.from('blocos_semana').update({
+      tipo_foco: bloco.tipo_foco,
+      descricao_geral: bloco.descricao_geral,
+    }).eq('id', bloco.id)
+    setBlocos(prev => prev.map(b => b.id === bloco.id ? { ...b, ...bloco } : b))
+    setEditingBloco(null)
     setSaving(false)
   }
 
-  const addDay = async () => {
-    const name = 'Treino ' + String.fromCharCode(65 + days.length)
-    const { data } = await supabase.from('workout_days').insert([{ plan_id:planId, name, focus:'', day_of_week:'', order_index:days.length }]).select().single()
-    if (data) setDays(d => [...d, { ...data, exercises:[] }])
-  }
-
-  const updateDay = async (dayId, field, val) => {
-    setDays(d => d.map(day => day.id === dayId ? { ...day, [field]:val } : day))
-    await supabase.from('workout_days').update({ [field]:val }).eq('id', dayId)
-  }
-
-  const deleteDay = async (dayId) => {
-    if (!confirm('Excluir este dia de treino e todos os exercícios?')) return
-    await supabase.from('workout_days').delete().eq('id', dayId)
-    setDays(d => d.filter(day => day.id !== dayId))
-  }
-
-  const addExercise = async (dayId, exData) => {
-    const form = exData || (newExForms[dayId] || { ...emptyEx })
-    if (!form.name?.trim()) return
-    const { data } = await supabase.from('exercises').insert([{
-      day_id:dayId, name:form.name, sets:form.sets, reps:form.reps,
-      rest:form.rest, tip:form.tip||'', type:form.type,
-      order_index:(days.find(d => d.id === dayId)?.exercises?.length || 0),
-    }]).select().single()
-    if (data) {
-      setDays(d => d.map(day => day.id === dayId ? { ...day, exercises:[...day.exercises, data] } : day))
-      if (!exData) setNewExForms(f => ({ ...f, [dayId]:{ ...emptyEx } }))
-    }
-  }
-
-  const updateExercise = async (dayId, exId, field, val) => {
-    setDays(d => d.map(day => day.id === dayId
-      ? { ...day, exercises:day.exercises.map(ex => ex.id === exId ? { ...ex, [field]:val } : ex) }
-      : day))
-    await supabase.from('exercises').update({ [field]:val }).eq('id', exId)
-  }
-
-  const deleteExercise = async (dayId, exId) => {
-    await supabase.from('exercises').delete().eq('id', exId)
-    setDays(d => d.map(day => day.id === dayId ? { ...day, exercises:day.exercises.filter(ex => ex.id !== exId) } : day))
-  }
-
-  const applyTemplate = async (tpl) => {
-    setShowTemplate(false)
-    for (const day of days) await supabase.from('workout_days').delete().eq('id', day.id)
-    setDays([])
-    for (let i = 0; i < tpl.days.length; i++) {
-      const td = tpl.days[i]
-      const { data:newDay } = await supabase.from('workout_days').insert([{
-        plan_id:planId, name:td.name, focus:td.focus, day_of_week:td.day_of_week, order_index:i,
-      }]).select().single()
-      if (newDay) {
-        const exInserts = td.exercises.map((ex, j) => ({ day_id:newDay.id, name:ex.name, sets:ex.sets, reps:ex.reps, rest:ex.rest, tip:ex.tip||'', type:ex.type, order_index:j }))
-        const { data:exData } = await supabase.from('exercises').insert(exInserts).select()
-        setDays(d => [...d, { ...newDay, exercises:(exData||[]).sort((a,b) => a.order_index-b.order_index) }])
-      }
-    }
-  }
-
-  const getNewExForm  = (dayId) => newExForms[dayId] || { ...emptyEx }
-  const setNewExField = (dayId, field, val) => setNewExForms(f => ({ ...f, [dayId]:{ ...getNewExForm(dayId), [field]:val } }))
-
-  if (loading) return <div style={{ padding:40, color:'#475569' }}>Carregando treino...</div>
-  if (!plan)   return null
-
-  const ageColor = AGE_GROUP_COLOR[ageGroup]
-  const ageRestr = AGE_RESTRICTIONS[ageGroup]
+  if (!planejamentos.length) return (
+    <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+      <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
+      <div style={{ fontSize: 15, color: '#64748B', marginBottom: 16 }}>Nenhum planejamento criado ainda</div>
+      <button onClick={() => setShowModalPlan(true)} style={S.btn()}>Criar Planejamento</button>
+      {showModalPlan && (
+        <ModalNovoPlanejamento turmaId={turma.id} turma={turma} onSave={onRefresh} onClose={() => setShowModalPlan(false)} />
+      )}
+    </div>
+  )
 
   return (
-    <div style={s.wrap}>
-      <div style={s.inner}>
+    <div>
+      {/* Selector de planejamento + botão novo */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 20, flexWrap: 'wrap' }}>
+        <select style={{ ...S.input, maxWidth: 280 }} value={selectedPlan || ''} onChange={e => setSelectedPlan(e.target.value)}>
+          {planejamentos.map(p => <option key={p.id} value={p.id}>{p.titulo}</option>)}
+        </select>
+        <button onClick={() => setShowModalPlan(true)} style={{ ...S.ghost, fontSize: 12 }}>+ Novo Planejamento</button>
+      </div>
 
-        <button style={s.back} onClick={() => navigate('student-detail', { id:studentId })}>
-          ← Voltar ao Aluno
-        </button>
-
-        {/* Plan header */}
-        <div style={s.header}>
-          <input
-            style={{ ...s.input, flex:2, fontSize:18, fontWeight:700 }}
-            value={plan.title}
-            onChange={e => setPlan(p => ({ ...p, title:e.target.value }))}
-            onBlur={savePlanTitle}
-            placeholder="Nome do plano..."
-          />
-          <select style={s.select} value={plan.status} onChange={e => { setPlan(p => ({ ...p, status:e.target.value })); setTimeout(savePlanTitle, 100) }}>
-            {STATUS_OPTIONS.map(o => <option key={o} value={o}>{STATUS_LABEL[o]}</option>)}
-          </select>
-          {student && (
-            <div style={{ display:'flex', alignItems:'center', gap:6, background:ageColor+'15', border:'1px solid '+ageColor+'30', borderRadius:8, padding:'6px 12px' }}>
-              <span style={{ fontSize:11, color:ageColor, fontWeight:700 }}>
-                {student.name} · {AGE_GROUP_LABEL[ageGroup]}
-              </span>
-            </div>
-          )}
-          <button onClick={() => setSemAcademia(v => !v)}
-            style={{ padding:'7px 14px', borderRadius:8, border:'1px solid '+(semAcademia ? '#34D39940':'rgba(255,255,255,0.1)'), background: semAcademia ? 'rgba(52,211,153,0.12)':'rgba(255,255,255,0.04)', color: semAcademia ? '#34D399':'#64748B', fontSize:12, fontWeight:700, cursor:'pointer' }}>
-            {semAcademia ? '🏠 Sem academia' : '🏋️ Com academia'}
-          </button>
-          <button onClick={() => setShowTemplate(true)} style={{ ...s.btn('#6366F1'), display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
-            Gerar Estrutura
-          </button>
-          <div style={{ fontSize:11, color:'#334155' }}>
-            {saving ? <span style={{ color:'#FBBF24' }}>Salvando...</span> : 'Salvo automaticamente'}
-          </div>
-        </div>
-
-        {/* Age warning */}
-        {ageRestr?.warning && (
-          <div style={{ background:'rgba(251,191,36,0.07)', border:'1px solid rgba(251,191,36,0.18)', borderRadius:12, padding:'10px 16px', fontSize:13, color:'#FBBF24', marginBottom:16 }}>
-            {ageRestr.warning}
-          </div>
-        )}
-
-        {/* Legenda tipos novos */}
-        <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:16 }}>
-          {NEW_TYPES.map(t => {
-            const c = getTypeColor(t)
-            return (
-              <div key={t} style={{ display:'flex', alignItems:'center', gap:5, padding:'4px 10px', borderRadius:20, background:c+'12', border:'1px solid '+c+'30' }}>
-                <div style={{ width:6, height:6, borderRadius:'50%', background:c }} />
-                <span style={{ fontSize:10, color:c, fontWeight:700 }}>{t}</span>
-              </div>
-            )
-          })}
-          <div style={{ fontSize:10, color:'#334155', alignSelf:'center', marginLeft:4 }}>← Novos tipos disponíveis</div>
-        </div>
-
-        {/* Days */}
-        {days.map((day, idx) => {
-          const color = DAY_COLORS[idx % DAY_COLORS.length]
-          const newEx = getNewExForm(day.id)
-          return (
-            <div key={day.id} style={s.dayCard(color)}>
-
-              {/* Day header */}
-              <div style={s.dayHeader(color)}>
-                <div style={{ display:'flex', gap:8, alignItems:'center', flex:1, flexWrap:'wrap' }}>
-                  <div style={{ width:8, height:8, borderRadius:'50%', background:color, boxShadow:'0 0 6px '+color }} />
-                  <input style={{ ...s.input, fontWeight:700, color, background:'transparent', border:'none', fontSize:15, minWidth:80 }} value={day.name} onChange={e => updateDay(day.id, 'name', e.target.value)} placeholder="Nome do treino" />
-                  <span style={{ color:'#334155' }}>-</span>
-                  <input style={{ ...s.input, fontSize:13, flex:1, minWidth:100 }} value={day.focus||''} onChange={e => updateDay(day.id, 'focus', e.target.value)} placeholder="Foco (ex: Funcional + Core)" />
-                  <select style={{ ...s.input, fontSize:12, maxWidth:90 }} value={day.day_of_week||''} onChange={e => updateDay(day.id, 'day_of_week', e.target.value)}>
-                    <option value="">Dia...</option>
-                    {['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].map(d => <option key={d}>{d}</option>)}
-                  </select>
-                </div>
-                <button style={s.delBtn} onClick={() => deleteDay(day.id)}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ opacity:0.4 }}><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-                </button>
-              </div>
-
-              {/* Exercise list */}
-              {day.exercises.length > 0 && (
-                <div style={{ padding:'4px 0' }}>
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr auto auto auto auto', gap:8, padding:'6px 16px 2px', borderBottom:'1px solid rgba(255,255,255,0.04)' }}>
-                    {['Exercício','Tipo','Séries','Reps','Desc.'].map(h => (
-                      <div key={h} style={{ fontSize:9, color:'#334155', textTransform:'uppercase', letterSpacing:1 }}>{h}</div>
-                    ))}
+      {plan && (
+        <>
+          {/* Barra de progresso */}
+          <div style={{ ...S.card, marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#0C4A6E' }}>{plan.titulo}</div>
+                {turma.objetivo_final && (
+                  <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>Objetivo: {turma.objetivo_final}</div>
+                )}
+                {plan.data_inicio && plan.data_fim && (
+                  <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>
+                    {new Date(plan.data_inicio + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} →
+                    {new Date(plan.data_fim + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </div>
-                  {day.exercises.map(ex => {
-                    const tc = getTypeColor(ex.type)
-                    return (
-                      <div key={ex.id}>
-                        <div style={s.exRow}>
-                          <div style={{ flex:1, minWidth:0 }}>
-                            <div style={{ display:'flex', gap:5, alignItems:'center', marginBottom:4 }}>
-                              <span style={{ fontSize:9, background:tc+'18', color:tc, border:'1px solid '+tc+'35', borderRadius:10, padding:'1px 6px', fontWeight:700, flexShrink:0, whiteSpace:'nowrap' }}>{ex.type}</span>
-                              <input style={{ ...s.smallInput, fontWeight:600, flex:1 }} value={ex.name} onChange={e => updateExercise(day.id, ex.id, 'name', e.target.value)} placeholder="Nome" />
-                              <button onClick={() => setOpenCalc(openCalc === ex.id ? null : ex.id)}
-                                style={{ background: openCalc===ex.id ? 'rgba(167,139,250,0.2)':'rgba(167,139,250,0.06)', border:'1px solid '+(openCalc===ex.id ? '#A78BFA60':'rgba(167,139,250,0.15)'), borderRadius:6, padding:'4px 8px', color:'#A78BFA', fontSize:10, cursor:'pointer', fontWeight:700, flexShrink:0 }}>
-                                1RM
-                              </button>
-                              <button style={s.delBtn} onClick={() => deleteExercise(day.id, ex.id)}>
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ opacity:0.35 }}><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-                              </button>
-                            </div>
-                            <input style={{ ...s.smallInput, fontSize:11, color:'#475569' }} value={ex.tip||''} onChange={e => updateExercise(day.id, ex.id, 'tip', e.target.value)} placeholder="Dica de execução (opcional)" />
-                          </div>
-                          <select style={{ ...s.smallSel, width:110, flexShrink:0 }} value={ex.type||''} onChange={e => updateExercise(day.id, ex.id, 'type', e.target.value)}>
-                            <optgroup label="— Musculação">
-                              {MUSCLE_TYPES.map(t => <option key={t}>{t}</option>)}
-                            </optgroup>
-                            <optgroup label="— Funcional / Casa">
-                              {NEW_TYPES.map(t => <option key={t}>{t}</option>)}
-                            </optgroup>
-                          </select>
-                          {[['sets','3'],['reps','10-12'],['rest','60s']].map(([field, ph]) => (
-                            <input key={field} style={{ ...s.smallSel, width:58, flexShrink:0 }} value={ex[field]||''} onChange={e => updateExercise(day.id, ex.id, field, e.target.value)} placeholder={ph} />
-                          ))}
+                )}
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 26, fontWeight: 900, color: '#0C4A6E', lineHeight: 1 }}>{pct}%</div>
+                <div style={{ fontSize: 10, color: '#94A3B8' }}>{semanasFeitas}/{totalSemanas} semanas</div>
+              </div>
+            </div>
+            <div style={{ height: 10, borderRadius: 99, background: 'rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${pct}%`, borderRadius: 99, background: 'linear-gradient(90deg,#0C4A6E,#34D399)', transition: 'width 0.8s ease' }} />
+            </div>
+            {/* Legenda de tipos */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+              {TIPO_FOCO.map(t => (
+                <span key={t.id} style={S.tag(t.color, t.bg)}>{t.id}</span>
+              ))}
+            </div>
+          </div>
+
+          {/* Toggle semanas / mensal */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+            {[['semanas', 'Semanas'], ['mensal', 'Mensal']].map(([id, label]) => (
+              <button key={id} onClick={() => setViewMode(id)} style={{
+                padding: '7px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                background: viewMode === id ? '#0C4A6E' : 'rgba(0,0,0,0.06)',
+                color: viewMode === id ? '#fff' : '#64748B',
+              }}>{label}</button>
+            ))}
+          </div>
+
+          {/* Visão por Semanas */}
+          {viewMode === 'semanas' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {blocos.map(bloco => {
+                const foco = getFoco(bloco.tipo_foco)
+                const isEditing = editingBloco?.id === bloco.id
+                return (
+                  <div key={bloco.id} style={{ background: '#fff', border: `1px solid ${isEditing ? foco.color : 'rgba(0,0,0,0.08)'}`, borderRadius: 12, overflow: 'hidden', transition: 'border-color 0.15s' }}>
+                    {/* Linha resumo */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', cursor: 'pointer', background: isEditing ? foco.bg : 'transparent' }}
+                      onClick={() => setEditingBloco(isEditing ? null : { ...bloco })}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: foco.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <span style={{ fontSize: 11, fontWeight: 900, color: foco.color }}>S{bloco.semana_numero}</span>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: '#0D1B2A' }}>Semana {bloco.semana_numero}</span>
+                          <span style={S.tag(foco.color, foco.bg)}>{bloco.tipo_foco}</span>
                         </div>
-                        {openCalc === ex.id && (
-                          <div style={{ padding:'0 16px 4px' }}>
-                            <OneRMCalc
-                              ageGroup={ageGroup}
-                              onApply={({ reps, rest }) => { updateExercise(day.id, ex.id, 'reps', reps); updateExercise(day.id, ex.id, 'rest', rest); setOpenCalc(null) }}
-                              onClose={() => setOpenCalc(null)}
-                            />
+                        {bloco.descricao_geral && (
+                          <div style={{ fontSize: 11, color: '#64748B', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {bloco.descricao_geral}
                           </div>
                         )}
+                      </div>
+                      <span style={{ fontSize: 11, color: '#94A3B8', flexShrink: 0 }}>{isEditing ? '▲' : '▼'}</span>
+                    </div>
+
+                    {/* Editor inline */}
+                    {isEditing && editingBloco && (
+                      <div style={{ padding: '0 16px 16px', borderTop: `1px solid ${foco.color}30` }}>
+                        <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                          <div>
+                            <div style={S.label}>Foco da Semana</div>
+                            <select style={S.input} value={editingBloco.tipo_foco}
+                              onChange={e => setEditingBloco(x => ({ ...x, tipo_foco: e.target.value }))}>
+                              {TIPO_FOCO.map(t => <option key={t.id}>{t.id}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                        <div style={{ marginBottom: 10 }}>
+                          <div style={S.label}>Descrição Geral da Semana</div>
+                          <textarea style={{ ...S.input, minHeight: 70, resize: 'vertical', fontFamily: 'inherit' }}
+                            placeholder="O que será trabalhado nesta semana..."
+                            value={editingBloco.descricao_geral || ''}
+                            onChange={e => setEditingBloco(x => ({ ...x, descricao_geral: e.target.value }))} />
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button onClick={() => saveBloco(editingBloco)} disabled={saving} style={S.btn(foco.color)}>
+                            {saving ? 'Salvando...' : 'Salvar'}
+                          </button>
+                          <button onClick={() => setEditingBloco(null)} style={S.ghost}>Cancelar</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Visão Mensal */}
+          {viewMode === 'mensal' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {Object.entries(meses).map(([mes, semanasDoMes]) => (
+                <div key={mes}>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: '#0C4A6E', textTransform: 'capitalize', marginBottom: 10, letterSpacing: 0.3 }}>
+                    {mes}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8 }}>
+                    {semanasDoMes.map(bloco => {
+                      const foco = getFoco(bloco.tipo_foco)
+                      return (
+                        <div key={bloco.id} style={{ background: foco.bg, border: `1px solid ${foco.color}35`, borderRadius: 12, padding: '12px 14px', cursor: 'pointer' }}
+                          onClick={() => { setViewMode('semanas'); setEditingBloco({ ...bloco }) }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: foco.color, marginBottom: 4 }}>Semana {bloco.semana_numero}</div>
+                          {bloco.dataInicio && (
+                            <div style={{ fontSize: 9, color: foco.color, opacity: 0.7, marginBottom: 6 }}>
+                              {bloco.dataInicio.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                            </div>
+                          )}
+                          <div style={{ fontSize: 11, fontWeight: 700, color: foco.color }}>{bloco.tipo_foco}</div>
+                          {bloco.descricao_geral && (
+                            <div style={{ fontSize: 9, color: foco.color, opacity: 0.65, marginTop: 4, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                              {bloco.descricao_geral}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {showModalPlan && (
+        <ModalNovoPlanejamento turmaId={turma.id} turma={turma} onSave={() => { onRefresh(); setShowModalPlan(false) }} onClose={() => setShowModalPlan(false)} />
+      )}
+    </div>
+  )
+}
+
+// ── Detalhe de Turma ──────────────────────────────────────────────────────────
+function TurmaDetail({ turma, students, teacherId, onBack, onRefresh }) {
+  const [tab, setTab]               = useState('planejamento')
+  const [turmaAlunos, setTurmaAlunos] = useState([])
+  const [planejamentos, setPlanejamentos] = useState([])
+  const [showAddAluno, setShowAddAluno]   = useState(false)
+
+  const alunosDaTurma = students.filter(s => turmaAlunos.includes(s.id))
+
+  useEffect(() => {
+    supabase.from('turma_alunos').select('student_id').eq('turma_id', turma.id)
+      .then(({ data }) => setTurmaAlunos((data || []).map(r => r.student_id)))
+    supabase.from('planejamentos').select('*').eq('turma_id', turma.id).order('created_at')
+      .then(({ data }) => setPlanejamentos(data || []))
+  }, [turma.id])
+
+  const removeAluno = async (sid) => {
+    await supabase.from('turma_alunos').delete().eq('turma_id', turma.id).eq('student_id', sid)
+    setTurmaAlunos(prev => prev.filter(x => x !== sid))
+  }
+
+  const addAluno = async (sid) => {
+    await supabase.from('turma_alunos').insert([{ turma_id: turma.id, student_id: sid }])
+    setTurmaAlunos(prev => [...prev, sid])
+    setShowAddAluno(false)
+  }
+
+  const sport = getSport(turma.esporte)
+  const diasLabel = (turma.dias_semana || []).join(' · ')
+
+  return (
+    <div>
+      {/* Header da turma */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 20 }}>
+        <button onClick={onBack} style={{ ...S.ghost, padding: '8px 12px', flexShrink: 0 }}>← Voltar</button>
+        <div>
+          <div style={{ fontSize: 20, fontWeight: 900, color: '#0C4A6E', lineHeight: 1.1 }}>
+            {sport?.icon} {turma.nome}
+          </div>
+          <div style={{ fontSize: 12, color: '#64748B', marginTop: 4 }}>
+            {turma.posicao && <span style={{ marginRight: 8 }}>{turma.posicao}</span>}
+            {diasLabel && <span style={{ marginRight: 8 }}>{diasLabel}</span>}
+            <span>{alunosDaTurma.length} aluno{alunosDaTurma.length !== 1 ? 's' : ''}</span>
+          </div>
+          {turma.objetivo_final && (
+            <div style={{ fontSize: 11, color: '#0C4A6E', marginTop: 4, fontWeight: 600 }}>
+              Objetivo: {turma.objetivo_final}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
+        {[['planejamento', 'Planejamento'], ['alunos', 'Alunos']].map(([id, label]) => (
+          <button key={id} onClick={() => setTab(id)} style={{
+            padding: '8px 18px', borderRadius: 8, border: 'none', cursor: 'pointer',
+            fontWeight: 700, fontSize: 13,
+            background: tab === id ? '#0C4A6E' : 'rgba(0,0,0,0.06)',
+            color: tab === id ? '#fff' : '#64748B',
+          }}>{label}</button>
+        ))}
+      </div>
+
+      {/* Aba Planejamento */}
+      {tab === 'planejamento' && (
+        <PlanejamentoView
+          turma={turma}
+          planejamentos={planejamentos}
+          students={alunosDaTurma}
+          teacherId={teacherId}
+          onRefresh={() => {
+            supabase.from('planejamentos').select('*').eq('turma_id', turma.id).order('created_at')
+              .then(({ data }) => setPlanejamentos(data || []))
+            onRefresh()
+          }}
+        />
+      )}
+
+      {/* Aba Alunos */}
+      {tab === 'alunos' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#0C4A6E' }}>{alunosDaTurma.length} aluno{alunosDaTurma.length !== 1 ? 's' : ''} nesta turma</div>
+            <button onClick={() => setShowAddAluno(!showAddAluno)} style={{ ...S.ghost, fontSize: 12 }}>+ Adicionar</button>
+          </div>
+
+          {/* Adicionar alunos */}
+          {showAddAluno && (
+            <div style={{ ...S.card, marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#0C4A6E', marginBottom: 10 }}>Selecione um aluno</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {students.filter(s => !turmaAlunos.includes(s.id)).map(s => (
+                  <div key={s.id} onClick={() => addAluno(s.id)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, background: 'rgba(0,0,0,0.03)', cursor: 'pointer', border: '1px solid rgba(0,0,0,0.06)' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(12,74,110,0.06)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0.03)'}>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: '#0D1B2A' }}>{s.name}</span>
+                    {s.sport && <span style={{ fontSize: 10, color: '#94A3B8', marginLeft: 'auto' }}>{getSport(s.sport)?.icon} {s.sport_position || ''}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Lista de alunos */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {alunosDaTurma.map(s => (
+              <div key={s.id} style={{ ...S.card, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg,#0C4A6E,#155E8E)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: '#fff' }}>{s.name[0]}</span>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#0D1B2A' }}>{s.name}</div>
+                  <div style={{ fontSize: 11, color: '#64748B' }}>
+                    {s.sport_position && <span>{s.sport_position}</span>}
+                    {s.age && <span style={{ marginLeft: 6 }}>{s.age} anos</span>}
+                  </div>
+                </div>
+                <button onClick={() => removeAluno(s.id)} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', fontSize: 13, padding: '4px 8px', borderRadius: 6 }}>
+                  Remover
+                </button>
+              </div>
+            ))}
+            {alunosDaTurma.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '30px 20px', color: '#94A3B8', fontSize: 13 }}>
+                Nenhum aluno na turma ainda
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Componente Principal ──────────────────────────────────────────────────────
+export default function TabEscolinha({ session, students }) {
+  const [turmas, setTurmas]           = useState([])
+  const [loading, setLoading]         = useState(true)
+  const [showModal, setShowModal]     = useState(false)
+  const [selectedTurma, setSelectedTurma] = useState(null)
+
+  const teacherId = session?.user?.id
+
+  const fetchTurmas = async () => {
+    try {
+      const { data, error } = await supabase.from('turmas').select('*')
+        .eq('teacher_id', teacherId).order('created_at')
+      if (error) {
+        console.error('Escolinha: tabela turmas indisponivel -', error.message)
+        console.error('Execute o SQL escolinha_migration.sql no Supabase.')
+      }
+      setTurmas(data || [])
+    } catch (err) {
+      console.error('Escolinha fetchTurmas error:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { if (teacherId) fetchTurmas() }, [teacherId])
+
+  // Agrupar turmas por esporte
+  const porEsporte = {}
+  turmas.forEach(t => {
+    const key = t.esporte
+    if (!porEsporte[key]) porEsporte[key] = []
+    porEsporte[key].push(t)
+  })
+
+  if (loading) return (
+    <div style={{ padding: '60px 20px', textAlign: 'center', color: '#0C4A6E', opacity: 0.5 }}>
+      <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
+      Carregando turmas...
+    </div>
+  )
+
+  // Tabela não existe — SQL não foi executado
+  if (!Array.isArray(turmas)) return (
+    <div style={{ padding: '60px 20px', textAlign: 'center' }}>
+      <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: '#0C4A6E', marginBottom: 8 }}>Configuração necessária</div>
+      <div style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6 }}>
+        Execute o arquivo <strong>escolinha_migration.sql</strong><br/>
+        no Supabase SQL Editor para ativar a Escolinha.
+      </div>
+    </div>
+  )
+
+  if (selectedTurma) return (
+    <TurmaDetail
+      turma={selectedTurma}
+      students={students}
+      teacherId={teacherId}
+      onBack={() => setSelectedTurma(null)}
+      onRefresh={fetchTurmas}
+    />
+  )
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+        <div>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0C4A6E', marginBottom: 3 }}>Escolinha</h1>
+          <p style={{ fontSize: 13, color: '#0C4A6E', fontWeight: 600 }}>
+            <span style={{ color: '#34D399', fontWeight: 700 }}>{turmas.length}</span> turma{turmas.length !== 1 ? 's' : ''} ativa{turmas.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+        <button onClick={() => setShowModal(true)} style={S.btn()}>+ Nova Turma</button>
+      </div>
+
+      {/* Lista agrupada por esporte */}
+      {turmas.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '80px 20px', color: '#0C4A6E', opacity: 0.5 }}>
+          <div style={{ fontSize: 48, marginBottom: 14 }}>🏟️</div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>Nenhuma turma criada</div>
+          <div style={{ fontSize: 13, marginTop: 6 }}>Clique em "+ Nova Turma" para começar</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {Object.entries(porEsporte).map(([esporte, turmasDoEsporte]) => {
+            const sport = getSport(esporte)
+            return (
+              <div key={esporte}>
+                {/* Cabeçalho do esporte */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <span style={{ fontSize: 20 }}>{sport?.icon || '🏅'}</span>
+                  <span style={{ fontSize: 16, fontWeight: 800, color: '#0C4A6E' }}>{sport?.label || esporte}</span>
+                  <span style={{ fontSize: 11, color: '#94A3B8', marginLeft: 4 }}>{turmasDoEsporte.length} turma{turmasDoEsporte.length !== 1 ? 's' : ''}</span>
+                </div>
+
+                {/* Cards de turma */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
+                  {turmasDoEsporte.map(turma => {
+                    const diasLabel = (turma.dias_semana || []).join(' · ')
+                    return (
+                      <div key={turma.id} onClick={() => setSelectedTurma(turma)}
+                        style={{ ...S.card, cursor: 'pointer', transition: 'all 0.18s', position: 'relative', overflow: 'hidden' }}
+                        onMouseEnter={e => e.currentTarget.style.boxShadow = '0 8px 28px rgba(12,74,110,0.15)'}
+                        onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}>
+                        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg,#0C4A6E,#34D399)' }} />
+                        <div style={{ paddingTop: 4 }}>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: '#0C4A6E', marginBottom: 4 }}>{turma.nome}</div>
+                          {turma.posicao && <div style={{ fontSize: 11, color: '#475569', marginBottom: 4 }}>{turma.posicao}</div>}
+                          {diasLabel && <div style={{ fontSize: 11, color: '#64748B', marginBottom: 6 }}>{diasLabel}</div>}
+                          {turma.objetivo_final && (
+                            <div style={{ fontSize: 10, color: '#0C4A6E', fontWeight: 600, background: 'rgba(12,74,110,0.07)', borderRadius: 6, padding: '3px 8px', display: 'inline-block', marginBottom: 6 }}>
+                              {turma.objetivo_final}
+                            </div>
+                          )}
+                          <div style={{ fontSize: 11, color: '#94A3B8' }}>
+                            {turma.data_inicio && new Date(turma.data_inicio + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
+                            {turma.data_fim && ` → ${new Date(turma.data_fim + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}`}
+                          </div>
+                          <div style={{ marginTop: 8, fontSize: 12, color: '#0C4A6E', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            Ver turma →
+                          </div>
+                        </div>
                       </div>
                     )
                   })}
                 </div>
-              )}
-
-              {/* Add exercise */}
-              <div style={s.addRow}>
-                <div style={{ fontSize:10, color:'#334155', marginBottom:10, textTransform:'uppercase', letterSpacing:1, fontWeight:600 }}>Adicionar Exercício</div>
-
-                <ExerciseSearch
-                  onSelect={ex => setNewExForms(f => ({ ...f, [day.id]:{ name:ex.name, sets:ex.sets, reps:ex.reps, rest:ex.rest, tip:ex.tip, type:ex.type } }))}
-                  suggestedTypes={suggestedTypes}
-                  ageGroup={ageGroup}
-                />
-
-                <NoEquipmentSection
-                  onAddExercise={(ex) => addExercise(day.id, ex)}
-                />
-
-                {/* ── Habilidades Motoras (só criança/adolescente) ── */}
-                <MotorSkillsSection
-                  dayId={day.id}
-                  ageGroup={ageGroup}
-                  studentAge={studentAge}
-                  onAddExercise={(ex) => addExercise(day.id, ex)}
-                />
-
-                {/* Formulário manual */}
-                <div style={{ marginTop:10 }}>
-                  <div style={{ fontSize:9, color:'#334155', textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>Ou adicionar manualmente</div>
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 110px 58px 58px 58px', gap:6, marginBottom:8 }}>
-                    <input style={s.smallInput} value={newEx.name} onChange={e => setNewExField(day.id, 'name', e.target.value)} placeholder="Nome do exercício *" />
-                    <select style={s.smallSel} value={newEx.type} onChange={e => setNewExField(day.id, 'type', e.target.value)}>
-                      <optgroup label="— Musculação">
-                        {MUSCLE_TYPES.map(t => <option key={t}>{t}</option>)}
-                      </optgroup>
-                      <optgroup label="— Funcional / Casa">
-                        {NEW_TYPES.map(t => <option key={t}>{t}</option>)}
-                      </optgroup>
-                    </select>
-                    <input style={s.smallInput} value={newEx.sets} onChange={e => setNewExField(day.id, 'sets', e.target.value)} placeholder="3" />
-                    <input style={s.smallInput} value={newEx.reps} onChange={e => setNewExField(day.id, 'reps', e.target.value)} placeholder="10-12" />
-                    <input style={s.smallInput} value={newEx.rest} onChange={e => setNewExField(day.id, 'rest', e.target.value)} placeholder="60s" />
-                  </div>
-                  <input style={{ ...s.smallInput, marginBottom:8, fontSize:11 }} value={newEx.tip} onChange={e => setNewExField(day.id, 'tip', e.target.value)} placeholder="Dica de execução (opcional)" />
-                  <button style={s.btn(color)} onClick={() => addExercise(day.id)}>+ Adicionar ao Treino</button>
-                </div>
               </div>
-
-            </div>
-          )
-        })}
-
-        <button style={{ ...s.outlineBtn, width:'100%', padding:'16px', fontSize:14, borderStyle:'dashed', borderRadius:12 }} onClick={addDay}>
-          + Adicionar Dia de Treino
-        </button>
-
-        <div style={{ marginTop:12, textAlign:'center', fontSize:11, color:'#1E293B' }}>
-          Alterações salvas automaticamente
+            )
+          })}
         </div>
+      )}
 
-        {showTemplate && (
-          <TemplateModal
-            student={student}
-            ageGroup={ageGroup}
-            semAcademia={semAcademia}
-            onApply={applyTemplate}
-            onClose={() => setShowTemplate(false)}
-          />
-        )}
-
-      </div>
+      {showModal && (
+        <ModalNovaTurma teacherId={teacherId} students={students} onSave={fetchTurmas} onClose={() => setShowModal(false)} />
+      )}
     </div>
   )
 }
