@@ -2019,7 +2019,7 @@ export default function Dashboard({ navigate, session }) {
         supabase.from('progress_entries').select('student_id,date,weight').in('student_id', ids).order('date', { ascending: false }),
         supabase.from('exercise_logs').select('student_id,date').in('student_id', ids),
         supabase.from('student_feedbacks').select('student_id,date').in('student_id', ids),
-        supabase.from('workout_plans').select('*, workout_days(*)').in('student_id', ids).eq('status', 'active'),
+        supabase.from('workout_plans').select('id,student_id,title,status,updated_at').in('student_id', ids).eq('status', 'active'),
       ])
 
       const datesByStudent = {}
@@ -2041,10 +2041,10 @@ export default function Dashboard({ navigate, session }) {
       // Monta mapa de dias planejados por aluno (ex: { uuid: ['Seg','Qua','Sex'] })
       const plannedDaysMap = {}
       ids.forEach(id => { plannedDaysMap[id] = [] })
+      // workout_days não mais no join — plannedDaysMap vazio por ora (ok, streak ainda funciona via logs)
       if (plansRes.data) {
         plansRes.data.forEach(p => {
-          const days = (p.workout_days || []).map(d => d.day_of_week).filter(Boolean)
-          plannedDaysMap[p.student_id] = [...new Set([...(plannedDaysMap[p.student_id] || []), ...days])]
+          plannedDaysMap[p.student_id] = plannedDaysMap[p.student_id] || []
         })
       }
 
@@ -2075,9 +2075,8 @@ export default function Dashboard({ navigate, session }) {
         if (logs.data) logs.data.forEach(r => logMap[r.student_id]?.push(r.date))
 
         setWorkouts(plans.map(p => {
-          const st   = studs.find(s => s.id === p.student_id)
-          const days = (p.workout_days || []).map(d => d.day_of_week).filter(Boolean)
-          return { ...p, studentName: st?.name || '—', goal: st?.goal || '', days, workoutDays: p.workout_days || [], attendanceDates: attMap[p.student_id] || [], logDates: logMap[p.student_id] || [] }
+          const st = studs.find(s => s.id === p.student_id)
+          return { ...p, studentName: st?.name || '—', goal: st?.goal || '', days: [], workoutDays: [], attendanceDates: attMap[p.student_id] || [], logDates: logMap[p.student_id] || [] }
         }))
       }
     } else {
