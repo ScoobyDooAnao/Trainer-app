@@ -29,7 +29,7 @@ const DIA_JS_MAP  = { Seg: 1, Ter: 2, Qua: 3, Qui: 4, Sex: 5, Sáb: 6, Dom: 0 }
 
 const NAV = [
   { id: 'alunos',    icon: '⬛', label: 'Meus Alunos' },
-  { id: 'treinos',   icon: '⬛', label: 'Treinos'      },
+  { id: 'treinos',   icon: '⬛', label: 'Cronograma'   },
   { id: 'evolucao',  icon: '⬛', label: 'Evolução'     },
   { id: 'cardio',    icon: '⬛', label: 'Cardio'       },
   { id: 'escolinha', icon: '⬛', label: 'Escolinha'    },
@@ -544,20 +544,142 @@ function WorkoutChip({ workout, dia, onClick }) {
   )
 }
 
+
+// ── EscolinhaChip ─────────────────────────────────────────────────────────────
+const FOCO_CHIP_COLORS = {
+  'Físico':      { bg:'#FEE2E2', border:'#FECACA', text:'#991B1B', dot:'#EF4444' },
+  'Técnico':     { bg:'#DBEAFE', border:'#BFDBFE', text:'#1E40AF', dot:'#3B82F6' },
+  'Lúdico':      { bg:'#EDE9FE', border:'#DDD6FE', text:'#5B21B6', dot:'#8B5CF6' },
+  'Competitivo': { bg:'#FEF3C7', border:'#FDE68A', text:'#92400E', dot:'#F59E0B' },
+  'Progressão':  { bg:'#D1FAE5', border:'#A7F3D0', text:'#064E3B', dot:'#10B981' },
+  'Misto':       { bg:'#F1F5F9', border:'#E2E8F0', text:'#475569', dot:'#94A3B8' },
+}
+const SPORT_ICON_SMALL = { futebol:'⚽', futsal:'🥅', natacao:'🏊', basquete:'🏀', volei:'🏐', outro:'🏅' }
+function EscolinhaChip({ item }) {
+  const [hov, setHov] = useState(false)
+  const fc = FOCO_CHIP_COLORS[item.focoTipo] || FOCO_CHIP_COLORS['Misto']
+  return (
+    <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      style={{ borderRadius:12, padding:'9px 10px', marginBottom:7, cursor:'default',
+        background: hov ? fc.border : fc.bg,
+        border: `1.5px solid ${fc.border}`,
+        boxShadow: hov ? '0 4px 14px rgba(0,0,0,0.1)' : '0 1px 4px rgba(0,0,0,0.06)',
+        transition:'all 0.18s' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
+        <span style={{ fontSize:11 }}>{SPORT_ICON_SMALL[item.esporte] || '🏅'}</span>
+        <div style={{ fontSize:11, fontWeight:800, color:fc.text, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+          {item.turma}
+        </div>
+      </div>
+      <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+        <div style={{ width:6, height:6, borderRadius:'50%', background:fc.dot, flexShrink:0 }} />
+        <span style={{ fontSize:10, fontWeight:700, color:fc.text }}>{item.focoTipo}</span>
+      </div>
+      {item.blocos.length > 0 && (
+        <div style={{ marginTop:4, display:'flex', gap:3, flexWrap:'wrap' }}>
+          {item.blocos.slice(0,3).map((b,i) => (
+            <span key={i} style={{ fontSize:8, background:'rgba(0,0,0,0.08)', borderRadius:10, padding:'1px 5px', color:fc.text, fontWeight:600 }}>
+              {b.nome || b.tipo} {b.duracao_min ? b.duracao_min+'m' : ''}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── TabTreinos ─────────────────────────────────────────────────────────────
-function TabTreinos({ workouts, navigate }) {
+function TabTreinos({ workouts, navigate, session }) {
   const [selectedStudent, setSelectedStudent] = useState(null)
   const [modalWorkout, setModalWorkout]       = useState(null)
+  const [escolinhaItems, setEscolinhaItems]   = useState([]) // { dia, turma, blocoFoco, blocoDesc }
 
   const filtered       = selectedStudent ? workouts.filter(w => w.student_id === selectedStudent) : workouts
   const uniqueStudents = [...new Map(workouts.map(w => [w.student_id, { id: w.student_id, name: w.studentName }])).values()]
+
+  // Buscar aulas da Escolinha da semana atual
+  useEffect(() => {
+    if (!session?.user?.id) return
+    const load = async () => {
+      try {
+        // Pegar turmas do professor
+        const { data: turmas } = await supabase.from('turmas')
+          .select('id, nome, esporte, dias_semana')
+          .eq('teacher_id', session.user.id).eq('ativo', true)
+        if (!turmas || turmas.length === 0) return
+
+        const turmaIds = turmas.map(t => t.id)
+        // Pegar planejamentos ativos
+        const { data: plans } = await supabase.from('planejamentos')
+          .select('id, turma_id, titulo, total_semanas, data_inicio')
+          .in('turma_id', turmaIds)
+        if (!plans || plans.length === 0) return
+
+        const today = new Date()
+        const items = []
+
+        for (const plan of plans) {
+          // Calcular semana atual
+          let semanaAtual = 1
+          if (plan.data_inicio) {
+            const inicio = new Date(plan.data_inicio)
+            const diff = Math.floor((today - inicio) / (7 * 24 * 3600 * 1000))
+            semanaAtual = Math.max(1, Math.min(diff + 1, plan.total_semanas))
+          }
+          // Buscar bloco da semana atual
+          const { data: bloco } = await supabase.from('blocos_semana')
+            .select('*, planos_aula(*)')
+            .eq('planejamento_id', plan.id)
+            .eq('semana_numero', semanaAtual)
+            .single()
+
+          if (!bloco) continue
+          const turma = turmas.find(t => t.id === plan.turma_id)
+
+          // Cada dia de treino da turma gera um item no cronograma
+          const diasTurma = turma?.dias_semana || []
+          // Buscar planos de aula do bloco para pegar dias específicos
+          const { data: planos } = await supabase.from('planos_aula')
+            .select('dia_semana, status, blocos_aula(tipo, nome, duracao_min)')
+            .eq('bloco_semana_id', bloco.id)
+
+          const diasComPlano = new Set((planos || []).map(p => p.dia_semana))
+
+          // Adicionar todos os dias da turma
+          const todosOsDias = diasComPlano.size > 0
+            ? [...diasComPlano]
+            : diasTurma
+
+          todosOsDias.forEach(dia => {
+            const planoDodia = (planos || []).find(p => p.dia_semana === dia)
+            items.push({
+              dia,
+              turmaId: turma.id,
+              turma: turma.nome,
+              esporte: turma.esporte,
+              planTitulo: plan.titulo,
+              semana: semanaAtual,
+              focoTipo: bloco.tipo_foco,
+              descricao: bloco.descricao_geral || '',
+              blocos: planoDodia?.blocos_aula || [],
+              status: planoDodia?.status || 'planejado',
+            })
+          })
+        }
+        setEscolinhaItems(items)
+      } catch (err) {
+        console.error('escolinha cronograma error:', err)
+      }
+    }
+    load()
+  }, [session])
 
   return (
     <div>
       {modalWorkout && <WorkoutModal workout={modalWorkout} onClose={() => setModalWorkout(null)} navigate={navigate} />}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0C3251', letterSpacing: '-0.5px', marginBottom: 4, textShadow:'0 1px 3px rgba(255,255,255,0.5)' }}>Treinos da Semana</h1>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0C3251', letterSpacing: '-0.5px', marginBottom: 4, textShadow:'0 1px 3px rgba(255,255,255,0.5)' }}>Cronograma Semanal</h1>
           <p style={{ fontSize: 13, color: '#0C4A6E' }}>
             <span style={{ color: '#059669', fontWeight: 700 }}>{workouts.length} planos ativos</span>
             {' · '}{uniqueStudents.length} alunos com treino
@@ -581,10 +703,14 @@ function TabTreinos({ workouts, navigate }) {
         <div className="db-week-grid"><div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', borderBottom: '2px solid #FEF3C7' }}>
           {DIAS_SEMANA.map((dia, i) => {
             const count = filtered.filter(w => (w.days || []).includes(dia)).length
+            const countEsc = escolinhaItems.filter(e => e.dia === dia).length
             return (
               <div key={dia} style={{ padding: '14px 8px 12px', textAlign: 'center', background: i >= 5 ? 'rgba(245,200,66,0.06)' : 'transparent', borderRight: i < 6 ? '1px solid #F1F5F9' : 'none' }}>
                 <div style={{ fontSize: 13, fontWeight: 800, color: i >= 5 ? '#D97706' : '#0D1B2A', marginBottom: 4 }}>{dia}</div>
-                {count > 0 && <div style={{ display: 'inline-block', fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: 'linear-gradient(135deg,#F5C842,#D97706)', color: '#431C00' }}>{count} treino{count > 1 ? 's' : ''}</div>}
+                <div style={{ display:'flex', gap:3, justifyContent:'center', flexWrap:'wrap' }}>
+                  {count > 0 && <div style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: 'linear-gradient(135deg,#F5C842,#D97706)', color: '#431C00' }}>{count} acad.</div>}
+                  {countEsc > 0 && <div style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: '#DBEAFE', color: '#1E40AF', border:'1px solid #BFDBFE' }}>{countEsc} esc.</div>}
+                </div>
               </div>
             )
           })}
@@ -592,11 +718,18 @@ function TabTreinos({ workouts, navigate }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', minHeight: 260 }}>
           {DIAS_SEMANA.map((dia, i) => {
             const dayWorkouts = filtered.filter(w => (w.days || []).includes(dia))
+            const dayEscolinha = escolinhaItems.filter(e => e.dia === dia)
+            const isEmpty = dayWorkouts.length === 0 && dayEscolinha.length === 0
             return (
               <div key={dia} style={{ padding: '12px 8px', background: i >= 5 ? 'rgba(245,200,66,0.03)' : 'transparent', borderRight: i < 6 ? '1px solid #F1F5F9' : 'none' }}>
-                {dayWorkouts.length === 0
+                {isEmpty
                   ? <div style={{ textAlign: 'center', paddingTop: 30, color: '#E2E8F0', fontSize: 20 }}>·</div>
-                  : dayWorkouts.map(w => <WorkoutChip key={w.id + dia} workout={w} dia={dia} onClick={setModalWorkout} />)
+                  : (
+                    <>
+                      {dayWorkouts.map(w => <WorkoutChip key={w.id + dia} workout={w} dia={dia} onClick={setModalWorkout} />)}
+                      {dayEscolinha.map((item, idx) => <EscolinhaChip key={item.turmaId + dia + idx} item={item} />)}
+                    </>
+                  )
                 }
               </div>
             )
@@ -606,13 +739,21 @@ function TabTreinos({ workouts, navigate }) {
       </div>{/* end db-week-grid */}
       {/* Legenda */}
       <div style={{ display: 'flex', gap: 14, marginTop: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-        {[{ emoji: '👍', label: 'Feito' }, { emoji: '⏳', label: 'Ainda dá' }, { emoji: '😓', label: 'Faltou' }, { emoji: '📅', label: 'Agendado' }].map(({ emoji, label }) => (
-          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ fontSize: 13 }}>{emoji}</span>
-            <span style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 600 }}>{label}</span>
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <div style={{ width:10, height:10, borderRadius:3, background:'linear-gradient(135deg,#F5C842,#D97706)' }} />
+          <span style={{ fontSize:11, color:'#0C4A6E', fontWeight:600 }}>Academia</span>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <div style={{ width:10, height:10, borderRadius:3, background:'#3B82F6' }} />
+          <span style={{ fontSize:11, color:'#0C4A6E', fontWeight:600 }}>Escolinha</span>
+        </div>
+        <span style={{ fontSize:11, color:'#0C4A6E', opacity:0.5 }}>·</span>
+        {[{ dot:'#059669', label:'Feito' }, { dot:'#F59E0B', label:'Ainda dá' }, { dot:'#EF4444', label:'Faltou' }, { dot:'#94A3B8', label:'Agendado' }].map(({ dot, label }) => (
+          <div key={label} style={{ display:'flex', alignItems:'center', gap:5 }}>
+            <div style={{ width:7, height:7, borderRadius:'50%', background:dot }} />
+            <span style={{ fontSize:11, color:'#0C4A6E', fontWeight:600 }}>{label}</span>
           </div>
         ))}
-        <span style={{ fontSize: 11, color: '#0C4A6E', opacity: 0.7 }}>· Clique num treino para ver detalhes</span>
       </div>
     </div>
   )
@@ -2066,7 +2207,7 @@ export default function Dashboard({ navigate, session }) {
       })
       setStudents(enriched)
 
-      // Monta workouts para a aba Treinos
+      // Monta workouts para o Cronograma
       const plans = plansRes.data || []
       if (plans.length > 0) {
         const attMap = {}; const logMap = {}
@@ -2074,9 +2215,35 @@ export default function Dashboard({ navigate, session }) {
         if (att.data) att.data.forEach(r => attMap[r.student_id]?.push(r.date))
         if (logs.data) logs.data.forEach(r => logMap[r.student_id]?.push(r.date))
 
+        // Buscar dias da semana de cada plano (leve — só day_of_week e name)
+        const planIds = plans.map(p => p.id)
+        const { data: wDays } = await supabase
+          .from('workout_days')
+          .select('plan_id, day_of_week, name, focus')
+          .in('plan_id', planIds)
+
+        // Montar mapa planId → dias e workoutDays
+        const daysMap = {}
+        const wdMap   = {}
+        planIds.forEach(pid => { daysMap[pid] = []; wdMap[pid] = [] })
+        if (wDays) {
+          wDays.forEach(d => {
+            if (d.day_of_week) daysMap[d.plan_id]?.push(d.day_of_week)
+            wdMap[d.plan_id]?.push(d)
+          })
+        }
+
         setWorkouts(plans.map(p => {
           const st = studs.find(s => s.id === p.student_id)
-          return { ...p, studentName: st?.name || '—', goal: st?.goal || '', days: [], workoutDays: [], attendanceDates: attMap[p.student_id] || [], logDates: logMap[p.student_id] || [] }
+          return {
+            ...p,
+            studentName: st?.name || '—',
+            goal: st?.goal || '',
+            days: [...new Set(daysMap[p.id] || [])],
+            workoutDays: wdMap[p.id] || [],
+            attendanceDates: attMap[p.student_id] || [],
+            logDates: logMap[p.student_id] || [],
+          }
         }))
       }
     } else {
@@ -2197,7 +2364,7 @@ export default function Dashboard({ navigate, session }) {
         )}
 
         {/* ABA: TREINOS */}
-        {nav === 'treinos' && <TabTreinos workouts={workouts} navigate={navigate} />}
+        {nav === 'treinos' && <TabTreinos workouts={workouts} navigate={navigate} session={session} />}
 
         {/* ABA: EVOLUÇÃO */}
         {nav === 'evolucao' && <TabEvolucao students={students} />}
