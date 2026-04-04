@@ -1595,6 +1595,8 @@ export default function StudentView({ studentId }) {
   const [loading,        setLoading]        = useState(true)
   const [confirmedToday, setConfirmedToday] = useState(false)
   const [confirming,     setConfirming]     = useState(false)
+  const [showMakeup,     setShowMakeup]     = useState(false)
+  const [missedDays,     setMissedDays]     = useState([]) // dias perdidos da semana
 
   useEffect(() => {
     if (!studentId) { setLoading(false); return }
@@ -1633,10 +1635,68 @@ export default function StudentView({ studentId }) {
         if (gsR.status === 'fulfilled' && gsR.value.data) setGoals(gsR.value.data)
         if (csR.status === 'fulfilled' && csR.value.data) setCardio(csR.value.data)
 
-        // Check if already confirmed today — done here to avoid a second useEffect
-        supabase.from('exercise_logs')
-          .select('id').eq('student_id', studentId).eq('date', today()).limit(1)
-          .then(({ data }) => { if (data?.length) setConfirmedToday(true) })
+        // Check if already confirmed today
+        const todayStr = today()
+        const { data: logsToday } = await supabase
+          .from('exercise_logs').select('id, day_id')
+          .eq('student_id', studentId).eq('date', todayStr)
+        if (logsToday?.length) setConfirmedToday(true)
+
+        // Find missed days this week (days that had workouts but no log)
+        const JS_TO_DIA = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
+        const now = new Date()
+        const weekStart = new Date(now)
+        weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7))
+        weekStart.setHours(0,0,0,0)
+
+        const { data: weekLogs } = await supabase
+          .from('exercise_logs').select('date, day_id')
+          .eq('student_id', studentId)
+          .gte('date', weekStart.toISOString().slice(0,10))
+        const loggedDayIds = new Set((weekLogs||[]).map(l => l.day_id).filter(Boolean))
+        const loggedDates  = new Set((weekLogs||[]).map(l => l.date))
+
+        // days é populado do plano ativo buscado acima
+        // Precisamos aguardar o state ser setado, então fazemos direto aqui
+        if (plans?.[0]) {
+          const { data: daysData2 } = await supabase
+            .from('workout_days').select('id, name, day_of_week, focus, order_index')
+            .eq('plan_id', plans[0].id).order('order_index')
+
+          if (daysData2) {
+            const missed = []
+            const DIA_JS = { Seg:1,Ter:2,Qua:3,Qui:4,Sex:5,Sáb:6,Dom:0 }
+            const todayJS = now.getDay()
+
+            daysData2.forEach(d => {
+              if (!d.day_of_week) return
+              const diaJS = DIA_JS[d.day_of_week]
+              if (diaJS === undefined) return
+              // Só inclui dias que já passaram esta semana (não hoje, não futuros)
+              const alreadyPassed = diaJS !== todayJS && (
+                (diaJS < todayJS && !(diaJS === 0 && todayJS !== 0)) ||
+                (diaJS === 0 && todayJS > 0)
+              )
+              if (!alreadyPassed) return
+              // Já foi feito este dia?
+              const jaFez = loggedDayIds.has(d.id) || (() => {
+                // Verifica se tem log na data correta do dia nesta semana
+                const cursor = new Date(weekStart)
+                while (cursor <= now) {
+                  if (cursor.getDay() === diaJS) {
+                    const ds = cursor.toISOString().slice(0,10)
+                    if (loggedDates.has(ds)) return true
+                    break
+                  }
+                  cursor.setDate(cursor.getDate()+1)
+                }
+                return false
+              })()
+              if (!jaFez) missed.push({ ...d, dia: d.day_of_week })
+            })
+            setMissedDays(missed)
+          }
+        }
       } catch (err) {
         console.error('StudentView load error:', err)
       } finally {
@@ -1662,17 +1722,29 @@ export default function StudentView({ studentId }) {
   const day   = days[activeDay]
   const color = DAY_COLORS[activeDay % DAY_COLORS.length]
 
-  const confirmWorkout = async () => {
-    if (confirmedToday || confirming || !day) return
+  const confirmWorkout = async (overrideDay = null) => {
+    const targetDay = overrideDay || day
+    if (!overrideDay && (confirmedToday || confirming || !day)) return
     setConfirming(true)
+    const isMakeup = !!overrideDay
     const { error } = await supabase.from('exercise_logs').insert({
-      student_id: studentId,
-      exercise_id: day.exercises?.[0]?.id || null,
-      date: today(),
-      sets: [],
+      student_id:    studentId,
+      exercise_id:   targetDay?.exercises?.[0]?.id || null,
+      date:          today(),
+      sets:          [],
+      day_id:        targetDay?.id || null,
+      is_makeup:     isMakeup,
+      scheduled_day: targetDay?.day_of_week || null,
     })
     setConfirming(false)
-    if (!error) setConfirmedToday(true)
+    if (!error) {
+      if (!isMakeup) setConfirmedToday(true)
+      else {
+        // Remove o dia da lista de perdidos
+        setMissedDays(prev => prev.filter(d => d.id !== targetDay.id))
+        setShowMakeup(false)
+      }
+    }
   }
 
   // Tabs config
@@ -1814,7 +1886,7 @@ export default function StudentView({ studentId }) {
                   </div>
                 )}
 
-                {/* ── Botão confirmar treino — sempre visível com plano ativo ── */}
+                {/* ── Confirmar treino ── */}
                 <div style={{ marginTop: 16 }}>
                   {confirmedToday ? (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '16px', borderRadius: 14, background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.25)' }}>
@@ -1823,7 +1895,7 @@ export default function StudentView({ studentId }) {
                     </div>
                   ) : (
                     <button
-                      onClick={confirmWorkout}
+                      onClick={() => confirmWorkout()}
                       disabled={confirming}
                       style={{
                         width: '100%', padding: '18px', borderRadius: 14, border: 'none',
@@ -1837,6 +1909,51 @@ export default function StudentView({ studentId }) {
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
                       {confirming ? 'Confirmando...' : 'Confirmar Treino de Hoje'}
                     </button>
+                  )}
+
+                  {/* ── Treinos perdidos desta semana ── */}
+                  {missedDays.length > 0 && (
+                    <div style={{ marginTop: 12 }}>
+                      <button
+                        onClick={() => setShowMakeup(v => !v)}
+                        style={{ width: '100%', padding: '13px', borderRadius: 12, border: '1px solid rgba(251,191,36,0.35)', background: showMakeup ? 'rgba(251,191,36,0.15)' : 'rgba(251,191,36,0.07)', color: '#D97706', fontWeight: 700, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'all 0.2s' }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+                        {missedDays.length} treino{missedDays.length > 1 ? 's' : ''} perdido{missedDays.length > 1 ? 's' : ''} esta semana
+                        <span style={{ fontSize: 11, fontWeight: 400, opacity: 0.8 }}>— fazer agora?</span>
+                      </button>
+
+                      {showMakeup && (
+                        <div style={{ marginTop: 8, background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: 14, padding: '14px 16px' }}>
+                          <div style={{ fontSize: 12, color: '#92400E', fontWeight: 700, marginBottom: 10, textAlign: 'center' }}>
+                            Selecione o treino que quer recuperar hoje
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {missedDays.map(missed => (
+                              <button
+                                key={missed.id}
+                                onClick={() => confirmWorkout(missed)}
+                                disabled={confirming}
+                                style={{ padding: '13px 16px', borderRadius: 12, border: '1px solid rgba(251,191,36,0.4)', background: 'rgba(255,255,255,0.6)', cursor: 'pointer', textAlign: 'left', transition: 'all 0.18s', display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg,#F5C842,#D97706)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                  <span style={{ fontSize: 11, fontWeight: 900, color: '#431C00' }}>{missed.dia}</span>
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontSize: 13, fontWeight: 700, color: '#431C00' }}>{missed.name}</div>
+                                  {missed.focus && <div style={{ fontSize: 11, color: '#92400E', marginTop: 1 }}>{missed.focus}</div>}
+                                  <div style={{ fontSize: 10, color: '#92400E', opacity: 0.7, marginTop: 2 }}>
+                                    Treino de {missed.dia} — feito hoje como recuperação
+                                  </div>
+                                </div>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="#D97706"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                              </button>
+                            ))}
+                          </div>
+                          <div style={{ fontSize: 10, color: '#92400E', opacity: 0.6, textAlign: 'center', marginTop: 10, lineHeight: 1.5 }}>
+                            O treino será registrado como feito hoje.<br/>O cronograma vai mostrar que foi recuperado.
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               </>
