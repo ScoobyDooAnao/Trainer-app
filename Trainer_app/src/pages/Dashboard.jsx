@@ -14,43 +14,74 @@ const YELLOW_BG     = 'rgba(245,200,66,0.15)'
 const YELLOW_BORDER = 'rgba(245,200,66,0.45)'
 
 const GOAL = {
-  'Ganho de Massa':           { bg: '#E0F4FF', accent: '#0284C7', icon: '💪' },
-  'Emagrecimento':            { bg: '#FEF2F2', accent: '#E05252', icon: '🔥' },
-  'Força e Performance':      { bg: '#EDE9FE', accent: '#7C3AED', icon: '⚡' },
-  'Condicionamento':          { bg: '#FFFBEB', accent: '#D97706', icon: '🏃' },
-  'Saúde e Bem-Estar':        { bg: '#F0FDF4', accent: '#16A34A', icon: '🌿' },
-  'Iniciação Esportiva':      { bg: '#ECFDF5', accent: '#059669', icon: '🎮' },
-  'Desenvolvimento Atlético': { bg: '#EFF6FF', accent: '#3B82F6', icon: '📈' },
-  'Treinamento Competitivo':  { bg: '#FDF4FF', accent: '#A21CAF', icon: '🏆' },
+  'Ganho de Massa':           { bg: '#E0F4FF', accent: '#0284C7', icon: null },
+  'Emagrecimento':            { bg: '#FEF2F2', accent: '#E05252', icon: null },
+  'Força e Performance':      { bg: '#EDE9FE', accent: '#7C3AED', icon: null },
+  'Condicionamento':          { bg: '#FFFBEB', accent: '#D97706', icon: null },
+  'Saúde e Bem-Estar':        { bg: '#F0FDF4', accent: '#16A34A', icon: null },
+  'Iniciação Esportiva':      { bg: '#ECFDF5', accent: '#059669', icon: null },
+  'Desenvolvimento Atlético': { bg: '#EFF6FF', accent: '#3B82F6', icon: null },
+  'Treinamento Competitivo':  { bg: '#FDF4FF', accent: '#A21CAF', icon: null },
+}
+// Objetivo como ponto colorido + texto
+function GoalBadge({ goal, size = 'sm' }) {
+  const g = GOAL[goal]
+  if (!g) return <span style={{ fontSize: 12, color: '#64748B' }}>{goal}</span>
+  const fs = size === 'sm' ? 11 : 12
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+      <span style={{ width: 7, height: 7, borderRadius: '50%', background: g.accent, flexShrink: 0, display: 'inline-block' }} />
+      <span style={{ fontSize: fs, fontWeight: 600, color: g.accent }}>{goal}</span>
+    </span>
+  )
 }
 
 const DIAS_SEMANA = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 const DIA_JS_MAP  = { Seg: 1, Ter: 2, Qua: 3, Qui: 4, Sex: 5, Sáb: 6, Dom: 0 }
 
 const NAV = [
-  { id: 'alunos',    icon: '⬛', label: 'Meus Alunos' },
-  { id: 'treinos',   icon: '⬛', label: 'Cronograma'   },
-  { id: 'evolucao',  icon: '⬛', label: 'Evolução'     },
-  { id: 'cardio',    icon: '⬛', label: 'Cardio'       },
-  { id: 'escolinha', icon: '⬛', label: 'Escolinha'    },
+  { id: 'alunos',    icon: '', label: 'Meus Alunos' },
+  { id: 'treinos',   icon: '', label: 'Cronograma'   },
+  { id: 'evolucao',  icon: '', label: 'Evolução'     },
+  { id: 'cardio',    icon: '', label: 'Cardio'       },
+  { id: 'escolinha', icon: '', label: 'Escolinha'    },
 ]
 const GOALS  = ['Ganho de Massa', 'Emagrecimento', 'Condicionamento', 'Força e Performance', 'Saúde e Bem-Estar', 'Iniciação Esportiva', 'Desenvolvimento Atlético', 'Treinamento Competitivo']
 const LEVELS = ['Iniciante', 'Intermediário', 'Avançado', 'Atleta Jovem', 'Atleta Competitivo']
 
+const SPORT_SVG = {
+  futebol:   '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" fill="none"/><path d="M12 2l2.5 7.5H7.5L12 2zm0 20l-2.5-7.5h5L12 22zM2 12l7.5-2.5v5L2 12zm20 0l-7.5 2.5v-5L22 12z" opacity=".6"/><circle cx="12" cy="12" r="2.5"/></svg>',
+  futsal:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="5" width="20" height="14" rx="1" stroke="currentColor" strokeWidth="1.5" fill="none"/><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="2" fill="currentColor"/><rect x="2" y="8" width="3" height="8" rx=".5" fill="currentColor" opacity=".5"/><rect x="19" y="8" width="3" height="8" rx=".5" fill="currentColor" opacity=".5"/></svg>',
+  natacao:   '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M2 16c1.5 0 2.5-1 4-1s2.5 1 4 1 2.5-1 4-1 2.5 1 4 1v2c-1.5 0-2.5-1-4-1s-2.5 1-4 1-2.5-1-4-1-2.5 1-4 1v-2z"/><path d="M14.5 6.5a2 2 0 100-4 2 2 0 000 4z"/><path d="M6 14.5l4-5 3 3 3.5-4.5 4 2.5"/></svg>',
+  tenis:     '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="9.5" stroke="currentColor" strokeWidth="1.5" fill="none"/><path d="M5 5.5C7 8 7 16 5 18.5M19 5.5C17 8 17 16 19 18.5" stroke="currentColor" strokeWidth="1.5" fill="none"/></svg>',
+  basquete:  '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="9.5" stroke="currentColor" strokeWidth="1.5" fill="none"/><path d="M2.5 12h19M12 2.5v19M5.5 5.5C8 9 8 15 5.5 18.5M18.5 5.5C16 9 16 15 18.5 18.5" stroke="currentColor" strokeWidth="1.2" fill="none"/></svg>',
+  volei:     '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="9.5" stroke="currentColor" strokeWidth="1.5" fill="none"/><path d="M2.5 9.5h19M12 2.5c0 0-4 5-4 9.5s4 9.5 4 9.5M12 2.5c0 0 4 5 4 9.5s-4 9.5-4 9.5" stroke="currentColor" strokeWidth="1.2" fill="none"/></svg>',
+  atletismo: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="4" r="2"/><path d="M12 7l-3 5h6l-3-5zm-3 5l-2 8h2l1-4 2 2 2-2 1 4h2l-2-8"/></svg>',
+  ginastica: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="4" r="2"/><path d="M9 8h6l1 5H8l1-5zm-2 5l-3 7h2l2-4h8l2 4h2l-3-7" opacity=".8"/><path d="M7 11.5l-3 1.5M17 11.5l3 1.5" stroke="currentColor" strokeWidth="1.5" fill="none"/></svg>',
+  judo:      '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="4" r="2"/><path d="M9 7h6v5l2 8h-2l-1.5-5h-3L9 20H7l2-8V7z"/><path d="M7 10l-3 3M17 10l3 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round"/></svg>',
+  ciclismo:  '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="16" r="4" stroke="currentColor" strokeWidth="1.5" fill="none"/><circle cx="18" cy="16" r="4" stroke="currentColor" strokeWidth="1.5" fill="none"/><path d="M6 16l6-10 2 4h4M12 6l2 4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round"/><circle cx="14" cy="5" r="1.5"/></svg>',
+  handebol:  '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="13" cy="11" r="7" stroke="currentColor" strokeWidth="1.5" fill="none"/><path d="M8 5l-4 3M10 4l-2-2M7 9l-5-.5" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round"/></svg>',
+  saude:     '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21C7 17 3 13.5 3 9.5a4.5 4.5 0 018-2.83A4.5 4.5 0 0119 9.5c0 4-4 7.5-7 11.5z" opacity=".7"/><path d="M9 9h6M12 6v6" stroke="white" strokeWidth="1.8" fill="none" strokeLinecap="round"/></svg>',
+  custom:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="12,3 15,9 22,9.5 17,14 18.5,21 12,17.5 5.5,21 7,14 2,9.5 9,9" stroke="currentColor" strokeWidth="1.2" fill="none"/></svg>',
+}
+function SportIcon({ id, size = 14, color = 'currentColor' }) {
+  const svg = SPORT_SVG[id] || SPORT_SVG.custom
+  return <span style={{ display:'inline-flex', alignItems:'center', color }} dangerouslySetInnerHTML={{ __html: svg.replace(/width="14"/g, \`width="\${size}"\`).replace(/height="14"/g, \`height="\${size}"\`) }} />
+}
 const SPORTS = [
-  { id: 'futebol',       label: 'Futebol',            icon: '⚽' },
-  { id: 'futsal',        label: 'Futsal',              icon: '🥅' },
-  { id: 'natacao',       label: 'Natação',             icon: '🏊' },
-  { id: 'tenis',         label: 'Tênis',               icon: '🎾' },
-  { id: 'basquete',      label: 'Basquete',            icon: '🏀' },
-  { id: 'volei',         label: 'Vôlei',               icon: '🏐' },
-  { id: 'atletismo',     label: 'Atletismo',           icon: '🏃' },
-  { id: 'ginastica',     label: 'Ginástica',           icon: '🤸' },
-  { id: 'judo',          label: 'Judô',                icon: '🥋' },
-  { id: 'ciclismo',      label: 'Ciclismo',            icon: '🚴' },
-  { id: 'handebol',      label: 'Handebol',            icon: '🤾' },
-  { id: 'saude',         label: 'Saúde e Bem-Estar',  icon: '🌿' },
-  { id: 'custom',        label: 'Outro',               icon: '🏅' },
+  { id: 'futebol',   label: 'Futebol',           icon: null },
+  { id: 'futsal',    label: 'Futsal',             icon: null },
+  { id: 'natacao',   label: 'Natação',            icon: null },
+  { id: 'tenis',     label: 'Tênis',              icon: null },
+  { id: 'basquete',  label: 'Basquete',           icon: null },
+  { id: 'volei',     label: 'Vôlei',              icon: null },
+  { id: 'atletismo', label: 'Atletismo',          icon: null },
+  { id: 'ginastica', label: 'Ginástica',          icon: null },
+  { id: 'judo',      label: 'Judô',               icon: null },
+  { id: 'ciclismo',  label: 'Ciclismo',           icon: null },
+  { id: 'handebol',  label: 'Handebol',           icon: null },
+  { id: 'saude',     label: 'Saúde e Bem-Estar',  icon: null },
+  { id: 'custom',    label: 'Outro',              icon: null },
 ]
 
 // LTAD — Long-Term Athlete Development
@@ -61,19 +92,19 @@ function calcLTAD(age, expYears, sport) {
   const exp = expYears || 0
 
   // FUNdamentals — 6 a 9 anos, ou até 11 com pouca experiência
-  if (age < 9)               return { fase: 'FUNdamentals',     cor: '#0284C7', bg: 'rgba(2,132,199,0.1)',  icon: '🎮', desc: 'Habilidades motoras fundamentais e ludicidade' }
-  if (age <= 11 && exp < 3)  return { fase: 'FUNdamentals',     cor: '#0284C7', bg: 'rgba(2,132,199,0.1)',  icon: '🎮', desc: 'Habilidades motoras fundamentais e ludicidade' }
+  if (age < 9)               return { fase: 'FUNdamentals',     cor: '#0284C7', bg: 'rgba(2,132,199,0.1)',  icon: null, desc: 'Habilidades motoras fundamentais e ludicidade' }
+  if (age <= 11 && exp < 3)  return { fase: 'FUNdamentals',     cor: '#0284C7', bg: 'rgba(2,132,199,0.1)',  icon: null, desc: 'Habilidades motoras fundamentais e ludicidade' }
 
   // Learn to Train — 9 a 12 anos (ou até 15 com pouca exp)
-  if (age <= 12)             return { fase: 'Learn to Train',   cor: '#059669', bg: 'rgba(5,150,105,0.1)',  icon: '📚', desc: 'Aprender habilidades esportivas gerais' }
-  if (age <= 15 && exp < 4)  return { fase: 'Learn to Train',   cor: '#059669', bg: 'rgba(5,150,105,0.1)',  icon: '📚', desc: 'Aprender habilidades esportivas gerais' }
+  if (age <= 12)             return { fase: 'Learn to Train',   cor: '#059669', bg: 'rgba(5,150,105,0.1)',  icon: null, desc: 'Aprender habilidades esportivas gerais' }
+  if (age <= 15 && exp < 4)  return { fase: 'Learn to Train',   cor: '#059669', bg: 'rgba(5,150,105,0.1)',  icon: null, desc: 'Aprender habilidades esportivas gerais' }
 
   // Train to Train — 12 a 16 anos (base física específica)
-  if (age <= 16)             return { fase: 'Train to Train',   cor: '#D97706', bg: 'rgba(217,119,6,0.1)',  icon: '💪', desc: 'Construir base física específica ao esporte' }
-  if (age <= 17 && exp < 5)  return { fase: 'Train to Train',   cor: '#D97706', bg: 'rgba(217,119,6,0.1)',  icon: '💪', desc: 'Construir base física específica ao esporte' }
+  if (age <= 16)             return { fase: 'Train to Train',   cor: '#D97706', bg: 'rgba(217,119,6,0.1)',  icon: null, desc: 'Construir base física específica ao esporte' }
+  if (age <= 17 && exp < 5)  return { fase: 'Train to Train',   cor: '#D97706', bg: 'rgba(217,119,6,0.1)',  icon: null, desc: 'Construir base física específica ao esporte' }
 
   // Train to Compete — 17–18 anos, apenas se tiver esporte E for de fato atleta jovem competitivo
-  if (age <= 18)             return { fase: 'Train to Compete', cor: '#7C3AED', bg: 'rgba(124,58,237,0.1)', icon: '🏆', desc: 'Especialização e desempenho competitivo' }
+  if (age <= 18)             return { fase: 'Train to Compete', cor: '#7C3AED', bg: 'rgba(124,58,237,0.1)', icon: null, desc: 'Especialização e desempenho competitivo' }
 
   // 19+ anos → fora do modelo LTAD, usar faixas etárias normais
   return null
@@ -231,7 +262,7 @@ function WaveDivider() {
 // ── NavItem ────────────────────────────────────────────────────────────────
 const NAV_ICONS = {
   alunos:   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>,
-  treinos:  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29l-1.43-1.43z"/></svg>,
+  treinos:  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>,
   evolucao: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>,
   cardio:   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>,
   perfil:   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>,
@@ -290,7 +321,7 @@ function ConfirmDeleteModal({ student, onConfirm, onClose, deleting }) {
   return (
     <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:300, padding:20 }}>
       <div onClick={e => e.stopPropagation()} style={{ background:'#fff', borderRadius:20, padding:'28px 28px 24px', maxWidth:380, width:'100%', boxShadow:'0 24px 60px rgba(0,0,0,0.25)', fontFamily:"'DM Sans',sans-serif" }}>
-        <div style={{ fontSize:36, textAlign:'center', marginBottom:10 }}>🗑️</div>
+        <div style={{ fontSize:36, textAlign:'center', marginBottom:10 }}></div>
         <div style={{ fontSize:18, fontWeight:800, color:'#0D1B2A', textAlign:'center', marginBottom:6 }}>Excluir aluno?</div>
         <div style={{ fontSize:14, color:'#64748B', textAlign:'center', lineHeight:1.6, marginBottom:20 }}>
           Tem certeza que deseja excluir <strong style={{ color:'#0D1B2A' }}>{student.name}</strong>?<br/>
@@ -301,7 +332,7 @@ function ConfirmDeleteModal({ student, onConfirm, onClose, deleting }) {
             Cancelar
           </button>
           <button onClick={onConfirm} disabled={deleting} style={{ flex:1, padding:'11px', borderRadius:10, border:'none', background: deleting ? '#FCA5A5' : 'linear-gradient(135deg,#EF4444,#DC2626)', color:'#fff', fontWeight:800, fontSize:14, cursor: deleting ? 'not-allowed' : 'pointer', fontFamily:'inherit', boxShadow:'0 4px 12px rgba(239,68,68,0.35)' }}>
-            {deleting ? '⏳ Excluindo…' : '🗑️ Confirmar exclusão'}
+            {deleting ? 'Excluindo…' : 'Confirmar exclusão'}
           </button>
         </div>
       </div>
@@ -370,7 +401,7 @@ function StudentCard({ st, onClick, onDelete }) {
           onMouseLeave={() => setHovDel(false)}
           title="Excluir aluno"
           style={{ position:'absolute', top:10, right:10, width:28, height:28, borderRadius:'50%', border:'none', background: hovDel ? 'rgba(239,68,68,0.18)' : 'rgba(239,68,68,0.08)', color: hovDel ? '#EF4444' : '#FCA5A5', fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.15s', zIndex:2, lineHeight:1 }}>
-          🗑️
+          
         </button>
 
         {/* Topo */}
@@ -402,23 +433,23 @@ function StudentCard({ st, onClick, onDelete }) {
             )}
             {sport && (
               <div style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'2px 9px', borderRadius:20, background:'rgba(59,130,246,0.1)', border:'1px solid rgba(59,130,246,0.25)' }}>
-                <span style={{ fontSize:11 }}>{sport.icon}</span>
+                <SportIcon id={sport.id} size={14} />
                 <span style={{ fontSize:11, fontWeight:700, color:'#3B82F6' }}>{sport.label}</span>
               </div>
             )}
             {ltad && (
               <div title={ltad.desc} style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'2px 9px', borderRadius:20, background: ltad.bg, border:`1px solid ${ltad.cor}33` }}>
-                <span style={{ fontSize:11 }}>{ltad.icon}</span>
+                <span style={{ width:8, height:8, borderRadius:"50%", background:ltad.cor, display:"inline-block", flexShrink:0 }} />
                 <span style={{ fontSize:11, fontWeight:700, color: ltad.cor }}>{ltad.fase}</span>
               </div>
             )}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 12, color: g.accent, fontWeight: 700 }}>{g.icon} {st.goal}</span>
+            <GoalBadge goal={st.goal} />
             {st.guardian_name && <>
               <span style={{ fontSize: 10, color: '#CBD5E1' }}>·</span>
-              <span style={{ fontSize: 11, color: '#64748B' }}>👨‍👩‍👧 {st.guardian_name.split(' ')[0]}</span>
+              <span style={{ fontSize: 11, color: '#64748B' }}>Resp.: {st.guardian_name.split(' ')[0]}</span>
             </>
             }
           </div>
@@ -483,9 +514,9 @@ function WorkoutModal({ workout, onClose, navigate }) {
             <div>
               <div style={{ fontSize: 11, color: '#7C3700', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Plano de Treino</div>
               <div style={{ fontSize: 20, fontWeight: 800, color: '#431C00' }}>{workout.title}</div>
-              <div style={{ fontSize: 13, color: '#7C4A00', marginTop: 3, fontWeight: 600 }}>👤 {workout.studentName}</div>
+              <div style={{ fontSize: 13, color: '#7C4A00', marginTop: 3, fontWeight: 600 }}>{workout.studentName}</div>
             </div>
-            <button onClick={onClose} style={{ background: 'rgba(0,0,0,0.1)', border: 'none', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 16, color: '#431C00' }}>✕</button>
+            <button onClick={onClose} style={{ background: 'rgba(0,0,0,0.1)', border: 'none', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 16, color: '#431C00' }}>×</button>
           </div>
         </div>
         <div style={{ padding: '20px 24px' }}>
@@ -519,7 +550,7 @@ function WorkoutModal({ workout, onClose, navigate }) {
           <div style={{ display: 'flex', gap: 10 }}>
             <button onClick={() => { onClose(); navigate('workout-editor', { studentId: workout.student_id, planId: workout.id }) }}
               style={{ flex: 1, padding: 12, borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#F5C842,#D97706)', color: '#431C00', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
-              ✏️ Editar Treino
+              Editar Treino
             </button>
             <button onClick={onClose} style={{ flex: 1, padding: 12, borderRadius: 10, border: '1px solid #E2E8F0', background: '#F8FAFC', color: '#64748B', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Fechar</button>
           </div>
@@ -739,7 +770,7 @@ const FOCO_CHIP_COLORS = {
   'Progressão':  { bg:'#D1FAE5', border:'#A7F3D0', text:'#064E3B', dot:'#10B981' },
   'Misto':       { bg:'#F1F5F9', border:'#E2E8F0', text:'#475569', dot:'#94A3B8' },
 }
-const SPORT_ICON_SMALL = { futebol:'⚽', futsal:'🥅', natacao:'🏊', basquete:'🏀', volei:'🏐', outro:'🏅' }
+// SPORT_ICON_SMALL removed — use SportIcon component
 function EscolinhaChip({ item }) {
   const [hov, setHov] = useState(false)
   const fc = FOCO_CHIP_COLORS[item.focoTipo] || FOCO_CHIP_COLORS['Misto']
@@ -751,7 +782,7 @@ function EscolinhaChip({ item }) {
         boxShadow: hov ? '0 4px 14px rgba(0,0,0,0.1)' : '0 1px 4px rgba(0,0,0,0.06)',
         transition:'all 0.18s' }}>
       <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
-        <span style={{ fontSize:11 }}>{SPORT_ICON_SMALL[item.esporte] || '🏅'}</span>
+        <SportIcon id={item.esporte} size={14} />
         <div style={{ fontSize:11, fontWeight:800, color:fc.text, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
           {item.turma}
         </div>
@@ -913,7 +944,7 @@ function TabTreinos({ workouts, navigate, session }) {
 
       {/* Filtro */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18, padding: '12px 16px', background: 'rgba(255,255,255,0.5)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.8)', backdropFilter:'blur(8px)' }}>
-        <span style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, alignSelf: 'center', marginRight: 4 }}>👤 Filtrar:</span>
+        <span style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, alignSelf: 'center', marginRight: 4 }}>Filtrar:</span>
         {[{ id: null, name: 'Todos' }, ...uniqueStudents].map(opt => (
           <button key={opt.id ?? 'all'} onClick={() => setSelectedStudent(opt.id)}
             style={{ padding: '7px 16px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none', transition: 'all 0.15s', background: selectedStudent === opt.id ? 'linear-gradient(135deg,#F5C842,#D97706)' : 'rgba(255,255,255,0.7)', color: selectedStudent === opt.id ? '#431C00' : '#64748B', boxShadow: selectedStudent === opt.id ? '0 3px 10px rgba(245,200,66,0.4)' : '0 1px 3px rgba(0,0,0,0.07)' }}>
@@ -1074,7 +1105,7 @@ function EvolucaoModal({ studentId, mode, onSave, onClose, exercises }) {
     onClose()
   }
 
-  const titles = { peso: '⚖️ Registrar Peso', medidas: '📏 Registrar Medidas', forca: '💪 Registrar Carga' }
+  const titles = { peso: 'Registrar Peso', medidas: 'Registrar Medidas', forca: 'Registrar Carga' }
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
@@ -1117,7 +1148,7 @@ function EvolucaoModal({ studentId, mode, onSave, onClose, exercises }) {
                   <span style={{ fontSize: 11, color: '#64748B', fontWeight: 700, minWidth: 20 }}>S{i+1}</span>
                   <input type="number" placeholder="kg" style={{ ...inp, flex: 1 }} value={s.weight} onChange={e => setSets(prev => prev.map((x,j) => j===i ? { ...x, weight: e.target.value } : x))} />
                   <input type="number" placeholder="reps" style={{ ...inp, flex: 1 }} value={s.reps} onChange={e => setSets(prev => prev.map((x,j) => j===i ? { ...x, reps: e.target.value } : x))} />
-                  {sets.length > 1 && <button onClick={() => setSets(p => p.filter((_,j) => j!==i))} style={{ background: 'rgba(239,68,68,0.1)', border: 'none', borderRadius: 6, padding: '6px 8px', cursor: 'pointer', color: '#EF4444', fontSize: 12 }}>✕</button>}
+                  {sets.length > 1 && <button onClick={() => setSets(p => p.filter((_,j) => j!==i))} style={{ background: 'rgba(239,68,68,0.1)', border: 'none', borderRadius: 6, padding: '6px 8px', cursor: 'pointer', color: '#EF4444', fontSize: 12 }}>×</button>}
                 </div>
               ))}
               <button onClick={() => setSets(p => [...p, { weight: '', reps: '' }])} style={{ background: 'rgba(12,74,110,0.08)', border: '1px dashed rgba(12,74,110,0.3)', borderRadius: 8, padding: '8px', cursor: 'pointer', color: '#0C4A6E', fontSize: 12, fontWeight: 700 }}>+ Adicionar série</button>
@@ -1137,7 +1168,7 @@ function EvolucaoModal({ studentId, mode, onSave, onClose, exercises }) {
 function EmptyChart({ label }) {
   return (
     <div style={{ height: 200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94A3B8', gap: 10 }}>
-      <div style={{ fontSize: 36 }}>📊</div>
+      <div style={{ fontSize: 36 }}></div>
       <div style={{ fontSize: 13, fontWeight: 600 }}>Nenhum registro de {label} ainda</div>
     </div>
   )
@@ -1217,9 +1248,9 @@ function TabEvolucao({ students }) {
   const selEx = exercises.find(e => e.id === selExId)
 
   const subTabs = [
-    { id: 'peso',    icon: '⚖️', label: 'Peso'    },
-    { id: 'medidas', icon: '📏', label: 'Medidas' },
-    { id: 'forca',   icon: '💪', label: 'Força'   },
+    { id: 'peso',    icon: null, label: 'Peso'    },
+    { id: 'medidas', icon: null, label: 'Medidas' },
+    { id: 'forca',   icon: null, label: 'Força'   },
   ]
 
   return (
@@ -1242,7 +1273,7 @@ function TabEvolucao({ students }) {
 
       {/* Selector de aluno */}
       <div style={{ ...GLASS_CARD, padding: '16px 20px', marginBottom: 20 }}>
-        <div style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>👤 Selecionar Aluno</div>
+        <div style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Selecionar Aluno</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {students.map(s => {
             const sel = s.id === selectedId
@@ -1250,7 +1281,7 @@ function TabEvolucao({ students }) {
             return (
               <button key={s.id} onClick={() => { setSelectedId(s.id); setSubTab('peso') }}
                 style={{ padding: '8px 16px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: sel ? 'none' : '1px solid rgba(12,74,110,0.15)', transition: 'all 0.15s', background: sel ? `linear-gradient(135deg,${YELLOW},#F59E0B)` : 'rgba(255,255,255,0.7)', color: sel ? '#431C00' : '#0C4A6E', boxShadow: sel ? '0 3px 12px rgba(245,200,66,0.4)' : 'none' }}>
-                {g?.icon} {s.name.split(' ')[0]}
+                {s.name.split(' ')[0]}
               </button>
             )
           })}
@@ -1260,7 +1291,7 @@ function TabEvolucao({ students }) {
 
       {!selectedId && (
         <div style={{ textAlign: 'center', padding: '60px 20px', color: '#0C4A6E', opacity: 0.4 }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>👆</div>
+          <div style={{ fontSize: 40, marginBottom: 12 }}></div>
           <div style={{ fontSize: 15, fontWeight: 700 }}>Selecione um aluno para ver a evolução</div>
         </div>
       )}
@@ -1272,7 +1303,7 @@ function TabEvolucao({ students }) {
             {subTabs.map(t => (
               <button key={t.id} onClick={() => setSubTab(t.id)}
                 style={{ padding: '10px 22px', borderRadius: 12, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', transition: 'all 0.15s', background: subTab === t.id ? 'linear-gradient(135deg,#0C4A6E,#155E8E)' : 'rgba(255,255,255,0.65)', color: subTab === t.id ? '#FFF' : '#0C4A6E', boxShadow: subTab === t.id ? '0 4px 14px rgba(12,74,110,0.3)' : '0 1px 4px rgba(0,0,0,0.06)', backdropFilter: 'blur(6px)' }}>
-                {t.icon} {t.label}
+                {t.label}
               </button>
             ))}
             <button onClick={() => setModal(subTab)}
@@ -1290,7 +1321,7 @@ function TabEvolucao({ students }) {
                 <div style={GLASS_CARD}>
                   <div className="db-search-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                     <div>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251' }}>⚖️ Peso ao longo do tempo</div>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251' }}>Peso ao longo do tempo</div>
                       {pesoData.length > 0 && (
                         <div style={{ fontSize: 12, color: '#0C4A6E', marginTop: 4 }}>
                           Início: <b>{pesoData[0].Peso}kg</b>
@@ -1339,7 +1370,7 @@ function TabEvolucao({ students }) {
               {/* ── MEDIDAS ── */}
               {subTab === 'medidas' && (
                 <div style={GLASS_CARD}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251', marginBottom: 20 }}>📏 Medidas corporais</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251', marginBottom: 20 }}>Medidas corporais</div>
                   {medidasData.length < 2 ? <EmptyChart label="medidas" /> : (
                     <ResponsiveContainer width="100%" height={280}>
                       <LineChart data={medidasData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
@@ -1386,11 +1417,11 @@ function TabEvolucao({ students }) {
               {subTab === 'forca' && (
                 <div style={GLASS_CARD}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251' }}>💪 Força por exercício</div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251' }}>Força por exercício</div>
                   </div>
                   {exercises.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: 40, color: '#94A3B8' }}>
-                      <div style={{ fontSize: 32, marginBottom: 8 }}>🏋️</div>
+                      <div style={{ fontSize: 32, marginBottom: 8 }}></div>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>Nenhum exercício encontrado para este aluno</div>
                     </div>
                   ) : (
@@ -1420,7 +1451,7 @@ function TabEvolucao({ students }) {
                       {/* Novo PR banner */}
                       {forcaData.length > 1 && forcaData[forcaData.length-1].Máx >= Math.max(...forcaData.slice(0,-1).map(d => d.Máx)) && (
                         <div style={{ background: 'linear-gradient(135deg,#7C3AED,#A855F7)', borderRadius: 14, padding: '12px 18px', marginTop: 16, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 4px 20px rgba(124,58,237,0.4)', animation: 'pulse 2s ease-in-out infinite' }}>
-                          <div style={{ fontSize: 28 }}>🏆</div>
+                          <div style={{ fontSize: 28, color:'#7C3AED' }}>PR</div>
                           <div>
                             <div style={{ fontSize: 14, fontWeight: 800, color: '#FFF', letterSpacing: '-0.3px' }}>Novo Recorde Pessoal!</div>
                             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.85)', marginTop: 2 }}>
@@ -1439,7 +1470,7 @@ function TabEvolucao({ students }) {
                           {[
                             { label: 'Carga Inicial', val: forcaData[0].Máx, color: '#64748B' },
                             { label: 'Carga Atual',   val: forcaData[forcaData.length-1].Máx, color: '#155E8E' },
-                            { label: '🏆 PR',          val: Math.max(...forcaData.map(d => d.Máx)), color: '#7C3AED' },
+                            { label: 'PR',          val: Math.max(...forcaData.map(d => d.Máx)), color: '#7C3AED' },
                           ].map(({ label, val, color }) => (
                             <div key={label} style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 12, padding: '12px 18px', border: `1px solid rgba(255,255,255,0.9)`, textAlign: 'center', flex: 1 }}>
                               <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>{label}</div>
@@ -1470,13 +1501,13 @@ function TabEvolucao({ students }) {
 
 // ── TabCardio ──────────────────────────────────────────────────────────────
 const CARDIO_TYPES = [
-  { id: 'corrida',     label: 'Corrida',       icon: '🏃', color: '#EF4444', hasDistance: true,  hasHR: true,  isHIIT: false },
-  { id: 'bike',        label: 'Bike',          icon: '🚴', color: '#F59E0B', hasDistance: true,  hasHR: true,  isHIIT: false },
-  { id: 'esteira',     label: 'Esteira',       icon: '🏃', color: '#8B5CF6', hasDistance: true,  hasHR: true,  isHIIT: false },
-  { id: 'eliptico',    label: 'Elíptico',      icon: '⭕', color: '#06B6D4', hasDistance: false, hasHR: true,  isHIIT: false },
-  { id: 'natacao',     label: 'Natação',       icon: '🏊', color: '#3B82F6', hasDistance: true,  hasHR: false, isHIIT: false },
-  { id: 'pular_corda', label: 'Pular Corda',   icon: '🪢', color: '#10B981', hasDistance: false, hasHR: true,  isHIIT: false },
-  { id: 'hiit',        label: 'HIIT',          icon: '⚡', color: '#F5C842', hasDistance: false, hasHR: true,  isHIIT: true  },
+  { id: 'corrida',     label: 'Corrida',       icon: null, color: '#EF4444', hasDistance: true,  hasHR: true,  isHIIT: false },
+  { id: 'bike',        label: 'Bike',          icon: null, color: '#F59E0B', hasDistance: true,  hasHR: true,  isHIIT: false },
+  { id: 'esteira',     label: 'Esteira',       icon: null, color: '#8B5CF6', hasDistance: true,  hasHR: true,  isHIIT: false },
+  { id: 'eliptico',    label: 'Elíptico',      icon: null, color: '#06B6D4', hasDistance: false, hasHR: true,  isHIIT: false },
+  { id: 'natacao',     label: 'Natação',       icon: null, color: '#3B82F6', hasDistance: true,  hasHR: false, isHIIT: false },
+  { id: 'pular_corda', label: 'Pular Corda',   icon: null, color: '#10B981', hasDistance: false, hasHR: true,  isHIIT: false },
+  { id: 'hiit',        label: 'HIIT',          icon: null, color: '#F5C842', hasDistance: false, hasHR: true,  isHIIT: true  },
 ]
 
 const PSE_LABELS = ['', 'Muito leve', 'Leve', 'Moderado leve', 'Moderado', 'Moderado intenso', 'Intenso', 'Muito intenso', 'Difícil', 'Muito difícil', 'Máximo']
@@ -1494,7 +1525,7 @@ const PRESCRICAO = {
     volume: '120–200 min/semana',
     mixCardio: 60, // % de cardio vs musculação na semana
     obs: 'Priorize esforço contínuo e controlado. Evite intensidade alta demais — compromete a recuperação e aumenta o apetite.',
-    dicaCientifica: '⚠️ Sem controle alimentar, o cardio isolado tem eficácia limitada. Estudos mostram que o corpo compensa o gasto do exercício reduzindo o metabolismo basal (Pontzer et al., 2016). Combine com treino de força para melhores resultados.',
+    dicaCientifica: '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline;verticalAlign:-2px;marginRight:4px;flexShrink:0"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg> Sem controle alimentar, o cardio isolado tem eficácia limitada. Estudos mostram que o corpo compensa o gasto do exercício reduzindo o metabolismo basal (Pontzer et al., 2016). Combine com treino de força para melhores resultados.',
   },
   'Ganho de Massa': {
     tipo: ['esteira','bike','eliptico','natacao'],
@@ -1506,7 +1537,7 @@ const PRESCRICAO = {
     volume: '40–60 min/semana',
     mixCardio: 20, // % de cardio — dominância de musculação
     obs: 'Cardio deve preservar a recuperação muscular. Volume alto prejudica o ganho de massa.',
-    dicaCientifica: '💪 Cardio excessivo ativa o "efeito interferência" — compete com a síntese proteica e reduz os ganhos de força (Hickson, 1980; Wilson et al., 2012). Mantenha volume mínimo e priorize a musculação.',
+    dicaCientifica: 'Cardio excessivo ativa o "efeito interferência" — compete com a síntese proteica e reduz os ganhos de força (Hickson, 1980; Wilson et al., 2012). Mantenha volume mínimo e priorize a musculação.',
   },
   'Condicionamento': {
     tipo: ['corrida','hiit','bike','eliptico'],
@@ -1518,7 +1549,7 @@ const PRESCRICAO = {
     volume: '150–200 min/semana',
     mixCardio: 70, // % de cardio — foco aeróbico
     obs: 'Periodize a intensidade — não faça todo treino no mesmo ritmo. Modelo 80/20 comprovado em atletas.',
-    dicaCientifica: '📊 O modelo polarizado (80% moderado / 20% intenso) superou o treinamento contínuo em melhora de VO₂máx (Seiler & Tønnessen, 2009; Stöggl & Sperlich, 2014). Evite fazer todos os treinos na mesma intensidade.',
+    dicaCientifica: 'O modelo polarizado (80% moderado / 20% intenso) superou o treinamento contínuo em melhora de VO₂máx (Seiler & Tønnessen, 2009; Stöggl & Sperlich, 2014). Evite fazer todos os treinos na mesma intensidade.',
   },
   'Força e Performance': {
     tipo: ['bike','eliptico','natacao','esteira'],
@@ -1530,7 +1561,7 @@ const PRESCRICAO = {
     volume: '30–50 min/semana',
     mixCardio: 15, // % mínimo de cardio — dominância absoluta de força
     obs: 'Cardio intenso compete diretamente com adaptações neuromusculares. Mantenha volume mínimo.',
-    dicaCientifica: '⚡ Cardio de alta intensidade inibe a via mTOR e reduz ganhos de 1RM (Hawley, 2009). Para atletas de força, o cardio serve apenas para saúde cardiovascular mínima e recuperação — não como ferramenta de performance.',
+    dicaCientifica: 'Cardio de alta intensidade inibe a via mTOR e reduz ganhos de 1RM (Hawley, 2009). Para atletas de força, o cardio serve apenas para saúde cardiovascular mínima e recuperação — não como ferramenta de performance.',
   },
 }
 
@@ -1590,7 +1621,7 @@ function CardioSessionModal({ studentId, onSave, onClose }) {
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: 'rgba(255,255,255,0.93)', backdropFilter: 'blur(16px)', borderRadius: 20, padding: 28, width: '100%', maxWidth: 440, maxHeight: '90vh', overflowY: 'auto', border: '1.5px solid rgba(255,255,255,0.9)', boxShadow: '0 20px 60px rgba(12,50,81,0.2)' }}>
-        <div style={{ fontSize: 17, fontWeight: 800, color: '#0C3251', marginBottom: 18 }}>❤️ Registrar Sessão de Cárdio</div>
+        <div style={{ fontSize: 17, fontWeight: 800, color: '#0C3251', marginBottom: 18 }}>Registrar Sessão de Cárdio</div>
 
         <label style={lbl}>Data</label>
         <input type="date" style={inp} value={date} onChange={e => setDate(e.target.value)} />
@@ -1600,7 +1631,7 @@ function CardioSessionModal({ studentId, onSave, onClose }) {
           {CARDIO_TYPES.map(t => (
             <button key={t.id} onClick={() => setType(t.id)}
               style={{ padding: '7px 13px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none', background: type === t.id ? t.color : 'rgba(255,255,255,0.7)', color: type === t.id ? '#FFF' : '#0C4A6E', transition: 'all 0.15s', boxShadow: type === t.id ? `0 3px 10px ${t.color}55` : 'none' }}>
-              {t.icon} {t.label}
+              {t.label}
             </button>
           ))}
         </div>
@@ -1733,7 +1764,7 @@ function TabCardio({ students }) {
   const metabAlert   = thisWeekCount > 4
   const volColor     = thisWeekMin === 0 ? '#94A3B8' : thisWeekMin < 150 ? '#16A34A' : thisWeekMin <= 200 ? '#D97706' : '#DC2626'
   const volBg        = thisWeekMin === 0 ? 'rgba(148,163,184,0.06)' : thisWeekMin < 150 ? 'rgba(22,163,74,0.08)' : thisWeekMin <= 200 ? 'rgba(217,119,6,0.08)' : 'rgba(220,38,38,0.08)'
-  const volLabel     = thisWeekMin === 0 ? '— Sem sessões esta semana' : thisWeekMin < 150 ? '✅ Volume adequado' : thisWeekMin <= 200 ? '⚠️ Volume elevado' : '🔴 Volume excessivo'
+  const volLabel     = thisWeekMin === 0 ? 'Sem sessões esta semana' : thisWeekMin < 150 ? 'Volume adequado' : thisWeekMin <= 200 ? 'Volume elevado' : 'Volume excessivo'
   const volSub       = thisWeekMin === 0 ? 'Nenhuma sessão registrada esta semana' : thisWeekMin < 150 ? `${thisWeekMin} min — dentro do ideal (< 150 min)` : thisWeekMin <= 200 ? `${thisWeekMin} min — monitore a recuperação` : `${thisWeekMin} min — risco de overreaching (> 200 min)`
 
   // ── Faixa etária ───────────────────────────────────────────────────
@@ -1762,7 +1793,7 @@ function TabCardio({ students }) {
 
       {/* Seletor de aluno */}
       <div style={{ ...GLASS_CARD, padding: '16px 20px', marginBottom: 20 }}>
-        <div style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>👤 Selecionar Aluno</div>
+        <div style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Selecionar Aluno</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {students.map(s => {
             const sel = s.id === selectedId
@@ -1770,7 +1801,7 @@ function TabCardio({ students }) {
             return (
               <button key={s.id} onClick={() => setSelectedId(s.id)}
                 style={{ padding: '8px 16px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: sel ? 'none' : '1px solid rgba(12,74,110,0.15)', background: sel ? `linear-gradient(135deg,${YELLOW},#F59E0B)` : 'rgba(255,255,255,0.7)', color: sel ? '#431C00' : '#0C4A6E', boxShadow: sel ? '0 3px 12px rgba(245,200,66,0.4)' : 'none', transition: 'all 0.15s' }}>
-                {g?.icon} {s.name.split(' ')[0]}
+                {s.name.split(' ')[0]}
               </button>
             )
           })}
@@ -1779,7 +1810,7 @@ function TabCardio({ students }) {
 
       {!selectedId && (
         <div style={{ textAlign: 'center', padding: '60px 20px', color: '#0C4A6E', opacity: 0.4 }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>👆</div>
+          <div style={{ fontSize: 40, marginBottom: 12 }}></div>
           <div style={{ fontSize: 15, fontWeight: 700 }}>Selecione um aluno para ver o cárdio</div>
         </div>
       )}
@@ -1791,18 +1822,18 @@ function TabCardio({ students }) {
           {presc && (
             <div style={GLASS_CARD}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
-                <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251' }}>🎯 Prescrição Inteligente</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251' }}>Prescrição Inteligente</div>
                 <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: `${GOAL[student.goal]?.accent}20`, color: GOAL[student.goal]?.accent, border: `1px solid ${GOAL[student.goal]?.accent}40` }}>
-                  {GOAL[student.goal]?.icon} {student.goal}
+                  <GoalBadge goal={student.goal} />
                 </span>
               </div>
 
               {/* Cards de prescrição */}
               <div className="db-stats-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 14 }}>
                 {[
-                  { icon: '📅', label: 'Frequência',  val: presc.sessoes  },
-                  { icon: '⏱',  label: 'Duração',     val: presc.duracao  },
-                  { icon: '📊', label: 'Volume/semana',val: presc.volume   },
+                  { icon: null, label: 'Frequência',  val: presc.sessoes  },
+                  { icon: null, label: 'Duração',     val: presc.duracao  },
+                  { icon: null, label: 'Volume/semana',val: presc.volume   },
                 ].map(({ icon, label, val }) => (
                   <div key={label} style={{ background: 'rgba(255,255,255,0.65)', borderRadius: 12, padding: '12px 14px', border: '1px solid rgba(255,255,255,0.85)', textAlign: 'center' }}>
                     <div style={{ fontSize: 18, marginBottom: 4 }}>{icon}</div>
@@ -1814,14 +1845,14 @@ function TabCardio({ students }) {
 
               {/* PSE alvo */}
               <div style={{ background: 'rgba(255,255,255,0.65)', borderRadius: 12, padding: '12px 16px', border: '1px solid rgba(255,255,255,0.85)', marginBottom: 10 }}>
-                <div style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>🎯 PSE Alvo — Esforço Percebido</div>
+                <div style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>PSE Alvo — Esforço Percebido</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ flex: 1, height: 10, borderRadius: 10, background: 'linear-gradient(90deg,#60A5FA,#34D399,#F5C842,#F59E0B,#EF4444)', position: 'relative' }}>
                     <div style={{ position: 'absolute', left: `${(presc.pse.min - 1) / 9 * 100}%`, width: `${(presc.pse.max - presc.pse.min) / 9 * 100}%`, height: '100%', background: 'rgba(12,50,81,0.35)', borderRadius: 10, border: '2px solid #0C3251' }} />
                   </div>
                   <span style={{ fontSize: 13, fontWeight: 800, color: '#0C3251', whiteSpace: 'nowrap' }}>{presc.pse.label}</span>
                 </div>
-                <div style={{ fontSize: 11, color: '#64748B', marginTop: 6 }}>🏃 {presc.pace}</div>
+                <div style={{ fontSize: 11, color: '#64748B', marginTop: 6 }}>{presc.pace}</div>
               </div>
 
               {/* Modalidades + barra de proporção */}
@@ -1831,8 +1862,8 @@ function TabCardio({ students }) {
                 {/* Barra cardio vs musculação */}
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: '#0C4A6E' }}>❤️ Cárdio — {presc.mixCardio}%</span>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: '#7C3AED' }}>💪 Musculação — {100 - presc.mixCardio}%</span>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: '#0C4A6E' }}>Cárdio — {presc.mixCardio}%</span>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: '#7C3AED' }}>Musculação — {100 - presc.mixCardio}%</span>
                   </div>
                   <div style={{ height: 14, borderRadius: 99, overflow: 'hidden', background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(0,0,0,0.06)' }}>
                     <div style={{
@@ -1868,8 +1899,8 @@ function TabCardio({ students }) {
                         boxShadow: isDestaque ? `0 3px 14px ${info?.color}55` : 'none',
                         position: 'relative',
                       }}>
-                        {info?.icon} {info?.label}
-                        {isDestaque && <span style={{ fontSize: 9, marginLeft: 5, background: 'rgba(255,255,255,0.25)', padding: '1px 5px', borderRadius: 10 }}>★ recomendado</span>}
+                        {info?.label}
+                        {isDestaque && <span style={{ fontSize: 9, marginLeft: 5, background: 'rgba(255,255,255,0.25)', padding: '1px 5px', borderRadius: 10 }}>recomendado</span>}
                       </span>
                     )
                   })}
@@ -1883,18 +1914,18 @@ function TabCardio({ students }) {
 
               {/* Observação clínica */}
               <div style={{ background: 'rgba(12,74,110,0.06)', borderRadius: 10, padding: '10px 14px', borderLeft: '3px solid #155E8E' }}>
-                <span style={{ fontSize: 12, color: '#334155', lineHeight: 1.6 }}>💡 {presc.obs}</span>
+                <span style={{ fontSize: 12, color: '#334155', lineHeight: 1.6 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline;verticalAlign:-2px;marginRight:4px;flexShrink:0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg> {presc.obs}</span>
               </div>
 
               {/* ── Alerta de faixa etária ── */}
               {_age && (() => {
                 // Configuração por faixa
-                const cfg = isChild      ? { color:'#7C3AED', bg:'rgba(124,58,237,0.08)', border:'#7C3AED20', title:'🧒 Criança (<12 anos) — Restrições Ativas' }
-                          : isAdolesc    ? { color:'#D97706', bg:'rgba(217,119,6,0.08)',   border:'#D9770620', title:'🧑 Adolescente (12–17 anos) — Observações' }
-                          : isAdultYoung ? { color:'#059669', bg:'rgba(5,150,105,0.06)',   border:'#05966918', title:'🔥 Adulto Jovem (18–29 anos) — Alta Performance' }
-                          : isAdult      ? { color:'#0891B2', bg:'rgba(8,145,178,0.06)',   border:'#0891B218', title:'💪 Adulto (30–44 anos) — Atenção à Sarcopenia' }
-                          : isAdultMat   ? { color:'#7C3AED', bg:'rgba(124,58,237,0.07)',  border:'#7C3AED20', title:'🧠 Adulto Maduro (45–59 anos) — Prescrição Diferenciada' }
-                          : isElderly    ? { color:'#D97706', bg:'rgba(217,119,6,0.08)',   border:'#D9770620', title:'🧓 Idoso (60+ anos) — Prescrição Adaptada' }
+                const cfg = isChild      ? { color:'#7C3AED', bg:'rgba(124,58,237,0.08)', border:'#7C3AED20', title:'Criança (<12 anos) — Restrições Ativas' }
+                          : isAdolesc    ? { color:'#D97706', bg:'rgba(217,119,6,0.08)',   border:'#D9770620', title:'Adolescente (12–17 anos) — Observações' }
+                          : isAdultYoung ? { color:'#059669', bg:'rgba(5,150,105,0.06)',   border:'#05966918', title:'Adulto Jovem (18–29 anos) — Alta Performance' }
+                          : isAdult      ? { color:'#0891B2', bg:'rgba(8,145,178,0.06)',   border:'#0891B218', title:'Adulto (30–44 anos) — Atenção à Sarcopenia' }
+                          : isAdultMat   ? { color:'#7C3AED', bg:'rgba(124,58,237,0.07)',  border:'#7C3AED20', title:'Adulto Maduro (45–59 anos) — Prescrição Diferenciada' }
+                          : isElderly    ? { color:'#D97706', bg:'rgba(217,119,6,0.08)',   border:'#D9770620', title:'Idoso (60+ anos) — Prescrição Adaptada' }
                           : null
                 if (!cfg) return null
                 return (
@@ -1905,58 +1936,58 @@ function TabCardio({ students }) {
                       {/* FCmáx — aparece em todas as faixas */}
                       {fcmax && (
                         <div style={{ fontSize: 11, color: '#334155', background: 'rgba(255,255,255,0.6)', borderRadius: 8, padding: '6px 10px' }}>
-                          ❤️ <strong>FCmáx estimada:</strong> {fcmax} bpm ({fcFormula})
+                          <strong>FCmáx estimada:</strong> {fcmax} bpm ({fcFormula})
                         </div>
                       )}
 
                       {/* ── Criança ── */}
                       {isChild && <>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(220,38,38,0.06)', borderRadius: 8, padding: '6px 10px' }}>🚫 <strong>HIIT bloqueado</strong> — não recomendado para menores de 12 anos.</div>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(220,38,38,0.06)', borderRadius: 8, padding: '6px 10px' }}>🚫 <strong>1RM não aplicável</strong> — prescrição por PSE e peso corporal.</div>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.06)', borderRadius: 8, padding: '6px 10px' }}>🎮 <strong>LTAD — FUNdamentals:</strong> foco em habilidades motoras multilaterais e ludicidade.</div>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.06)', borderRadius: 8, padding: '6px 10px' }}>🦴 <strong>Atenção:</strong> placas epifisárias vulneráveis — evitar cargas axiais pesadas.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(220,38,38,0.06)', borderRadius: 8, padding: '6px 10px' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline;verticalAlign:-2px;marginRight:4px;flexShrink:0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 5h2v6h-2V7zm0 8h2v2h-2v-2z"/></svg><strong>HIIT bloqueado</strong> — não recomendado para menores de 12 anos.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(220,38,38,0.06)', borderRadius: 8, padding: '6px 10px' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline;verticalAlign:-2px;marginRight:4px;flexShrink:0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 5h2v6h-2V7zm0 8h2v2h-2v-2z"/></svg><strong>1RM não aplicável</strong> — prescrição por PSE e peso corporal.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.06)', borderRadius: 8, padding: '6px 10px' }}><strong>LTAD — FUNdamentals:</strong> foco em habilidades motoras multilaterais e ludicidade.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.06)', borderRadius: 8, padding: '6px 10px' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline;verticalAlign:-2px;marginRight:4px;flexShrink:0"><path d="M7.05 9.29l-4.24-4.24a2 2 0 112.83-2.83l.71.71.71-.71a2 2 0 012.83 2.83L7.76 6.47l1.41 1.41 8.49 8.49 1.41-1.41-1.41-1.41 1.41-1.41a2 2 0 11-2.83 2.83l-.71-.71-.71.71a2 2 0 01-2.83-2.83l1.41-1.41-1.41-1.41-4.94 4.94"/></svg><strong>Atenção:</strong> placas epifisárias vulneráveis — evitar cargas axiais pesadas.</div>
                       </>}
 
                       {/* ── Adolescente ── */}
                       {isAdolesc && <>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(217,119,6,0.06)', borderRadius: 8, padding: '6px 10px' }}>⚠️ <strong>Carga máxima:</strong> limitar a 70–75% do 1RM durante fase de crescimento ósseo.</div>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(217,119,6,0.06)', borderRadius: 8, padding: '6px 10px' }}>📈 <strong>LTAD — Learn/Train to Train:</strong> técnica em primeiro lugar, volume progressivo. (Faigenbaum et al., 2009)</div>
-                        {_age < 14 && <div style={{ fontSize: 11, color: '#334155', background: 'rgba(220,38,38,0.06)', borderRadius: 8, padding: '6px 10px' }}>🚫 <strong>1RM:</strong> não recomendado abaixo de 14 anos — fórmula de Epley não validada.</div>}
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(217,119,6,0.06)', borderRadius: 8, padding: '6px 10px' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline;verticalAlign:-2px;marginRight:4px;flexShrink:0"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><strong>Carga máxima:</strong> limitar a 70–75% do 1RM durante fase de crescimento ósseo.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(217,119,6,0.06)', borderRadius: 8, padding: '6px 10px' }}><strong>LTAD — Learn/Train to Train:</strong> técnica em primeiro lugar, volume progressivo. (Faigenbaum et al., 2009)</div>
+                        {_age < 14 && <div style={{ fontSize: 11, color: '#334155', background: 'rgba(220,38,38,0.06)', borderRadius: 8, padding: '6px 10px' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline;verticalAlign:-2px;marginRight:4px;flexShrink:0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 5h2v6h-2V7zm0 8h2v2h-2v-2z"/></svg><strong>1RM:</strong> não recomendado abaixo de 14 anos — fórmula de Epley não validada.</div>}
                       </>}
 
                       {/* ── Adulto Jovem 18–29 ── */}
                       {isAdultYoung && <>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(5,150,105,0.07)', borderRadius: 8, padding: '6px 10px' }}>✅ <strong>Capacidade máxima:</strong> pico de VO₂ máx e resposta hormonal. Tolerância alta a volume e intensidade.</div>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(5,150,105,0.07)', borderRadius: 8, padding: '6px 10px' }}>⚡ <strong>Recuperação:</strong> 24–48h entre sessões do mesmo grupo muscular. Permite alta frequência.</div>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(5,150,105,0.07)', borderRadius: 8, padding: '6px 10px' }}>📈 <strong>Periodização:</strong> suporta bloco de alta densidade. Atenção à técnica para evitar lesões por excesso de confiança.</div>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(8,145,178,0.07)', borderRadius: 8, padding: '6px 10px' }}>💡 <strong>PSE alvo:</strong> 6–9/10 em sessões de alta intensidade. HIIT bem tolerado.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(5,150,105,0.07)', borderRadius: 8, padding: '6px 10px' }}><strong>Capacidade máxima:</strong> pico de VO₂ máx e resposta hormonal. Tolerância alta a volume e intensidade.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(5,150,105,0.07)', borderRadius: 8, padding: '6px 10px' }}><strong>Recuperação:</strong> 24–48h entre sessões do mesmo grupo muscular. Permite alta frequência.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(5,150,105,0.07)', borderRadius: 8, padding: '6px 10px' }}><strong>Periodização:</strong> suporta bloco de alta densidade. Atenção à técnica para evitar lesões por excesso de confiança.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(8,145,178,0.07)', borderRadius: 8, padding: '6px 10px' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline;verticalAlign:-2px;marginRight:4px;flexShrink:0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg><strong>PSE alvo:</strong> 6–9/10 em sessões de alta intensidade. HIIT bem tolerado.</div>
                       </>}
 
                       {/* ── Adulto 30–44 ── */}
                       {isAdult && <>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(8,145,178,0.07)', borderRadius: 8, padding: '6px 10px' }}>📉 <strong>Sarcopenia subclínica:</strong> perda de ~0,5–1% de massa muscular/ano após os 30. Treino de força 2–3x/semana é essencial.</div>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(8,145,178,0.07)', borderRadius: 8, padding: '6px 10px' }}>⏱️ <strong>Recuperação:</strong> 48h ideais entre sessões intensas. VO₂ máx declina ~1%/ano — compensar com consistência.</div>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(8,145,178,0.07)', borderRadius: 8, padding: '6px 10px' }}>💡 <strong>Periodização:</strong> ondulada diária (DUP) ou semanal. Manter volume moderado-alto com boa gestão de recuperação.</div>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(8,145,178,0.07)', borderRadius: 8, padding: '6px 10px' }}>🧘 <strong>Mobilidade:</strong> incluir 1–2 sessões/semana de mobilidade articular para prevenção de lesões.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(8,145,178,0.07)', borderRadius: 8, padding: '6px 10px' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline;verticalAlign:-2px;marginRight:4px;flexShrink:0"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><strong>Sarcopenia subclínica:</strong> perda de ~0,5–1% de massa muscular/ano após os 30. Treino de força 2–3x/semana é essencial.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(8,145,178,0.07)', borderRadius: 8, padding: '6px 10px' }}><strong>Recuperação:</strong> 48h ideais entre sessões intensas. VO₂ máx declina ~1%/ano — compensar com consistência.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(8,145,178,0.07)', borderRadius: 8, padding: '6px 10px' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline;verticalAlign:-2px;marginRight:4px;flexShrink:0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg><strong>Periodização:</strong> ondulada diária (DUP) ou semanal. Manter volume moderado-alto com boa gestão de recuperação.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(8,145,178,0.07)', borderRadius: 8, padding: '6px 10px' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline;verticalAlign:-2px;marginRight:4px;flexShrink:0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg><strong>Mobilidade:</strong> incluir 1–2 sessões/semana de mobilidade articular para prevenção de lesões.</div>
                       </>}
 
                       {/* ── Adulto Maduro 45–59 ── */}
                       {isAdultMat && <>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.07)', borderRadius: 8, padding: '6px 10px' }}>⚠️ <strong>Declínio hormonal:</strong> testosterona ↓ ~1–2%/ano (homens); menopausa em mulheres — impacta força, massa óssea e composição corporal.</div>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.07)', borderRadius: 8, padding: '6px 10px' }}>🦴 <strong>Osteoporose:</strong> treino de força com impacto é a principal estratégia não farmacológica de prevenção. (Kohrt et al., 2004)</div>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.07)', borderRadius: 8, padding: '6px 10px' }}>❤️ <strong>Risco cardiovascular:</strong> monitorar FC durante esforço. PSE máx recomendado 7/10 sem avaliação médica prévia.</div>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.07)', borderRadius: 8, padding: '6px 10px' }}>⏱️ <strong>Recuperação:</strong> 48–72h entre sessões intensas. Reduzir volume total em 10–15% vs. adulto jovem.</div>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.07)', borderRadius: 8, padding: '6px 10px' }}>🧘 <strong>Mobilidade + equilíbrio:</strong> incluir obrigatoriamente — prevenção de quedas e manutenção funcional.</div>
-                        {_age >= 50 && <div style={{ fontSize: 11, color: '#334155', background: 'rgba(220,38,38,0.06)', borderRadius: 8, padding: '6px 10px' }}>🩺 <strong>50+ anos:</strong> recomendável avaliação médica com ECG de esforço antes de iniciar treinos de alta intensidade.</div>}
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.07)', borderRadius: 8, padding: '6px 10px' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline;verticalAlign:-2px;marginRight:4px;flexShrink:0"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><strong>Declínio hormonal:</strong> testosterona ↓ ~1–2%/ano (homens); menopausa em mulheres — impacta força, massa óssea e composição corporal.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.07)', borderRadius: 8, padding: '6px 10px' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline;verticalAlign:-2px;marginRight:4px;flexShrink:0"><path d="M7.05 9.29l-4.24-4.24a2 2 0 112.83-2.83l.71.71.71-.71a2 2 0 012.83 2.83L7.76 6.47l1.41 1.41 8.49 8.49 1.41-1.41-1.41-1.41 1.41-1.41a2 2 0 11-2.83 2.83l-.71-.71-.71.71a2 2 0 01-2.83-2.83l1.41-1.41-1.41-1.41-4.94 4.94"/></svg><strong>Osteoporose:</strong> treino de força com impacto é a principal estratégia não farmacológica de prevenção. (Kohrt et al., 2004)</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.07)', borderRadius: 8, padding: '6px 10px' }}><strong>Risco cardiovascular:</strong> monitorar FC durante esforço. PSE máx recomendado 7/10 sem avaliação médica prévia.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.07)', borderRadius: 8, padding: '6px 10px' }}><strong>Recuperação:</strong> 48–72h entre sessões intensas. Reduzir volume total em 10–15% vs. adulto jovem.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(124,58,237,0.07)', borderRadius: 8, padding: '6px 10px' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline;verticalAlign:-2px;marginRight:4px;flexShrink:0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg><strong>Mobilidade + equilíbrio:</strong> incluir obrigatoriamente — prevenção de quedas e manutenção funcional.</div>
+                        {_age >= 50 && <div style={{ fontSize: 11, color: '#334155', background: 'rgba(220,38,38,0.06)', borderRadius: 8, padding: '6px 10px' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline;verticalAlign:-2px;marginRight:4px;flexShrink:0"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><strong>50+ anos:</strong> recomendável avaliação médica com ECG de esforço antes de iniciar treinos de alta intensidade.</div>}
                       </>}
 
                       {/* ── Idoso 60+ ── */}
                       {isElderly && <>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(220,38,38,0.06)', borderRadius: 8, padding: '6px 10px' }}>⚠️ <strong>HIIT:</strong> avaliar individualmente. Iniciar apenas com aprovação médica e histórico de atividade.</div>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(217,119,6,0.07)', borderRadius: 8, padding: '6px 10px' }}>🦾 <strong>PSE máx recomendado:</strong> 6/10 — intensidades acima aumentam risco cardiovascular.</div>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(217,119,6,0.07)', borderRadius: 8, padding: '6px 10px' }}>⚖️ <strong>4º pilar:</strong> 1 sessão semanal de equilíbrio e mobilidade obrigatória. (Sherrington et al., 2019)</div>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(217,119,6,0.07)', borderRadius: 8, padding: '6px 10px' }}>🦴 <strong>Sarcopenia:</strong> 2–3x/semana de força é a 1ª linha de prevenção e tratamento. (Hurst et al., 2022)</div>
-                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(217,119,6,0.07)', borderRadius: 8, padding: '6px 10px' }}>🐢 <strong>Progressão conservadora:</strong> aumentar carga máx 5% por semana. Priorizar funcionalidade sobre performance.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(220,38,38,0.06)', borderRadius: 8, padding: '6px 10px' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline;verticalAlign:-2px;marginRight:4px;flexShrink:0"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><strong>HIIT:</strong> avaliar individualmente. Iniciar apenas com aprovação médica e histórico de atividade.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(217,119,6,0.07)', borderRadius: 8, padding: '6px 10px' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline;verticalAlign:-2px;marginRight:4px;flexShrink:0"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg><strong>PSE máx recomendado:</strong> 6/10 — intensidades acima aumentam risco cardiovascular.</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(217,119,6,0.07)', borderRadius: 8, padding: '6px 10px' }}><strong>4º pilar:</strong> 1 sessão semanal de equilíbrio e mobilidade obrigatória. (Sherrington et al., 2019)</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(217,119,6,0.07)', borderRadius: 8, padding: '6px 10px' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline;verticalAlign:-2px;marginRight:4px;flexShrink:0"><path d="M7.05 9.29l-4.24-4.24a2 2 0 112.83-2.83l.71.71.71-.71a2 2 0 012.83 2.83L7.76 6.47l1.41 1.41 8.49 8.49 1.41-1.41-1.41-1.41 1.41-1.41a2 2 0 11-2.83 2.83l-.71-.71-.71.71a2 2 0 01-2.83-2.83l1.41-1.41-1.41-1.41-4.94 4.94"/></svg><strong>Sarcopenia:</strong> 2–3x/semana de força é a 1ª linha de prevenção e tratamento. (Hurst et al., 2022)</div>
+                        <div style={{ fontSize: 11, color: '#334155', background: 'rgba(217,119,6,0.07)', borderRadius: 8, padding: '6px 10px' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline;verticalAlign:-2px;marginRight:4px;flexShrink:0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg><strong>Progressão conservadora:</strong> aumentar carga máx 5% por semana. Priorizar funcionalidade sobre performance.</div>
                       </>}
 
                     </div>
@@ -1969,7 +2000,7 @@ function TabCardio({ students }) {
           {/* ── MÉTRICAS INTELIGENTES ── */}
           {sessions.length > 0 && (
             <div style={{ ...GLASS_CARD, marginBottom: 0 }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251', marginBottom: 14 }}>🧠 Alertas Inteligentes</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251', marginBottom: 14 }}>Alertas Inteligentes</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
 
                 {/* Semáforo volume semanal */}
@@ -1984,14 +2015,14 @@ function TabCardio({ students }) {
 
                 {/* Alerta overtraining */}
                 <div style={{ borderRadius: 12, padding: '12px 16px', background: overtraining ? 'rgba(220,38,38,0.07)' : 'rgba(22,163,74,0.06)', border: `1.5px solid ${overtraining ? '#DC262620' : '#16A34A20'}`, display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ fontSize: 20 }}>{overtraining ? '🔥' : '😌'}</div>
+                  <div style={{ fontSize: 20 }}>{overtraining ? '!' : 'OK'}</div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 13, fontWeight: 800, color: overtraining ? '#DC2626' : '#16A34A' }}>
                       {overtraining ? 'Sinal de Overtraining Detectado' : 'Intensidade sob controle'}
                     </div>
                     <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
                       {avgPse2w
-                        ? `PSE médio (últimas 2 semanas): ${avgPse2w.toFixed(1)}/10 ${overtraining ? '— reduza para 1–2 sessões leves.' : '— dentro do ideal.'}`
+                        ? `PSE médio (últimas 2 semanas): ${avgPse2w.toFixed(1)}/10 ${overtraining ? 'reduza para 1–2 sessões leves.' : 'dentro do ideal.'}`
                         : 'Dados insuficientes para análise de overtraining.'}
                     </div>
                   </div>
@@ -2017,7 +2048,7 @@ function TabCardio({ students }) {
           {/* ── STATS GERAIS ── */}
           {sessions.length > 0 && (
             <div style={{ ...GLASS_CARD, marginBottom: 20 }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251', marginBottom: 14 }}>📊 Resumo Geral</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251', marginBottom: 14 }}>Resumo Geral</div>
               <div className="db-stats-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
                 {[
                   { label: 'Sessões',      val: totalSessoes,              unit: '',    color: '#155E8E' },
@@ -2037,7 +2068,7 @@ function TabCardio({ students }) {
           {/* ── GRÁFICOS ── */}
           {paceData.length >= 2 && (
             <div style={GLASS_CARD}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: '#0C3251', marginBottom: 16 }}>🏃 Evolução do Pace</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#0C3251', marginBottom: 16 }}>Evolução do Pace</div>
               <ResponsiveContainer width="100%" height={200}>
                 <LineChart data={paceData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(12,74,110,0.08)" />
@@ -2047,13 +2078,13 @@ function TabCardio({ students }) {
                   <Line type="monotone" dataKey="Pace" stroke="#EF4444" strokeWidth={2.5} dot={{ r: 4, fill: '#EF4444', stroke: '#FFF', strokeWidth: 2 }} activeDot={{ r: 6 }} />
                 </LineChart>
               </ResponsiveContainer>
-              <div style={{ fontSize: 11, color: '#94A3B8', textAlign: 'center', marginTop: 6 }}>Eixo Y invertido — pace menor = mais rápido ✅</div>
+              <div style={{ fontSize: 11, color: '#94A3B8', textAlign: 'center', marginTop: 6 }}>Eixo Y invertido — pace menor = mais rápido</div>
             </div>
           )}
 
           {volumeData.length >= 2 && (
             <div style={GLASS_CARD}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: '#0C3251', marginBottom: 16 }}>📅 Volume Semanal (minutos)</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#0C3251', marginBottom: 16 }}>Volume Semanal (minutos)</div>
               <ResponsiveContainer width="100%" height={180}>
                 <LineChart data={volumeData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(12,74,110,0.08)" />
@@ -2069,7 +2100,7 @@ function TabCardio({ students }) {
           {/* ── HISTÓRICO ── */}
           <div style={GLASS_CARD}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251' }}>📋 Histórico de Sessões</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251' }}>Histórico de Sessões</div>
               <button onClick={() => setModal(true)}
                 style={{ padding: '8px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#F5C842,#D97706)', color: '#431C00', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
                 + Registrar
@@ -2085,14 +2116,14 @@ function TabCardio({ students }) {
               {CARDIO_TYPES.filter(t => sessions.some(s => s.type === t.id)).map(t => (
                 <button key={t.id} onClick={() => setFilterType(t.id)}
                   style={{ padding: '5px 13px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: filterType === t.id ? t.color : 'rgba(255,255,255,0.7)', color: filterType === t.id ? '#FFF' : '#0C4A6E', transition: 'all 0.15s' }}>
-                  {t.icon} {t.label}
+                  {t.label}
                 </button>
               ))}
             </div>
 
             {filtered.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94A3B8' }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>❤️</div>
+                <div style={{ fontSize: 32, marginBottom: 8 }}></div>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>Nenhuma sessão registrada ainda</div>
                 <div style={{ fontSize: 12, marginTop: 4 }}>O aluno pode registrar pelo link dele</div>
               </div>
@@ -2104,7 +2135,7 @@ function TabCardio({ students }) {
                   return (
                     <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'rgba(255,255,255,0.65)', borderRadius: 12, border: `1.5px solid ${info?.color}25` }}>
                       {/* Ícone modalidade */}
-                      <div style={{ width: 38, height: 38, borderRadius: 10, background: `${info?.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{info?.icon}</div>
+                      <div style={{ width: 38, height: 38, borderRadius: 10, background: `${info?.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><span style={{ width:14, height:14, borderRadius:"50%", background:info?.color, display:"block" }} /></div>
                       {/* Info */}
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
@@ -2117,10 +2148,10 @@ function TabCardio({ students }) {
                           )}
                         </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-                          {s.duration_minutes && <span style={{ fontSize: 11, color: '#64748B' }}>⏱ {s.duration_minutes}min</span>}
-                          {s.distance_km      && <span style={{ fontSize: 11, color: '#64748B' }}>📍 {s.distance_km}km</span>}
-                          {pace !== '—'        && <span style={{ fontSize: 11, color: '#EF4444', fontWeight: 700 }}>🏃 {pace}</span>}
-                          {s.avg_hr           && <span style={{ fontSize: 11, color: '#64748B' }}>❤️ {s.avg_hr}bpm</span>}
+                          {s.duration_minutes && <span style={{ fontSize: 11, color: '#64748B' }}>{s.duration_minutes}min</span>}
+                          {s.distance_km      && <span style={{ fontSize: 11, color: '#64748B' }}>{s.distance_km}km</span>}
+                          {pace !== '—'        && <span style={{ fontSize: 11, color: '#EF4444', fontWeight: 700 }}>{pace}</span>}
+                          {s.avg_hr           && <span style={{ fontSize: 11, color: '#64748B' }}>{s.avg_hr}bpm</span>}
                           {s.pse              && <span style={{ fontSize: 11, color: '#64748B' }}>PSE {s.pse}/10</span>}
                         </div>
                         {s.notes && <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 3, fontStyle: 'italic' }}>{s.notes}</div>}
@@ -2246,7 +2277,7 @@ function NovoAlunoModal({ onSave, onClose, teacherId }) {
         <select style={inp} value={form.sport} onChange={e=>f('sport',e.target.value)}>
           <option value="">Selecionar...</option>
           {SPORTS.map(s=>(
-            <option key={s.id} value={s.id}>{s.icon} {s.label}</option>
+            <option key={s.id} value={s.id}>{s.label}</option>
           ))}
         </select>
         {form.sport === 'custom' && (
@@ -2268,7 +2299,7 @@ function NovoAlunoModal({ onSave, onClose, teacherId }) {
         {/* LTAD preview em tempo real */}
         {previewLTAD && (
           <div style={{ marginTop:12, padding:'10px 14px', borderRadius:10, background: previewLTAD.bg, border:`1px solid ${previewLTAD.cor}33`, display:'flex', alignItems:'center', gap:10 }}>
-            <span style={{ fontSize:18 }}>{previewLTAD.icon}</span>
+            <span style={{ width:12, height:12, borderRadius:"50%", background:previewLTAD?.cor, display:"inline-block" }} />
             <div>
               <div style={{ fontSize:12, fontWeight:800, color: previewLTAD.cor }}>Fase LTAD: {previewLTAD.fase}</div>
               <div style={{ fontSize:11, color:'#64748B' }}>{previewLTAD.desc}</div>
@@ -2290,7 +2321,7 @@ function NovoAlunoModal({ onSave, onClose, teacherId }) {
             </div>
           ) : (
             <div style={{ display:'flex', alignItems:'center', padding:'10px 12px', borderRadius:8, background:'rgba(0,0,0,0.03)', border:'1px dashed #E2E8F0', fontSize:12, color:'#94A3B8' }}>
-              📱 WhatsApp disponível para menores de 18 anos
+              WhatsApp disponível para menores de 18 anos
             </div>
           )}
         </div>
@@ -2342,7 +2373,7 @@ function DashboardMobileCSS() {
 function MobileBottomNav({ nav, setNav, navigate, logout }) {
   const items = [
     ...NAV,
-    { id: 'perfil', icon: '👤', label: 'Perfil' },
+    { id: 'perfil', icon: '', label: 'Perfil' },
   ]
   return (
     <div className="db-bottom-nav" style={{
@@ -2363,7 +2394,16 @@ function MobileBottomNav({ nav, setNav, navigate, logout }) {
             background:'none',border:'none',cursor:'pointer',padding:'6px 4px',
             flex:1,
           }}>
-            <span style={{fontSize:20,lineHeight:1,filter:active?'drop-shadow(0 0 6px rgba(245,200,66,0.7))':'none'}}>{item.icon}</span>
+            <span style={{
+                lineHeight:0,
+                filter: active ? 'drop-shadow(0 0 6px rgba(245,200,66,0.7))' : 'none',
+                color: active ? YELLOW : 'rgba(224,242,254,0.55)',
+                transition: 'all 0.15s',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: 22, height: 22,
+              }}>
+                {NAV_ICONS[item.id] || NAV_ICONS.perfil}
+              </span>
             <span style={{fontSize:9,fontWeight:active?800:500,color:active?YELLOW:'rgba(224,242,254,0.6)',textTransform:'uppercase',letterSpacing:0.5,transition:'color 0.15s'}}>{item.label}</span>
             {active && (
               <div style={{position:'absolute',bottom:0,width:32,height:2.5,background:YELLOW,borderRadius:2}} />
@@ -2521,7 +2561,7 @@ export default function Dashboard({ navigate, session }) {
 
   const isMobile = useIsMobile()
 
-  if (loading) return <div style={{ minHeight: '100vh', background: 'linear-gradient(175deg,#4AB8E8,#B3E5F7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFF', fontSize: 16, fontWeight: 700, fontFamily: "'DM Sans',sans-serif", textShadow: '0 1px 4px rgba(0,0,0,0.2)' }}>☀️ Carregando...</div>
+  if (loading) return <div style={{ minHeight: '100vh', background: 'linear-gradient(175deg,#4AB8E8,#B3E5F7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFF', fontSize: 16, fontWeight: 700, fontFamily: "'DM Sans',sans-serif", textShadow: '0 1px 4px rgba(0,0,0,0.2)' }}>Carregando...</div>
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', fontFamily: "'DM Sans','Segoe UI',sans-serif", position: 'relative' }}>
@@ -2533,7 +2573,7 @@ export default function Dashboard({ navigate, session }) {
         <aside style={{ width: 220, background: SIDEBAR_BG, display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh' }}>
           <div style={{ padding: '26px 18px 12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 11, background: 'linear-gradient(135deg,#34D399,#059669)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, boxShadow: '0 3px 12px rgba(52,211,153,0.35)' }}>💪</div>
+              <div style={{ width: 40, height: 40, borderRadius: 11, background: 'linear-gradient(135deg,#34D399,#059669)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 3px 12px rgba(52,211,153,0.35)' }}><svg width='18' height='18' viewBox='0 0 24 24' fill='white'><path d='M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29l-1.43-1.43z'/></svg></div>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 800, color: '#FFF', letterSpacing: '-0.3px' }}>TrainerApp</div>
                 <div style={{ fontSize: 10, color: '#BEE3F8', fontWeight: 500 }}>Gestão de Alunos</div>
@@ -2546,8 +2586,8 @@ export default function Dashboard({ navigate, session }) {
           </nav>
           <WaveDivider />
           <div style={{ padding: '4px 10px 26px', display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <NavItem item={{ id: 'perfil', icon: '👤', label: 'Meu Perfil' }}   active={false} onClick={() => navigate('teacher-profile')} />
-            <NavItem item={{ id: 'sair',   icon: '🚪', label: 'Sair' }}         active={false} onClick={logout} />
+            <NavItem item={{ id: 'perfil', icon: null, label: 'Meu Perfil' }}   active={false} onClick={() => navigate('teacher-profile')} />
+            <NavItem item={{ id: 'sair',   icon: '', label: 'Sair' }}         active={false} onClick={logout} />
           </div>
         </aside>
         {/* Onda lateral */}
@@ -2579,7 +2619,7 @@ export default function Dashboard({ navigate, session }) {
             {/* Busca + Filtros */}
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
               <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-                <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: '#94A3B8' }}>🔍</span>
+                <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: '#94A3B8' }}></span>
                 <input placeholder="Buscar aluno..." value={search} onChange={e => setSearch(e.target.value)}
                   style={{ width: '100%', padding: '10px 12px 10px 36px', background: 'rgba(255,255,255,0.75)', border: '1.5px solid rgba(255,255,255,0.9)', borderRadius: 10, fontSize: 13, color: '#0D1B2A', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', backdropFilter:'blur(6px)' }} />
               </div>
@@ -2595,8 +2635,8 @@ export default function Dashboard({ navigate, session }) {
 
             {/* Legenda ofensiva */}
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 20, padding: '10px 16px', background: 'rgba(255,255,255,0.45)', borderRadius: 10, border: `1px solid rgba(255,255,255,0.7)`, backdropFilter:'blur(6px)' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#0C4A6E' }}>🔥 Ofensiva:</span>
-              {[{ label: '1–6d', c: '#FDE68A' }, { label: '1 sem+', c: '#FCD34D' }, { label: '2 sem+', c: '#F5C842' }, { label: '1 mês+', c: '#F59E0B' }, { label: '3 mes+', c: '#EA580C' }, { label: '6 mes+', c: '#DC2626' }, { label: '1 ano 👑', c: '#D97706' }].map(({ label, c }) => (
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#0C4A6E' }}>Ofensiva:</span>
+              {[{ label: '1–6d', c: '#FDE68A' }, { label: '1 sem+', c: '#FCD34D' }, { label: '2 sem+', c: '#F5C842' }, { label: '1 mês+', c: '#F59E0B' }, { label: '3 mes+', c: '#EA580C' }, { label: '6 mes+', c: '#DC2626' }, { label: '1 ano ', c: '#D97706' }].map(({ label, c }) => (
                 <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: c, boxShadow: `0 0 5px ${c}80` }} />
                   <span style={{ fontSize: 10, color: '#0C4A6E', fontWeight: 600 }}>{label}</span>
@@ -2606,7 +2646,7 @@ export default function Dashboard({ navigate, session }) {
 
             {students.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '80px 20px', color: '#0C4A6E', opacity: 0.5 }}>
-                <div style={{ fontSize: 48, marginBottom: 14 }}>🏋️</div>
+                <div style={{ fontSize: 48, marginBottom: 14 }}></div>
                 <div style={{ fontSize: 18, fontWeight: 700 }}>Nenhum aluno cadastrado</div>
                 <div style={{ fontSize: 13, marginTop: 6 }}>Clique em "+ Novo Aluno" para começar</div>
               </div>
@@ -2635,7 +2675,7 @@ export default function Dashboard({ navigate, session }) {
         {/* OUTRAS ABAS */}
         {nav !== 'alunos' && nav !== 'treinos' && nav !== 'evolucao' && nav !== 'cardio' && nav !== 'escolinha' && (
           <div style={{ padding: '80px 20px', textAlign: 'center', color: '#0C4A6E', opacity: 0.5 }}>
-            <div style={{ fontSize: 48, marginBottom: 14 }}>🚧</div>
+            <div style={{ fontSize: 48, marginBottom: 14 }}></div>
             <div style={{ fontSize: 18, fontWeight: 700 }}>Em desenvolvimento</div>
           </div>
         )}
