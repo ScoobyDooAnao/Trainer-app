@@ -64,9 +64,13 @@ const SPORT_SVG = {
   saude:     '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21C7 17 3 13.5 3 9.5a4.5 4.5 0 018-2.83A4.5 4.5 0 0119 9.5c0 4-4 7.5-7 11.5z" opacity=".7"/><path d="M9 9h6M12 6v6" stroke="white" strokeWidth="1.8" fill="none" strokeLinecap="round"/></svg>',
   custom:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="12,3 15,9 22,9.5 17,14 18.5,21 12,17.5 5.5,21 7,14 2,9.5 9,9" stroke="currentColor" strokeWidth="1.2" fill="none"/></svg>',
 }
-function SportIcon({ id, size = 14, color = 'currentColor' }) {
-  const svg = SPORT_SVG[id] || SPORT_SVG.custom
-  return <span style={{ display:'inline-flex', alignItems:'center', color }} dangerouslySetInnerHTML={{ __html: svg.replace(/width="14"/g, \`width="\${size}"\`).replace(/height="14"/g, \`height="\${size}"\`) }} />
+function SportIcon({ id, size, color }) {
+  var s = size || 14
+  var col = color || 'currentColor'
+  var svg = (SPORT_SVG[id] || SPORT_SVG.custom)
+    .replace(/width="14"/g, 'width="' + s + '"')
+    .replace(/height="14"/g, 'height="' + s + '"')
+  return <span style={{ display:'inline-flex', alignItems:'center', color:col }} dangerouslySetInnerHTML={{ __html: svg }} />
 }
 const SPORTS = [
   { id: 'futebol',   label: 'Futebol',           icon: null },
