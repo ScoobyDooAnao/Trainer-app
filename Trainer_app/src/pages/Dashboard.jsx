@@ -109,10 +109,10 @@ function streakStyle(days) {
   return { color, display: `${emoji}${days}`, glow }
 }
 
-function getDayStatus(dia, attendanceDates, logDates) {
+function getDayStatus(dia, attendanceDates, logDates, makeupDates) {
   const todayJS  = new Date().getDay()
   const diaJS    = DIA_JS_MAP[dia]
-  const jaPassou = diaJS < todayJS
+  const jaPassou = diaJS < todayJS || (diaJS === 0 && todayJS > 0)
   const eHoje    = diaJS === todayJS
   const now      = new Date()
   const weekStart = new Date(now)
@@ -123,10 +123,13 @@ function getDayStatus(dia, attendanceDates, logDates) {
     const date = new Date(d + 'T12:00:00')
     return date.getDay() === diaJS && date >= weekStart
   })
-  if (fez)      return { bg: 'rgba(52,211,153,0.18)',  color: '#065F46', border: 'rgba(52,211,153,0.45)', label: 'Feito',    emoji: '' }
-  if (eHoje)    return { bg: 'rgba(59,130,246,0.15)',  color: '#1E3A8A', border: 'rgba(59,130,246,0.4)',  label: 'Ainda dá', emoji: '' }
-  if (jaPassou) return { bg: 'rgba(239,68,68,0.12)',   color: '#7F1D1D', border: 'rgba(239,68,68,0.38)',  label: 'Faltou',   emoji: '' }
-  return          { bg: 'rgba(148,163,184,0.12)', color: '#475569', border: 'rgba(148,163,184,0.3)', label: 'Agendado', emoji: '' }
+  // Verificar se foi recuperado (feito num dia diferente)
+  const recuperado = !fez && jaPassou && (makeupDates || []).some(d => d === dia)
+  if (fez)        return { bg: 'rgba(52,211,153,0.18)',  color: '#065F46', border: 'rgba(52,211,153,0.45)', label: 'Feito',      emoji: '' }
+  if (recuperado) return { bg: 'rgba(251,191,36,0.18)',  color: '#92400E', border: 'rgba(251,191,36,0.45)', label: 'Recuperado', emoji: '' }
+  if (eHoje)      return { bg: 'rgba(59,130,246,0.15)',  color: '#1E3A8A', border: 'rgba(59,130,246,0.4)',  label: 'Ainda dá',   emoji: '' }
+  if (jaPassou)   return { bg: 'rgba(239,68,68,0.12)',   color: '#7F1D1D', border: 'rgba(239,68,68,0.38)',  label: 'Faltou',     emoji: '' }
+  return            { bg: 'rgba(148,163,184,0.12)', color: '#475569', border: 'rgba(148,163,184,0.3)', label: 'Agendado',   emoji: '' }
 }
 
 function calcStreak(dates, plannedDays) {
@@ -529,7 +532,7 @@ function WorkoutModal({ workout, onClose, navigate }) {
 // ── WorkoutChip ────────────────────────────────────────────────────────────
 function WorkoutChip({ workout, dia, onClick }) {
   const [hov, setHov] = useState(false)
-  const s        = getDayStatus(dia, workout.attendanceDates, workout.logDates)
+  const s        = getDayStatus(dia, workout.attendanceDates, workout.logDates, workout.makeupDays)
   const initials = workout.studentName.split(' ').map(p => p[0]).slice(0, 2).join('')
   const g        = GOAL[workout.goal]
   return (
@@ -979,7 +982,7 @@ function TabTreinos({ workouts, navigate, session }) {
           <span style={{ fontSize:11, color:'#0C4A6E', fontWeight:600 }}>Avaliação</span>
         </div>
         <span style={{ fontSize:11, color:'#0C4A6E', opacity:0.5 }}>·</span>
-        {[{ dot:'#059669', label:'Feito' }, { dot:'#F59E0B', label:'Ainda dá' }, { dot:'#EF4444', label:'Faltou' }, { dot:'#94A3B8', label:'Agendado' }].map(({ dot, label }) => (
+        {[{ dot:'#059669', label:'Feito' }, { dot:'#F59E0B', label:'Recuperado' }, { dot:'#F97316', label:'Ainda dá' }, { dot:'#EF4444', label:'Faltou' }, { dot:'#94A3B8', label:'Agendado' }].map(({ dot, label }) => (
           <div key={label} style={{ display:'flex', alignItems:'center', gap:5 }}>
             <div style={{ width:7, height:7, borderRadius:'50%', background:dot }} />
             <span style={{ fontSize:11, color:'#0C4A6E', fontWeight:600 }}>{label}</span>
@@ -2393,7 +2396,7 @@ export default function Dashboard({ navigate, session }) {
       const [att, prog, logs, feed, plansRes] = await Promise.all([
         supabase.from('attendance').select('student_id,date').in('student_id', ids),
         supabase.from('progress_entries').select('student_id,date,weight').in('student_id', ids).order('date', { ascending: false }),
-        supabase.from('exercise_logs').select('student_id,date').in('student_id', ids),
+        supabase.from('exercise_logs').select('student_id,date,day_id,is_makeup,scheduled_day').in('student_id', ids),
         supabase.from('student_feedbacks').select('student_id,date').in('student_id', ids),
         supabase.from('workout_plans').select('id,student_id,title,status,updated_at').in('student_id', ids).eq('status', 'active'),
       ])
@@ -2448,7 +2451,24 @@ export default function Dashboard({ navigate, session }) {
         const attMap = {}; const logMap = {}
         ids.forEach(id => { attMap[id] = []; logMap[id] = [] })
         if (att.data) att.data.forEach(r => attMap[r.student_id]?.push(r.date))
-        if (logs.data) logs.data.forEach(r => logMap[r.student_id]?.push(r.date))
+        const makeupMap = {} // student_id -> [dia_semana que foi recuperado]
+        ids.forEach(id => { makeupMap[id] = [] })
+        if (logs.data) logs.data.forEach(r => {
+          logMap[r.student_id]?.push(r.date)
+          if (r.is_makeup && r.scheduled_day) {
+            makeupMap[r.student_id]?.push(r.scheduled_day)
+            // Adicionar também a data do dia original para o streak contar
+            const logDate = new Date(r.date + 'T12:00:00')
+            const DIA_JS = { Seg:1,Ter:2,Qua:3,Qui:4,Sex:5,Sáb:6,Dom:0 }
+            const targetDayJS = DIA_JS[r.scheduled_day]
+            if (targetDayJS !== undefined) {
+              const scheduled = new Date(logDate)
+              const diff = targetDayJS - logDate.getDay()
+              scheduled.setDate(scheduled.getDate() + diff)
+              logMap[r.student_id]?.push(scheduled.toISOString().slice(0,10))
+            }
+          }
+        })
 
         // Buscar dias da semana de cada plano (leve — só day_of_week e name)
         const planIds = plans.map(p => p.id)
@@ -2478,6 +2498,7 @@ export default function Dashboard({ navigate, session }) {
             workoutDays: wdMap[p.id] || [],
             attendanceDates: attMap[p.student_id] || [],
             logDates: logMap[p.student_id] || [],
+            makeupDays: makeupMap[p.student_id] || [],
           }
         }))
       }
