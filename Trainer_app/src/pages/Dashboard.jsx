@@ -2001,53 +2001,115 @@ function TabCardio({ students }) {
             </div>
           )}
 
-          {/* ── MÉTRICAS INTELIGENTES ── */}
-          {sessions.length > 0 && (
-            <div style={{ ...GLASS_CARD, marginBottom: 0 }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#0C3251', marginBottom: 14 }}>Alertas Inteligentes</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {/* ── ALERTAS INTELIGENTES ── */}
+          {sessions.length > 0 && (() => {
+            const SVG_WARN_LG = <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+            const SVG_OK_LG   = <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" opacity=".3"/><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+            const SVG_FIRE    = <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M13.5 0.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z"/></svg>
+            const pse2wBar = avgPse2w ? Math.round((avgPse2w / 10) * 100) : 0
+            const pse2wColor = !avgPse2w ? '#94A3B8' : avgPse2w <= 5 ? '#16A34A' : avgPse2w <= 7 ? '#D97706' : '#DC2626'
+            return (
+              <div style={{ ...GLASS_CARD, marginBottom: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 14 }}>Alertas Inteligentes</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
-                {/* Semáforo volume semanal */}
-                <div style={{ borderRadius: 12, padding: '12px 16px', background: volBg, border: `1.5px solid ${volColor}30`, display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 14, height: 14, borderRadius: '50%', background: volColor, boxShadow: `0 0 8px ${volColor}80`, flexShrink: 0 }} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: volColor }}>{volLabel}</div>
-                    <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{volSub}</div>
-                  </div>
-                  <div style={{ fontSize: 18, fontWeight: 900, color: volColor }}>{thisWeekMin}<span style={{ fontSize: 10, fontWeight: 600 }}>min</span></div>
-                </div>
-
-                {/* Alerta overtraining */}
-                <div style={{ borderRadius: 12, padding: '12px 16px', background: overtraining ? 'rgba(220,38,38,0.07)' : 'rgba(22,163,74,0.06)', border: `1.5px solid ${overtraining ? '#DC262620' : '#16A34A20'}`, display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ fontSize: 20 }}>{overtraining ? '!' : 'OK'}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: overtraining ? '#DC2626' : '#16A34A' }}>
-                      {overtraining ? 'Sinal de Overtraining Detectado' : 'Intensidade sob controle'}
-                    </div>
-                    <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
-                      {avgPse2w
-                        ? `PSE médio (últimas 2 semanas): ${avgPse2w.toFixed(1)}/10 ${overtraining ? 'reduza para 1–2 sessões leves.' : 'dentro do ideal.'}`
-                        : 'Dados insuficientes para análise de overtraining.'}
-                    </div>
-                  </div>
-                  {avgPse2w && <div style={{ fontSize: 18, fontWeight: 900, color: overtraining ? '#DC2626' : '#16A34A' }}>{avgPse2w.toFixed(1)}<span style={{ fontSize: 10 }}>/10</span></div>}
-                </div>
-
-                {/* Alerta compensação metabólica */}
-                {metabAlert && (
-                  <div style={{ borderRadius: 12, padding: '12px 16px', background: 'rgba(217,119,6,0.07)', border: '1.5px solid rgba(217,119,6,0.2)', display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ fontSize: 20 }}>⚡</div>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: '#D97706' }}>Compensação Metabólica — Atenção</div>
-                      <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
-                        {thisWeekCount} sessões esta semana. Volume elevado pode ativar compensação e dificultar resultados. (Pontzer et al., 2016)
+                  {/* ── 1. ALERTA OVERTRAINING ── */}
+                  <div style={{ borderRadius: 14, overflow: 'hidden', border: overtraining ? '1.5px solid #FCA5A5' : '1.5px solid rgba(22,163,74,0.2)', background: overtraining ? 'rgba(220,38,38,0.04)' : 'rgba(22,163,74,0.03)' }}>
+                    {/* Barra de status */}
+                    <div style={{ height: 4, background: overtraining ? 'linear-gradient(90deg,#DC2626,#EF4444)' : 'linear-gradient(90deg,#16A34A,#4ADE80)', width: overtraining ? '100%' : pse2wBar + '%', transition: 'width 0.8s ease' }} />
+                    <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                      {/* Ícone */}
+                      <div style={{ width: 40, height: 40, borderRadius: 12, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: overtraining ? 'rgba(220,38,38,0.12)' : 'rgba(22,163,74,0.1)', color: overtraining ? '#DC2626' : '#16A34A' }}>
+                        {overtraining ? SVG_FIRE : SVG_OK_LG}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                          <div style={{ fontSize: 13, fontWeight: 800, color: overtraining ? '#DC2626' : '#16A34A' }}>
+                            {overtraining ? 'Sinal de Overtraining' : 'Intensidade sob Controle'}
+                          </div>
+                          {avgPse2w && (
+                            <div style={{ fontSize: 18, fontWeight: 900, color: pse2wColor, lineHeight: 1 }}>
+                              {avgPse2w.toFixed(1)}<span style={{ fontSize: 9, fontWeight: 600, color: '#94A3B8' }}>/10</span>
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#64748B', lineHeight: 1.5, marginBottom: 10 }}>
+                          {avgPse2w
+                            ? overtraining
+                              ? 'PSE médio nas últimas 2 semanas acima de 7/10. Risco de acúmulo de fadiga e queda de performance.'
+                              : 'PSE médio nas últimas 2 semanas dentro da faixa segura.'
+                            : 'Registre pelo menos 5 sessões com PSE para ativar esta análise.'}
+                        </div>
+                        {/* Barra de PSE */}
+                        {avgPse2w && (
+                          <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#94A3B8', marginBottom: 3 }}>
+                              <span>PSE 1</span><span style={{ color: '#16A34A' }}>Zona ideal (≤7)</span><span>PSE 10</span>
+                            </div>
+                            <div style={{ height: 6, borderRadius: 99, background: 'rgba(0,0,0,0.07)', position: 'relative', overflow: 'hidden' }}>
+                              {/* Zona segura */}
+                              <div style={{ position: 'absolute', left: 0, width: '70%', height: '100%', background: 'rgba(22,163,74,0.15)', borderRadius: 99 }} />
+                              {/* Marcador PSE atual */}
+                              <div style={{ position: 'absolute', left: pse2wBar + '%', transform: 'translateX(-50%)', width: 10, height: 6, background: pse2wColor, borderRadius: 99, boxShadow: '0 0 6px ' + pse2wColor + '80', transition: 'left 0.8s ease' }} />
+                            </div>
+                          </div>
+                        )}
+                        {overtraining && (
+                          <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 8, background: 'rgba(220,38,38,0.07)', border: '1px solid rgba(220,38,38,0.15)' }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: '#DC2626', marginBottom: 3 }}>Recomendação</div>
+                            <div style={{ fontSize: 10, color: '#7F1D1D', lineHeight: 1.5 }}>
+                              Reduza para 1–2 sessões leves (PSE 3–4) nesta semana. Priorize recuperação ativa: caminhada, mobilidade ou descanso completo.
+                              <span style={{ color: '#94A3B8', marginLeft: 4 }}>(Meeusen et al., 2013)</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
-                )}
+
+                  {/* ── 2. ALERTA COMPENSAÇÃO METABÓLICA ── */}
+                  <div style={{ borderRadius: 14, overflow: 'hidden', border: metabAlert ? '1.5px solid #FDE68A' : '1.5px solid rgba(148,163,184,0.2)', background: metabAlert ? 'rgba(217,119,6,0.04)' : 'rgba(148,163,184,0.03)' }}>
+                    <div style={{ height: 4, background: metabAlert ? 'linear-gradient(90deg,#D97706,#F59E0B)' : 'rgba(148,163,184,0.2)' }} />
+                    <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 12, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: metabAlert ? 'rgba(217,119,6,0.12)' : 'rgba(148,163,184,0.08)', color: metabAlert ? '#D97706' : '#94A3B8' }}>
+                        {metabAlert ? SVG_WARN_LG : SVG_OK_LG}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          <div style={{ fontSize: 13, fontWeight: 800, color: metabAlert ? '#D97706' : '#94A3B8' }}>
+                            {metabAlert ? 'Risco de Compensação Metabólica' : 'Volume de Sessões Normal'}
+                          </div>
+                          <div style={{ display: 'flex', gap: 3 }}>
+                            {[1,2,3,4].map(i => (
+                              <div key={i} style={{ width: 6, height: 20, borderRadius: 3, background: thisWeekCount >= i ? (metabAlert ? '#D97706' : '#16A34A') : 'rgba(0,0,0,0.08)', transition: 'background 0.3s' }} />
+                            ))}
+                            {thisWeekCount > 4 && (
+                              <div style={{ width: 6, height: 20, borderRadius: 3, background: '#DC2626' }} />
+                            )}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 11, color: '#64748B', lineHeight: 1.5, marginBottom: metabAlert ? 10 : 0 }}>
+                          {metabAlert
+                            ? thisWeekCount + ' sessões esta semana. Acima de 4 sessões/semana o corpo pode compensar reduzindo NEAT e metabolismo basal.'
+                            : thisWeekCount + ' sessão' + (thisWeekCount !== 1 ? 'ões' : '') + ' esta semana — dentro do limite recomendado (≤4).'}
+                        </div>
+                        {metabAlert && (
+                          <div style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(217,119,6,0.07)', border: '1px solid rgba(217,119,6,0.15)' }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: '#D97706', marginBottom: 3 }}>Recomendação</div>
+                            <div style={{ fontSize: 10, color: '#92400E', lineHeight: 1.5 }}>
+                              Mantenha até 4 sessões/semana e adicione treino de força se o objetivo é composição corporal. Cardio isolado em excesso ativa mecanismos de compensação.
+                              <span style={{ color: '#94A3B8', marginLeft: 4 }}>(Pontzer et al., 2016)</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
 
           {/* ── STATS GERAIS ── */}
           {sessions.length > 0 && (
