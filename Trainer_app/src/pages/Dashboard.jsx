@@ -1505,6 +1505,12 @@ function TabEvolucao({ students }) {
 
 
 
+// ── Small alert icons (module-level to avoid React error #62) ─────────────────
+const IcoWarnSm  = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style={{ display:'inline', verticalAlign:'-2px', marginRight:4 }}><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+const IcoBlockSm = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style={{ display:'inline', verticalAlign:'-2px', marginRight:4 }}><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 5h2v6h-2V7zm0 8h2v2h-2v-2z"/></svg>
+const IcoInfoSm  = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style={{ display:'inline', verticalAlign:'-2px', marginRight:4 }}><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+const IcoBoneSm  = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style={{ display:'inline', verticalAlign:'-2px', marginRight:4 }}><path d="M7.05 9.29l-4.24-4.24a2 2 0 112.83-2.83l.71.71.71-.71a2 2 0 012.83 2.83L7.76 6.47l1.41 1.41 8.49 8.49 1.41-1.41-1.41-1.41 1.41-1.41a2 2 0 11-2.83 2.83l-.71-.71-.71.71a2 2 0 01-2.83-2.83l1.41-1.41-1.41-1.41-4.94 4.94"/></svg>
+
 // ── FaixaEtariaCardio — extraído de IIFE para evitar React error #62 ──────────
 function FaixaEtariaCardio({ age, isChild, isAdolesc, isAdultYoung, isAdult, isAdultMat, isElderly, fcmax, fcFormula }) {
   if (!age) return null
@@ -1522,10 +1528,7 @@ function FaixaEtariaCardio({ age, isChild, isAdolesc, isAdultYoung, isAdult, isA
       {children}
     </div>
   )
-  const SVG_WARN = <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style={{ display:'inline', verticalAlign:'-2px', marginRight:4, flexShrink:0 }}><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
-  const SVG_BLOCK = <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style={{ display:'inline', verticalAlign:'-2px', marginRight:4, flexShrink:0 }}><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 5h2v6h-2V7zm0 8h2v2h-2v-2z"/></svg>
-  const SVG_INFO  = <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style={{ display:'inline', verticalAlign:'-2px', marginRight:4, flexShrink:0 }}><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-  const SVG_BONE  = <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style={{ display:'inline', verticalAlign:'-2px', marginRight:4, flexShrink:0 }}><path d="M7.05 9.29l-4.24-4.24a2 2 0 112.83-2.83l.71.71.71-.71a2 2 0 012.83 2.83L7.76 6.47l1.41 1.41 8.49 8.49 1.41-1.41-1.41-1.41 1.41-1.41a2 2 0 11-2.83 2.83l-.71-.71-.71.71a2 2 0 01-2.83-2.83l1.41-1.41-1.41-1.41-4.94 4.94"/></svg>
+  // SVG icons as components (NOT as JSX consts — would cause React error #62)
 
   return (
     <div style={{ marginTop: 10, borderRadius: 12, padding: '14px 16px', background: cfg.bg, border: '1.5px solid ' + cfg.border }}>
@@ -1538,18 +1541,18 @@ function FaixaEtariaCardio({ age, isChild, isAdolesc, isAdultYoung, isAdult, isA
 
         {isChild && (
           <>
-            <Row bg="rgba(220,38,38,0.06)">{SVG_BLOCK}<strong>HIIT bloqueado</strong> — não recomendado para menores de 12 anos.</Row>
-            <Row bg="rgba(220,38,38,0.06)">{SVG_BLOCK}<strong>1RM não aplicável</strong> — prescrição por PSE e peso corporal.</Row>
+            <Row bg="rgba(220,38,38,0.06)"><IcoBlockSm /><strong>HIIT bloqueado</strong> — não recomendado para menores de 12 anos.</Row>
+            <Row bg="rgba(220,38,38,0.06)"><IcoBlockSm /><strong>1RM não aplicável</strong> — prescrição por PSE e peso corporal.</Row>
             <Row bg="rgba(124,58,237,0.06)"><strong>LTAD — FUNdamentals:</strong> foco em habilidades motoras multilaterais e ludicidade.</Row>
-            <Row bg="rgba(124,58,237,0.06)">{SVG_BONE}<strong>Atenção:</strong> placas epifisárias vulneráveis — evitar cargas axiais pesadas.</Row>
+            <Row bg="rgba(124,58,237,0.06)"><IcoBoneSm /><strong>Atenção:</strong> placas epifisárias vulneráveis — evitar cargas axiais pesadas.</Row>
           </>
         )}
 
         {isAdolesc && (
           <>
-            <Row bg="rgba(217,119,6,0.06)">{SVG_WARN}<strong>Carga máxima:</strong> limitar a 70–75% do 1RM durante fase de crescimento ósseo.</Row>
+            <Row bg="rgba(217,119,6,0.06)"><IcoWarnSm /><strong>Carga máxima:</strong> limitar a 70–75% do 1RM durante fase de crescimento ósseo.</Row>
             <Row bg="rgba(217,119,6,0.06)"><strong>LTAD — Learn/Train to Train:</strong> técnica em primeiro lugar, volume progressivo. (Faigenbaum et al., 2009)</Row>
-            {age < 14 && <Row bg="rgba(220,38,38,0.06)">{SVG_BLOCK}<strong>1RM:</strong> não recomendado abaixo de 14 anos — fórmula de Epley não validada.</Row>}
+            {age < 14 && <Row bg="rgba(220,38,38,0.06)"><IcoBlockSm /><strong>1RM:</strong> não recomendado abaixo de 14 anos — fórmula de Epley não validada.</Row>}
           </>
         )}
 
@@ -1558,37 +1561,37 @@ function FaixaEtariaCardio({ age, isChild, isAdolesc, isAdultYoung, isAdult, isA
             <Row bg="rgba(5,150,105,0.07)"><strong>Capacidade máxima:</strong> pico de VO₂ máx e resposta hormonal. Tolerância alta a volume e intensidade.</Row>
             <Row bg="rgba(5,150,105,0.07)"><strong>Recuperação:</strong> 24–48h entre sessões do mesmo grupo muscular. Permite alta frequência.</Row>
             <Row bg="rgba(5,150,105,0.07)"><strong>Periodização:</strong> suporta bloco de alta densidade. Atenção à técnica para evitar lesões por excesso de confiança.</Row>
-            <Row bg="rgba(8,145,178,0.07)">{SVG_INFO}<strong>PSE alvo:</strong> 6–9/10 em sessões de alta intensidade. HIIT bem tolerado.</Row>
+            <Row bg="rgba(8,145,178,0.07)"><IcoInfoSm /><strong>PSE alvo:</strong> 6–9/10 em sessões de alta intensidade. HIIT bem tolerado.</Row>
           </>
         )}
 
         {isAdult && (
           <>
-            <Row bg="rgba(8,145,178,0.07)">{SVG_WARN}<strong>Sarcopenia subclínica:</strong> perda de ~0,5–1% de massa muscular/ano após os 30. Treino de força 2–3x/semana é essencial.</Row>
+            <Row bg="rgba(8,145,178,0.07)"><IcoWarnSm /><strong>Sarcopenia subclínica:</strong> perda de ~0,5–1% de massa muscular/ano após os 30. Treino de força 2–3x/semana é essencial.</Row>
             <Row bg="rgba(8,145,178,0.07)"><strong>Recuperação:</strong> 48h ideais entre sessões intensas. VO₂ máx declina ~1%/ano — compensar com consistência.</Row>
-            <Row bg="rgba(8,145,178,0.07)">{SVG_INFO}<strong>Periodização:</strong> ondulada diária (DUP) ou semanal. Manter volume moderado-alto com boa gestão de recuperação.</Row>
-            <Row bg="rgba(8,145,178,0.07)">{SVG_INFO}<strong>Mobilidade:</strong> incluir 1–2 sessões/semana de mobilidade articular para prevenção de lesões.</Row>
+            <Row bg="rgba(8,145,178,0.07)"><IcoInfoSm /><strong>Periodização:</strong> ondulada diária (DUP) ou semanal. Manter volume moderado-alto com boa gestão de recuperação.</Row>
+            <Row bg="rgba(8,145,178,0.07)"><IcoInfoSm /><strong>Mobilidade:</strong> incluir 1–2 sessões/semana de mobilidade articular para prevenção de lesões.</Row>
           </>
         )}
 
         {isAdultMat && (
           <>
-            <Row bg="rgba(124,58,237,0.07)">{SVG_WARN}<strong>Declínio hormonal:</strong> testosterona ↓ ~1–2%/ano (homens); menopausa em mulheres — impacta força, massa óssea e composição corporal.</Row>
-            <Row bg="rgba(124,58,237,0.07)">{SVG_BONE}<strong>Osteoporose:</strong> treino de força com impacto é a principal estratégia não farmacológica de prevenção. (Kohrt et al., 2004)</Row>
+            <Row bg="rgba(124,58,237,0.07)"><IcoWarnSm /><strong>Declínio hormonal:</strong> testosterona ↓ ~1–2%/ano (homens); menopausa em mulheres — impacta força, massa óssea e composição corporal.</Row>
+            <Row bg="rgba(124,58,237,0.07)"><IcoBoneSm /><strong>Osteoporose:</strong> treino de força com impacto é a principal estratégia não farmacológica de prevenção. (Kohrt et al., 2004)</Row>
             <Row bg="rgba(124,58,237,0.07)"><strong>Risco cardiovascular:</strong> monitorar FC durante esforço. PSE máx recomendado 7/10 sem avaliação médica prévia.</Row>
             <Row bg="rgba(124,58,237,0.07)"><strong>Recuperação:</strong> 48–72h entre sessões intensas. Reduzir volume total em 10–15% vs. adulto jovem.</Row>
-            <Row bg="rgba(124,58,237,0.07)">{SVG_INFO}<strong>Mobilidade + equilíbrio:</strong> incluir obrigatoriamente — prevenção de quedas e manutenção funcional.</Row>
-            {age >= 50 && <Row bg="rgba(220,38,38,0.06)">{SVG_WARN}<strong>50+ anos:</strong> recomendável avaliação médica com ECG de esforço antes de iniciar treinos de alta intensidade.</Row>}
+            <Row bg="rgba(124,58,237,0.07)"><IcoInfoSm /><strong>Mobilidade + equilíbrio:</strong> incluir obrigatoriamente — prevenção de quedas e manutenção funcional.</Row>
+            {age >= 50 && <Row bg="rgba(220,38,38,0.06)"><IcoWarnSm /><strong>50+ anos:</strong> recomendável avaliação médica com ECG de esforço antes de iniciar treinos de alta intensidade.</Row>}
           </>
         )}
 
         {isElderly && (
           <>
-            <Row bg="rgba(220,38,38,0.06)">{SVG_WARN}<strong>HIIT:</strong> avaliar individualmente. Iniciar apenas com aprovação médica e histórico de atividade.</Row>
-            <Row bg="rgba(217,119,6,0.07)">{SVG_WARN}<strong>PSE máx recomendado:</strong> 6/10 — intensidades acima aumentam risco cardiovascular.</Row>
+            <Row bg="rgba(220,38,38,0.06)"><IcoWarnSm /><strong>HIIT:</strong> avaliar individualmente. Iniciar apenas com aprovação médica e histórico de atividade.</Row>
+            <Row bg="rgba(217,119,6,0.07)"><IcoWarnSm /><strong>PSE máx recomendado:</strong> 6/10 — intensidades acima aumentam risco cardiovascular.</Row>
             <Row bg="rgba(217,119,6,0.07)"><strong>4º pilar:</strong> 1 sessão semanal de equilíbrio e mobilidade obrigatória. (Sherrington et al., 2019)</Row>
-            <Row bg="rgba(217,119,6,0.07)">{SVG_BONE}<strong>Sarcopenia:</strong> 2–3x/semana de força é a 1ª linha de prevenção e tratamento. (Hurst et al., 2022)</Row>
-            <Row bg="rgba(217,119,6,0.07)">{SVG_INFO}<strong>Progressão conservadora:</strong> aumentar carga máx 5% por semana. Priorizar funcionalidade sobre performance.</Row>
+            <Row bg="rgba(217,119,6,0.07)"><IcoBoneSm /><strong>Sarcopenia:</strong> 2–3x/semana de força é a 1ª linha de prevenção e tratamento. (Hurst et al., 2022)</Row>
+            <Row bg="rgba(217,119,6,0.07)"><IcoInfoSm /><strong>Progressão conservadora:</strong> aumentar carga máx 5% por semana. Priorizar funcionalidade sobre performance.</Row>
           </>
         )}
 
