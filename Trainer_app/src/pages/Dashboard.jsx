@@ -2338,6 +2338,17 @@ function TabCardio({ students }) {
 }
 
 // ── NovoAlunoModal ─────────────────────────────────────────────────────────
+// ── Sep — separador de seção em formulários ──────────────────────────────────
+function Sep({ title }) {
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:22, marginBottom:4 }}>
+      <div style={{ flex:1, height:1, background:'#E2E8F0' }} />
+      <span style={{ fontSize:10, color:'#94A3B8', fontWeight:700, textTransform:'uppercase', letterSpacing:1.2, whiteSpace:'nowrap' }}>{title}</span>
+      <div style={{ flex:1, height:1, background:'#E2E8F0' }} />
+    </div>
+  )
+}
+
 function NovoAlunoModal({ onSave, onClose, teacherId }) {
   const [form, setForm] = useState({
     name: '', age: '', weight: '', height: '',
@@ -2349,13 +2360,7 @@ function NovoAlunoModal({ onSave, onClose, teacherId }) {
   const f   = (field, val) => setForm(prev => ({ ...prev, [field]: val }))
   const inp = { width: '100%', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '10px 12px', color: '#0D1B2A', fontSize: 14, outline: 'none', boxSizing: 'border-box' }
   const lbl = { fontSize: 11, color: '#64748B', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6, display: 'block', marginTop: 14 }
-  const Sep = ({ title }) => (
-    <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:22, marginBottom:4 }}>
-      <div style={{ flex:1, height:1, background:'#E2E8F0' }} />
-      <span style={{ fontSize:10, color:'#94A3B8', fontWeight:700, textTransform:'uppercase', letterSpacing:1.2, whiteSpace:'nowrap' }}>{title}</span>
-      <div style={{ flex:1, height:1, background:'#E2E8F0' }} />
-    </div>
-  )
+  // Sep defined at module level
 
   // Preview LTAD em tempo real
   const previewAge  = parseInt(form.age) || null
@@ -2391,7 +2396,7 @@ function NovoAlunoModal({ onSave, onClose, teacherId }) {
         <div style={{ fontSize:13, color:'#64748B', marginBottom:20 }}>Preencha os dados do aluno e do responsável</div>
 
         {/* ── Dados pessoais ── */}
-        <Sep title=\"Dados Pessoais\" />
+        <Sep title="Dados Pessoais" />
         <label style={lbl}>Nome completo</label>
         <input style={inp} type="text" placeholder="Ex: João Silva" value={form.name} onChange={e=>f('name',e.target.value)} />
 
@@ -2432,7 +2437,7 @@ function NovoAlunoModal({ onSave, onClose, teacherId }) {
         </select>
 
         {/* ── Esporte ── */}
-        <Sep title=\"Esporte\" />
+        <Sep title="Esporte" />
         <label style={lbl}>Modalidade principal</label>
         <select style={inp} value={form.sport} onChange={e=>f('sport',e.target.value)}>
           <option value="">Selecionar...</option>
@@ -2468,7 +2473,7 @@ function NovoAlunoModal({ onSave, onClose, teacherId }) {
         )}
 
         {/* ── Responsável — apenas para menores de 18 anos ── */}
-        <Sep title=\"Responsável\" />
+        <Sep title="Responsável" />
         <div className="db-grid-2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
           <div>
             <label style={lbl}>Nome do responsável</label>
@@ -2487,7 +2492,7 @@ function NovoAlunoModal({ onSave, onClose, teacherId }) {
         </div>
 
         {/* ── Observações ── */}
-        <Sep title=\"Observações\" />
+        <Sep title="Observações" />
         <label style={lbl}>Lesões, restrições ou observações</label>
         <textarea style={{ ...inp, minHeight:65, resize:'vertical' }} placeholder="Ex: Histórico de entorse no tornozelo direito..." value={form.notes} onChange={e=>f('notes',e.target.value)} />
 
