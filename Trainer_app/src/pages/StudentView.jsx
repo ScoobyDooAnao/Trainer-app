@@ -447,43 +447,7 @@ function TabMetas({ studentId, student, goals, onUpdate }) {
       <ConstellationDisplay goals={concluidas} />
 
       {/* Sugestões rápidas */}
-      {(() => {
-        const jaAdicionadas = goals.map(g=>g.title)
-        const disponiveis = sugestoes.filter(s=>!jaAdicionadas.includes(s.titulo)&&s.titulo!=='Meta personalizada')
-        if (!disponiveis.length) return null
-        return (
-          <div style={{ ...CARD, marginBottom:20 }}>
-            <div style={{ fontSize:10,color:'#A78BFA',fontWeight:800,textTransform:'uppercase',
-              letterSpacing:2,marginBottom:12,fontFamily:"'Nunito',sans-serif" }}>
-              ✦ Sugestões para {student?.goal}
-            </div>
-            <div style={{ display:'flex',flexDirection:'column',gap:6 }}>
-              {disponiveis.slice(0,4).map((s,i) => {
-                const cc = CAT_COLORS[s.categoria]||CAT_COLORS.outro
-                return (
-                  <div key={i} style={{ display:'flex',alignItems:'center',gap:10,padding:'10px 14px',
-                    borderRadius:12,background:cc.bg,border:`1px solid ${cc.border}`,transition:'all 0.15s' }}>
-                    <span style={{ fontSize:18 }}>{s.icon}</span>
-                    <span style={{ fontSize:13,color:'#CBD5E1',fontWeight:600,flex:1,
-                      fontFamily:"'Nunito',sans-serif" }}>{s.titulo}</span>
-                    <button onClick={async(e)=>{
-                      e.currentTarget.disabled = true
-                      const { error } = await supabase.from('student_goals').insert([{
-                        student_id:studentId, title:s.titulo, description:s.desc,
-                        category:s.categoria, target_unit:s.unidade||null, status:'ativa',
-                      }])
-                      if (!error) await onUpdate()
-                      else { alert('Erro ao salvar meta: ' + error.message); e.currentTarget.disabled = false }
-                    }} style={{ width:28,height:28,borderRadius:'50%',border:`1px solid ${cc.border}`,
-                      background:cc.bg,color:cc.text,fontSize:18,fontWeight:800,cursor:'pointer',
-                      display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,lineHeight:1 }}>+</button>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )
-      })()}
+      <SugestoesMetas goals={goals} sugestoes={sugestoes} student={student} onAdd={() => setAddGoalModal(true)} />
 
       {/* Metas ativas */}
       {ativas.length===0 && concluidas.length===0 ? (
@@ -738,61 +702,7 @@ function StudentCardioTab({ studentId, student, sessions, onNewSession }) {
       )}
 
       {/* Gráfico pace — SVG puro (sem dependência) */}
-      {paceData.length >= 2 && (() => {
-        const W = 340, H = 140, PAD = { t:14, r:14, b:30, l:44 }
-        const vals  = paceData.map(d => d.Pace)
-        const minV  = Math.min(...vals), maxV = Math.max(...vals)
-        const range = maxV - minV || 1
-        // pace menor = melhor, eixo Y invertido (melhor no topo)
-        const cx = (i) => PAD.l + (i/(paceData.length-1))*(W-PAD.l-PAD.r)
-        const cy = (v) => PAD.t + ((v-minV)/range)*(H-PAD.t-PAD.b)
-        const pts = paceData.map((d,i) => `${cx(i)},${cy(d.Pace)}`).join(' ')
-        const area = `M${cx(0)},${cy(paceData[0].Pace)} ` +
-          paceData.slice(1).map((d,i)=>`L${cx(i+1)},${cy(d.Pace)}`).join(' ') +
-          ` L${cx(paceData.length-1)},${H-PAD.b} L${cx(0)},${H-PAD.b} Z`
-        return (
-          <div style={{ ...CARD, marginBottom:14 }}>
-            <div style={{ fontSize:13,fontWeight:800,color:'#E2E8F0',marginBottom:10,
-              fontFamily:"'Nunito',sans-serif" }}>🏃 Evolução do Pace</div>
-            <div style={{ overflowX:'auto' }}>
-              <svg width={W} height={H} style={{ display:'block', minWidth: W }}>
-                {/* grid lines */}
-                {[0,.5,1].map(t => {
-                  const y = PAD.t + t*(H-PAD.t-PAD.b)
-                  const labelVal = minV + (1-t)*range
-                  const m=Math.floor(labelVal), s=Math.round((labelVal-m)*60).toString().padStart(2,'0')
-                  return (
-                    <g key={t}>
-                      <line x1={PAD.l} y1={y} x2={W-PAD.r} y2={y} stroke="rgba(255,255,255,0.05)" strokeWidth={1} />
-                      <text x={PAD.l-4} y={y+4} textAnchor="end" fontSize={9} fill="#475569">{m}:{s}</text>
-                    </g>
-                  )
-                })}
-                {/* x axis labels */}
-                {paceData.map((d,i) => (
-                  (i===0 || i===paceData.length-1 || (paceData.length>4 && i===Math.floor(paceData.length/2)))
-                    ? <text key={i} x={cx(i)} y={H-PAD.b+14} textAnchor="middle" fontSize={9} fill="#475569">{d.date}</text>
-                    : null
-                ))}
-                {/* area fill */}
-                <path d={area} fill="rgba(167,139,250,0.08)" />
-                {/* line */}
-                <polyline points={pts} fill="none" stroke="#A78BFA" strokeWidth={2.5}
-                  strokeLinejoin="round" strokeLinecap="round" />
-                {/* dots */}
-                {paceData.map((d,i) => (
-                  <circle key={i} cx={cx(i)} cy={cy(d.Pace)} r={4}
-                    fill="#A78BFA" stroke="#02040F" strokeWidth={2} />
-                ))}
-              </svg>
-            </div>
-            <div style={{ display:'flex',justifyContent:'space-between',fontSize:10,color:'#475569',marginTop:6 }}>
-              <span>⬆ Melhor pace: {(()=>{const m=Math.floor(minV);const s=Math.round((minV-m)*60).toString().padStart(2,'0');return `${m}:${s}/km`})()}</span>
-              <span>Últimas {paceData.length} sessões com distância</span>
-            </div>
-          </div>
-        )
-      })()}
+      {paceData.length >= 2 && <PaceChart paceData={paceData} />}
 
       {/* Filtro */}
       <div style={{ display:'flex',flexWrap:'wrap',gap:6,marginBottom:12 }}>
@@ -1577,6 +1487,90 @@ function SemanaCard({ blocoData, studentId, focoStyle, blocoColorFn, isAtual }) 
           {isAtual ? 'Plano de aula ainda não definido para esta semana' : 'Aguardando planejamento'}
         </div>
       )}
+    </div>
+  )
+}
+
+
+// ── SugestoesMetas ───────────────────────────────────────────────────────────
+function SugestoesMetas({ goals, sugestoes, student, onAdd }) {
+  const jaAdicionadas = (goals||[]).map(g => g.title)
+  const disponiveis   = (sugestoes||[]).filter(s => !jaAdicionadas.includes(s.titulo) && s.titulo !== 'Meta personalizada')
+  if (!disponiveis.length) return null
+  const CAT_C = { forca:'rgba(99,102,241,0.15)', cardio:'rgba(239,68,68,0.15)', mobilidade:'rgba(16,185,129,0.15)', composicao:'rgba(245,158,11,0.15)', outro:'rgba(100,116,139,0.15)' }
+  const CAT_T = { forca:'#818CF8', cardio:'#F87171', mobilidade:'#34D399', composicao:'#FBBF24', outro:'#94A3B8' }
+  return (
+    <div style={{ background:'rgba(167,139,250,0.05)', border:'1px solid rgba(167,139,250,0.15)', borderRadius:14, padding:'14px 16px', marginBottom:20 }}>
+      <div style={{ fontSize:10, color:'#A78BFA', fontWeight:800, textTransform:'uppercase', letterSpacing:2, marginBottom:12 }}>
+        Sugestões para {student?.goal}
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+        {disponiveis.slice(0,4).map((s,i) => {
+          const cc = CAT_C[s.categoria] || CAT_C.outro
+          const ct = CAT_T[s.categoria] || CAT_T.outro
+          return (
+            <div key={i} onClick={onAdd}
+              style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px', borderRadius:10, background:cc, cursor:'pointer' }}>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:12, fontWeight:700, color:ct }}>{s.titulo}</div>
+                {s.descricao && <div style={{ fontSize:10, color:ct, opacity:0.7, marginTop:1 }}>{s.descricao}</div>}
+              </div>
+              <span style={{ fontSize:16, color:ct }}>+</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ── PaceChart ────────────────────────────────────────────────────────────────
+function PaceChart({ paceData }) {
+  if (!paceData || paceData.length < 2) return null
+  const W = 340, H = 140, PAD = { t:14, r:14, b:30, l:44 }
+  const vals  = paceData.map(d => d.Pace)
+  const minV  = Math.min(...vals), maxV = Math.max(...vals)
+  const range = maxV - minV || 1
+  const cx = (i) => PAD.l + (i/(paceData.length-1))*(W-PAD.l-PAD.r)
+  const cy = (v) => PAD.t + ((v-minV)/range)*(H-PAD.t-PAD.b)
+  const pts  = paceData.map((d,i) => cx(i)+','+cy(d.Pace)).join(' ')
+  const area = 'M'+cx(0)+','+cy(paceData[0].Pace)+' '+
+    paceData.slice(1).map((d,i)=>'L'+cx(i+1)+','+cy(d.Pace)).join(' ')+
+    ' L'+cx(paceData.length-1)+','+(H-PAD.b)+' L'+cx(0)+','+(H-PAD.b)+' Z'
+  const bestM = Math.floor(minV)
+  const bestS = Math.round((minV-bestM)*60).toString().padStart(2,'0')
+  return (
+    <div style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:14, padding:'14px 16px', marginBottom:14 }}>
+      <div style={{ fontSize:13, fontWeight:800, color:'#E2E8F0', marginBottom:10 }}>Evolução do Pace</div>
+      <div style={{ overflowX:'auto' }}>
+        <svg width={W} height={H} style={{ display:'block', minWidth:W }}>
+          {[0,.5,1].map(t => {
+            const y = PAD.t + t*(H-PAD.t-PAD.b)
+            const lv = minV + (1-t)*range
+            const m=Math.floor(lv), s=Math.round((lv-m)*60).toString().padStart(2,'0')
+            return (
+              <g key={t}>
+                <line x1={PAD.l} y1={y} x2={W-PAD.r} y2={y} stroke="rgba(255,255,255,0.05)" strokeDasharray="3,3" />
+                <text x={PAD.l-4} y={y+4} textAnchor="end" fontSize={9} fill="#475569">{m}:{s}</text>
+              </g>
+            )
+          })}
+          {paceData.map((d,i) => (
+            (i===0||i===paceData.length-1||(paceData.length>4&&i===Math.floor(paceData.length/2)))
+              ? <text key={i} x={cx(i)} y={H-PAD.b+14} textAnchor="middle" fontSize={9} fill="#475569">{d.date}</text>
+              : null
+          ))}
+          <path d={area} fill="rgba(167,139,250,0.08)" />
+          <polyline points={pts} fill="none" stroke="#A78BFA" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+          {paceData.map((d,i) => (
+            <circle key={i} cx={cx(i)} cy={cy(d.Pace)} r={4} fill="#A78BFA" stroke="#02040F" strokeWidth={2} />
+          ))}
+        </svg>
+      </div>
+      <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:'#475569', marginTop:6 }}>
+        <span>Melhor pace: {bestM}:{bestS}/km</span>
+        <span>Últimas {paceData.length} sessões com distância</span>
+      </div>
     </div>
   )
 }
