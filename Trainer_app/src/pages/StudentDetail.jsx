@@ -1453,23 +1453,28 @@ function TgmdDeltaRow({ history }) {
 }
 
 // ── EditFormFields — form de edição do perfil do aluno ───────────────────────
-function EditFormFields({ form, setForm }) {
-  const f   = (field, val) => setForm(prev => ({ ...prev, [field]: val }))
-  const inp = { width:'100%', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'10px 12px', color:'#E2E8F0', fontSize:13, outline:'none', boxSizing:'border-box' }
-  const lbl = { fontSize:10, color:'#64748B', marginBottom:4, textTransform:'uppercase', letterSpacing:1, fontWeight:700, display:'block', marginTop:12 }
-  const Sep = ({ title }) => (
+// ── SepDark — separador dark para formulário de edição ───────────────────────
+function SepDark({ title }) {
+  return (
     <div style={{ gridColumn:'1/-1', display:'flex', alignItems:'center', gap:10, marginTop:16, marginBottom:4 }}>
       <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.08)' }} />
       <span style={{ fontSize:10, color:'#475569', fontWeight:700, textTransform:'uppercase', letterSpacing:1.2, whiteSpace:'nowrap' }}>{title}</span>
       <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.08)' }} />
     </div>
   )
+}
+
+function EditFormFields({ form, setForm }) {
+  const f   = (field, val) => setForm(prev => ({ ...prev, [field]: val }))
+  const inp = { width:'100%', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'10px 12px', color:'#E2E8F0', fontSize:13, outline:'none', boxSizing:'border-box' }
+  const lbl = { fontSize:10, color:'#64748B', marginBottom:4, textTransform:'uppercase', letterSpacing:1, fontWeight:700, display:'block', marginTop:12 }
+  // Sep defined at module level
   const editAge  = parseInt(form.age) || null
   const editLTAD = calcLTAD(editAge, parseInt(form.experience_years) || 0, form.sport)
 
   return (
     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-      <Sep title=\"Dados Pessoais\" />
+      <SepDark title="Dados Pessoais" />
       <div style={{ gridColumn:'1/-1' }}>
         <label style={lbl}>Nome</label>
         <input style={inp} value={form.name||''} onChange={e=>f('name',e.target.value)} />
@@ -1511,7 +1516,7 @@ function EditFormFields({ form, setForm }) {
         </select>
       </div>
 
-      <Sep title=\"Esporte\" />
+      <SepDark title="Esporte" />
       <div style={{ gridColumn:'1/-1' }}>
         <label style={lbl}>Modalidade</label>
         <select style={inp} value={form.sport||''} onChange={e=>f('sport',e.target.value)}>
@@ -1534,7 +1539,7 @@ function EditFormFields({ form, setForm }) {
         </div>
       )}
 
-      <Sep title=\"Responsável\" />
+      <SepDark title="Responsável" />
       <div>
         <label style={lbl}>Nome do responsável</label>
         <input style={inp} placeholder="Ex: Maria Silva" value={form.guardian_name||''} onChange={e=>f('guardian_name',e.target.value)} />
@@ -1544,7 +1549,7 @@ function EditFormFields({ form, setForm }) {
         <input style={inp} placeholder="(41) 99999-9999" value={form.guardian_phone||''} onChange={e=>f('guardian_phone',e.target.value)} />
       </div>
 
-      <Sep title=\"Maturação (PHV)\" />
+      <SepDark title="Maturação (PHV)" />
       <div>
         <label style={lbl}>Altura pai (cm)</label>
         <input style={inp} type="number" placeholder="Ex: 178" value={form.parent_height_father||''} onChange={e=>f('parent_height_father',e.target.value)} />
@@ -1554,7 +1559,7 @@ function EditFormFields({ form, setForm }) {
         <input style={inp} type="number" placeholder="Ex: 165" value={form.parent_height_mother||''} onChange={e=>f('parent_height_mother',e.target.value)} />
       </div>
 
-      <Sep title=\"Observações\" />
+      <SepDark title="Observações" />
       <div style={{ gridColumn:'1/-1' }}>
         <label style={lbl}>Lesões, restrições, notas</label>
         <textarea style={{ ...inp, minHeight:65, resize:'vertical', fontFamily:'inherit' }}
