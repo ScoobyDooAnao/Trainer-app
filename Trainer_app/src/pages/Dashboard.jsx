@@ -1600,14 +1600,16 @@ function FaixaEtariaCardio({ age, isChild, isAdolesc, isAdultYoung, isAdult, isA
   )
 }
 
+const IcoWarn = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+const IcoOk   = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+const IcoFire = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M13.5 0.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z"/></svg>
+
 // ── AlertasCarga — componente separado para evitar IIFE com JSX ──────────────
 function AlertasCarga({ sessions, overtraining, metabAlert, avgPse2w, thisWeekMin, thisWeekCount, volLabel, volSub, volColor, volBg }) {
   const pse2wBar   = avgPse2w ? Math.round((avgPse2w / 10) * 100) : 0
   const pse2wColor = !avgPse2w ? '#94A3B8' : avgPse2w <= 5 ? '#16A34A' : avgPse2w <= 7 ? '#D97706' : '#DC2626'
 
-  const IcoWarn = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
-  const IcoOk   = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-  const IcoFire = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M13.5 0.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z"/></svg>
+
 
   return (
     <div style={{ ...GLASS_CARD, marginBottom: 0, border: '1.5px solid rgba(12,74,110,0.12)', boxShadow: '0 4px 20px rgba(12,74,110,0.08)' }}>
