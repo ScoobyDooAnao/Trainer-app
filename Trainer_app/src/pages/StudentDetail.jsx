@@ -1716,7 +1716,17 @@ export default function StudentDetail({ navigate, studentId }) {
           </div>
 
           {editing ? (
-            <EditFormFields form={form} setForm={setForm} student={student} />
+            <>
+              <EditFormFields form={form} setForm={setForm} student={student} />
+              <div style={{ display:'flex', gap:8, marginTop:16 }}>
+                <button onClick={saveStudent} disabled={saving} style={{ flex:1, padding:'13px', borderRadius:12, border:'none', background:'linear-gradient(135deg,#34D399,#059669)', color:'#022c22', fontWeight:800, fontSize:14, cursor:'pointer' }}>
+                  {saving ? 'Salvando...' : '✓ Salvar Alterações'}
+                </button>
+                <button onClick={() => setEditing(false)} style={{ padding:'13px 18px', borderRadius:12, border:'1px solid rgba(255,255,255,0.1)', background:'transparent', color:'#64748B', fontWeight:600, fontSize:13, cursor:'pointer' }}>
+                  Cancelar
+                </button>
+              </div>
+            </>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
               {[['Idade', `${student.age || '—'} anos`], ['Peso', `${student.weight || '—'} kg`], ['Altura', `${student.height || '—'} cm`], ['IMC', imc]].map(([l, v]) => (
