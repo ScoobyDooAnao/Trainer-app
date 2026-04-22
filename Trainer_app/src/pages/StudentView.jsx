@@ -1575,6 +1575,280 @@ function PaceChart({ paceData }) {
   )
 }
 
+
+// ── ProgressChart — gráfico SVG de evolução de peso/medidas ──────────────────
+function ProgressChart({ progress }) {
+  const [metric, setMetric] = React.useState('weight')
+
+  const METRICS = [
+    { id:'weight', label:'Peso', unit:'kg', color:'#34D399' },
+    { id:'waist',  label:'Cintura', unit:'cm', color:'#60A5FA' },
+    { id:'chest',  label:'Peito', unit:'cm', color:'#F59E0B' },
+    { id:'hip',    label:'Quadril', unit:'cm', color:'#A78BFA' },
+    { id:'thigh',  label:'Coxa', unit:'cm', color:'#F87171' },
+  ]
+
+  // Build data series from progress entries (oldest first for chart)
+  const sorted = [...progress].reverse()
+  const cur = METRICS.find(m => m.id === metric)
+
+  const getData = (p) => {
+    if (metric === 'weight') return p.weight ? +p.weight : null
+    const m = p.measurements || {}
+    const v = m[metric] || p[metric]
+    return v ? +v : null
+  }
+
+  const points = sorted.map(p => ({ date: p.date, val: getData(p) })).filter(p => p.val !== null)
+
+  if (points.length < 2) return (
+    <div style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:14, padding:'20px 16px', marginBottom:14, textAlign:'center' }}>
+      <div style={{ fontSize:12, color:'#334155' }}>Registre pelo menos 2 medições para ver o gráfico de evolução.</div>
+    </div>
+  )
+
+  const W = 340, H = 120, PAD = { t:12, r:16, b:28, l:40 }
+  const vals  = points.map(p => p.val)
+  const minV  = Math.min(...vals), maxV = Math.max(...vals)
+  const range = maxV - minV || 1
+  const cx = (i) => PAD.l + (i / (points.length - 1)) * (W - PAD.l - PAD.r)
+  const cy = (v) => PAD.t + (1 - (v - minV) / range) * (H - PAD.t - PAD.b)
+  const pts = points.map((p, i) => cx(i) + ',' + cy(p.val)).join(' ')
+  const area = 'M' + cx(0) + ',' + cy(points[0].val) + ' ' +
+    points.slice(1).map((p, i) => 'L' + cx(i + 1) + ',' + cy(p.val)).join(' ') +
+    ' L' + cx(points.length - 1) + ',' + (H - PAD.b) + ' L' + cx(0) + ',' + (H - PAD.b) + ' Z'
+
+  const first = points[0].val, last = points[points.length - 1].val
+  const delta = +(last - first).toFixed(1)
+  const improving = metric === 'weight' ? delta <= 0 : delta >= 0
+  const deltaColor = delta === 0 ? '#94A3B8' : improving ? '#34D399' : '#F87171'
+  const fmtDate = (d) => { const [,m,day] = d.split('-'); return day + '/' + m }
+
+  return (
+    <div style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:14, padding:'14px 16px', marginBottom:14 }}>
+      {/* Metric selector */}
+      <div style={{ display:'flex', gap:6, marginBottom:12, flexWrap:'wrap' }}>
+        {METRICS.map(m => (
+          <button key={m.id} onClick={() => setMetric(m.id)}
+            style={{ padding:'4px 10px', borderRadius:20, fontSize:10, fontWeight:700, cursor:'pointer', border:'1px solid ' + (metric===m.id ? m.color : 'rgba(255,255,255,0.08)'), background: metric===m.id ? m.color+'20' : 'transparent', color: metric===m.id ? m.color : '#475569', transition:'all 0.15s' }}>
+            {m.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Delta summary */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:'#E2E8F0' }}>{cur.label}</div>
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <span style={{ fontSize:18, fontWeight:900, color:cur.color }}>{last}{cur.unit}</span>
+          <span style={{ fontSize:11, fontWeight:700, color:deltaColor, background:deltaColor+'18', padding:'2px 8px', borderRadius:20 }}>
+            {delta > 0 ? '+' : ''}{delta} {cur.unit}
+          </span>
+        </div>
+      </div>
+
+      {/* SVG Chart */}
+      <div style={{ overflowX:'auto' }}>
+        <svg width={W} height={H} style={{ display:'block', minWidth:W }}>
+          {[0, 0.5, 1].map(t => {
+            const y = PAD.t + t * (H - PAD.t - PAD.b)
+            const v = (maxV - t * range).toFixed(1)
+            return (
+              <g key={t}>
+                <line x1={PAD.l} y1={y} x2={W - PAD.r} y2={y} stroke="rgba(255,255,255,0.04)" />
+                <text x={PAD.l - 4} y={y + 4} textAnchor="end" fontSize={8} fill="#334155">{v}</text>
+              </g>
+            )
+          })}
+          {points.map((p, i) => (
+            (i === 0 || i === points.length - 1 || (points.length > 4 && i === Math.floor(points.length / 2)))
+              ? <text key={i} x={cx(i)} y={H - PAD.b + 14} textAnchor="middle" fontSize={8} fill="#334155">{fmtDate(p.date)}</text>
+              : null
+          ))}
+          <path d={area} fill={cur.color + '12'} />
+          <polyline points={pts} fill="none" stroke={cur.color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+          {points.map((p, i) => (
+            <circle key={i} cx={cx(i)} cy={cy(p.val)} r={i === points.length - 1 ? 5 : 3.5}
+              fill={cur.color} stroke="#02040F" strokeWidth={2} />
+          ))}
+        </svg>
+      </div>
+      <div style={{ fontSize:10, color:'#334155', marginTop:6 }}>
+        {points.length} registros · {fmtDate(points[0].date)} → {fmtDate(points[points.length-1].date)}
+      </div>
+    </div>
+  )
+}
+
+
+// ── WorkoutCarousel — carrossel semanal de treinos ───────────────────────────
+function WorkoutCarousel({ days, activePlan, confirmedToday, confirming, confirmWorkout, missedDays, showMakeup, setShowMakeup, studentId, isMobile }) {
+  const DIAS_SEMANA = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
+  const DAY_COLORS = ['#60A5FA','#34D399','#F59E0B','#A78BFA','#F87171','#38BDF8','#FB923C']
+
+  // Build full week: 7 slots, today highlighted
+  const todayJS  = new Date().getDay() // 0=Dom
+  const todayDia = DIAS_SEMANA[todayJS]
+
+  // Map workout days by day_of_week
+  const dayMap = {}
+  ;(days || []).forEach(d => { if (d.day_of_week) dayMap[d.day_of_week] = d })
+
+  // Build ordered week starting from today
+  const weekSlots = DIAS_SEMANA.map((dia, jsIdx) => {
+    const workout = dayMap[dia] || null
+    const isToday = jsIdx === todayJS
+    const diff    = (jsIdx - todayJS + 7) % 7
+    return { dia, jsIdx, workout, isToday, diff }
+  }).sort((a, b) => a.diff - b.diff) // today first
+
+  const [carouselIdx, setCarouselIdx] = React.useState(0)
+  const slot = weekSlots[carouselIdx]
+  const workout = slot?.workout
+  const color   = workout ? DAY_COLORS[days.findIndex(d => d.id === workout.id) % DAY_COLORS.length] : '#475569'
+  const isToday = slot?.isToday
+
+  const prev = () => setCarouselIdx(i => (i - 1 + 7) % 7)
+  const next = () => setCarouselIdx(i => (i + 1) % 7)
+
+  // Touch swipe
+  const touchStart = React.useRef(null)
+  const onTouchStart = (e) => { touchStart.current = e.touches[0].clientX }
+  const onTouchEnd   = (e) => {
+    if (!touchStart.current) return
+    const diff = touchStart.current - e.changedTouches[0].clientX
+    if (Math.abs(diff) > 40) diff > 0 ? next() : prev()
+    touchStart.current = null
+  }
+
+  return (
+    <div>
+      {/* Day indicators row */}
+      <div style={{ display:'flex', gap:4, marginBottom:14, justifyContent:'center' }}>
+        {weekSlots.map((s, i) => {
+          const isActive = i === carouselIdx
+          const hasWorkout = !!s.workout
+          const dotColor = hasWorkout ? DAY_COLORS[days.findIndex(d => d.id === s.workout?.id) % DAY_COLORS.length] : '#1E293B'
+          return (
+            <button key={s.dia} onClick={() => setCarouselIdx(i)}
+              style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3, padding:'6px 8px', borderRadius:10, border: isActive ? '1.5px solid ' + (hasWorkout ? dotColor : '#475569') : '1.5px solid transparent', background: isActive ? (hasWorkout ? dotColor+'18' : 'rgba(255,255,255,0.05)') : 'transparent', cursor:'pointer', transition:'all 0.2s', minWidth:36 }}>
+              <div style={{ fontSize:9, fontWeight:700, color: isActive ? (hasWorkout ? dotColor : '#E2E8F0') : '#334155', textTransform:'uppercase' }}>{s.dia}</div>
+              <div style={{ width:6, height:6, borderRadius:'50%', background: hasWorkout ? dotColor : '#1E293B', border:'1px solid ' + (hasWorkout ? dotColor+'60' : '#334155'), boxShadow: s.isToday ? '0 0 6px ' + (hasWorkout ? dotColor : '#475569') : 'none' }} />
+              {s.isToday && <div style={{ fontSize:7, color: hasWorkout ? dotColor : '#475569', fontWeight:800 }}>HOJE</div>}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Main card */}
+      <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}
+        style={{ position:'relative', background:'#0D1117', borderRadius:18, overflow:'hidden', border:'1px solid ' + (isToday ? color : 'rgba(255,255,255,0.06)'), boxShadow: isToday ? '0 0 0 1px ' + color + '40' : 'none', transition:'all 0.3s', minHeight:200 }}>
+
+        {/* Header */}
+        <div style={{ background: color + (isToday ? '18' : '0A'), padding:'14px 16px', borderBottom:'1px solid ' + color + '20', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            {isToday && <div style={{ width:8, height:8, borderRadius:'50%', background:color, boxShadow:'0 0 8px ' + color, flexShrink:0 }} />}
+            <div>
+              <div style={{ fontSize:15, fontWeight:800, color: workout ? color : '#475569' }}>
+                {slot.dia}{isToday ? ' — Hoje' : slot.diff === 1 ? ' — Amanhã' : ''}
+              </div>
+              {workout && <div style={{ fontSize:11, color:'#475569', marginTop:1 }}>{workout.focus || workout.name}</div>}
+            </div>
+          </div>
+          <div style={{ display:'flex', gap:6 }}>
+            <button onClick={prev} style={{ width:32, height:32, borderRadius:'50%', border:'1px solid rgba(255,255,255,0.08)', background:'rgba(255,255,255,0.04)', color:'#475569', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>‹</button>
+            <button onClick={next} style={{ width:32, height:32, borderRadius:'50%', border:'1px solid rgba(255,255,255,0.08)', background:'rgba(255,255,255,0.04)', color:'#475569', cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>›</button>
+          </div>
+        </div>
+
+        {/* Content */}
+        {!workout ? (
+          <div style={{ padding:'32px 20px', textAlign:'center' }}>
+            <div style={{ fontSize:32, marginBottom:10 }}>{isToday ? '🌙' : '—'}</div>
+            <div style={{ fontSize:14, fontWeight:700, color:'#334155' }}>
+              {isToday ? 'Dia de Descanso' : 'Dia de Descanso'}
+            </div>
+            <div style={{ fontSize:11, color:'#1E293B', marginTop:4 }}>Recuperação é parte do treino</div>
+          </div>
+        ) : workout.exercises && workout.exercises.length === 0 ? (
+          <div style={{ padding:'32px 20px', textAlign:'center' }}>
+            <div style={{ fontSize:28, marginBottom:10 }}>📋</div>
+            <div style={{ fontSize:14, fontWeight:700, color:'#334155' }}>Ainda em Planejamento</div>
+            <div style={{ fontSize:11, color:'#1E293B', marginTop:4 }}>Seu professor ainda está montando este treino</div>
+          </div>
+        ) : (
+          <div>
+            {/* Column headers desktop */}
+            {!isMobile && (
+              <div style={{ display:'grid', gridTemplateColumns:'2fr 0.5fr 0.7fr 0.6fr', gap:8, padding:'8px 16px', borderBottom:'1px solid rgba(255,255,255,0.04)' }}>
+                {['Exercício','Séries','Reps','Descanso'].map(h => (
+                  <div key={h} style={{ fontSize:9, color:'#334155', textTransform:'uppercase', letterSpacing:1 }}>{h}</div>
+                ))}
+              </div>
+            )}
+            {workout.exercises.map(ex => (
+              <ExerciseLogRow key={ex.id} ex={ex} studentId={studentId} dayColor={color} isMobile={isMobile} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Confirm button — only for today's workout */}
+      {isToday && workout && (
+        <div style={{ marginTop:14 }}>
+          {confirmedToday ? (
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, padding:'16px', borderRadius:14, background:'rgba(52,211,153,0.1)', border:'1px solid rgba(52,211,153,0.25)' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="#34D399"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+              <span style={{ fontSize:15, fontWeight:700, color:'#34D399' }}>Treino confirmado hoje!</span>
+            </div>
+          ) : (
+            <button onClick={() => confirmWorkout()} disabled={confirming}
+              style={{ width:'100%', padding:'16px', borderRadius:14, border:'none', cursor: confirming ? 'not-allowed' : 'pointer', background: confirming ? 'rgba(52,211,153,0.3)' : 'linear-gradient(135deg,#34D399,#059669)', color:'#022c22', fontWeight:800, fontSize:15, boxShadow: confirming ? 'none' : '0 4px 20px rgba(52,211,153,0.4)', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+              {confirming ? 'Confirmando...' : 'Confirmar Treino de Hoje'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Missed days */}
+      {missedDays.length > 0 && (
+        <div style={{ marginTop:10 }}>
+          <button onClick={() => setShowMakeup(v => !v)}
+            style={{ width:'100%', padding:'11px', borderRadius:12, border:'1px solid rgba(251,191,36,0.35)', background: showMakeup ? 'rgba(251,191,36,0.15)' : 'rgba(251,191,36,0.07)', color:'#D97706', fontWeight:700, fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+            {missedDays.length} treino{missedDays.length > 1 ? 's' : ''} perdido{missedDays.length > 1 ? 's' : ''} esta semana — fazer agora?
+          </button>
+          {showMakeup && (
+            <div style={{ marginTop:8, background:'rgba(251,191,36,0.06)', border:'1px solid rgba(251,191,36,0.2)', borderRadius:14, padding:'12px 14px' }}>
+              <div style={{ fontSize:11, color:'#92400E', fontWeight:700, marginBottom:8, textAlign:'center' }}>Selecione o treino para recuperar</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                {missedDays.map(missed => (
+                  <button key={missed.id} onClick={() => confirmWorkout(missed)} disabled={confirming}
+                    style={{ padding:'11px 14px', borderRadius:12, border:'1px solid rgba(251,191,36,0.4)', background:'rgba(255,255,255,0.04)', cursor:'pointer', textAlign:'left', display:'flex', alignItems:'center', gap:10 }}>
+                    <div style={{ width:34, height:34, borderRadius:9, background:'linear-gradient(135deg,#F5C842,#D97706)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                      <span style={{ fontSize:10, fontWeight:900, color:'#431C00' }}>{missed.dia}</span>
+                    </div>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:12, fontWeight:700, color:'#431C00' }}>{missed.name}</div>
+                      {missed.focus && <div style={{ fontSize:10, color:'#92400E' }}>{missed.focus}</div>}
+                    </div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="#D97706"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Swipe hint */}
+      <div style={{ textAlign:'center', marginTop:10, fontSize:10, color:'#1E293B' }}>
+        {isMobile ? 'Deslize para ver outros dias' : 'Use ‹ › para navegar entre os dias'}
+      </div>
+    </div>
+  )
+}
+
 export default function StudentView({ studentId }) {
   const isMobile = useIsMobile()
   const [student,    setStudent]    = useState(null)
@@ -1797,160 +2071,24 @@ export default function StudentView({ studentId }) {
         {/* ── ABA TREINO ── */}
         {tab === 'treino' && (
           <>
-            {!activePlan || days.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '50px 20px', color: '#334155' }}>
-                <div style={{ fontSize: 44, marginBottom: 12 }}>🏋️</div>
-                <div style={{ fontSize: 15, lineHeight: 1.6 }}>Nenhum treino ativo.<br/>Aguarde seu professor configurar seu plano.</div>
+            {!activePlan ? (
+              <div style={{ textAlign:'center', padding:'50px 20px', color:'#334155' }}>
+                <div style={{ fontSize:44, marginBottom:12 }}>🏋️</div>
+                <div style={{ fontSize:15, lineHeight:1.6 }}>Nenhum treino ativo.<br/>Aguarde seu professor configurar seu plano.</div>
               </div>
             ) : (
-              <>
-                {/* ── Seletor de dias ── */}
-                {isMobile ? (
-                  /* Mobile: scroll horizontal, botões maiores */
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 16, overflowX: 'auto', paddingBottom: 4, WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
-                    {days.map((d, i) => {
-                      const c = DAY_COLORS[i % DAY_COLORS.length]
-                      return (
-                        <button key={d.id} onClick={() => setActiveDay(i)} style={{
-                          flexShrink: 0, minWidth: 72, padding: '12px 10px', borderRadius: 14,
-                          border: activeDay === i ? `2px solid ${c}` : '1px solid rgba(255,255,255,0.08)',
-                          background: activeDay === i ? `${c}22` : 'rgba(255,255,255,0.03)',
-                          color: activeDay === i ? c : '#475569', fontWeight: 800, fontSize: 13, cursor: 'pointer',
-                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-                        }}>
-                          <span>{d.name}</span>
-                          {d.day_of_week && <span style={{ fontSize: 10, fontWeight: 500, opacity: 0.7 }}>{d.day_of_week}</span>}
-                        </button>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  /* Desktop: flex wrap */
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-                    {days.map((d, i) => {
-                      const c = DAY_COLORS[i % DAY_COLORS.length]
-                      return (
-                        <button key={d.id} onClick={() => setActiveDay(i)} style={{
-                          flex: 1, minWidth: 70, padding: '12px 8px', borderRadius: 12,
-                          border: activeDay === i ? `2px solid ${c}` : '1px solid rgba(255,255,255,0.08)',
-                          background: activeDay === i ? `${c}18` : 'rgba(255,255,255,0.03)',
-                          color: activeDay === i ? c : '#475569', fontWeight: 800, fontSize: 13, cursor: 'pointer',
-                        }}>
-                          {d.name}
-                          {d.day_of_week && <div style={{ fontSize: 9, marginTop: 2, fontWeight: 500 }}>{d.day_of_week}</div>}
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-
-                {/* ── Card do dia ── */}
-                {day && (
-                  <div style={{ background: '#0D1117', borderRadius: 16, overflow: 'hidden', border: `1px solid ${color}30` }}>
-                    {/* Header do dia */}
-                    <div style={{ background: `${color}12`, padding: isMobile ? '14px 16px' : '16px 20px', borderBottom: `1px solid ${color}25` }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, boxShadow: `0 0 8px ${color}`, flexShrink: 0 }} />
-                        <span style={{ fontWeight: 700, color, fontSize: isMobile ? 15 : 16 }}>{day.name}</span>
-                        {day.focus && <span style={{ fontSize: 12, color: '#475569' }}>— {day.focus}</span>}
-                      </div>
-                      <div style={{ fontSize: 11, color: '#334155', marginTop: 6 }}>
-                        ⚖️ Toque em <strong style={{ color: '#64748B' }}>Registrar carga</strong> para anotar o peso usado
-                      </div>
-                    </div>
-
-                    {/* Cabeçalho de colunas — só no desktop */}
-                    {!isMobile && (
-                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 0.5fr 0.7fr 0.6fr', gap: 8, padding: '10px 20px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                        {['Exercício', 'Séries', 'Reps', 'Descanso'].map(h => (
-                          <div key={h} style={{ fontSize: 9, color: '#334155', textTransform: 'uppercase', letterSpacing: 1 }}>{h}</div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Lista de exercícios */}
-                    {day.exercises.length === 0 ? (
-                      <div style={{ padding: 30, textAlign: 'center', color: '#334155', fontSize: 13 }}>Nenhum exercício neste dia ainda.</div>
-                    ) : (
-                      day.exercises.map(ex => (
-                        <ExerciseLogRow key={ex.id} ex={ex} studentId={studentId} dayColor={color} isMobile={isMobile} />
-                      ))
-                    )}
-
-                  </div>
-                )}
-
-                {/* ── Confirmar treino ── */}
-                <div style={{ marginTop: 16 }}>
-                  {confirmedToday ? (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '16px', borderRadius: 14, background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.25)' }}>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="#34D399"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-                      <span style={{ fontSize: 15, fontWeight: 700, color: '#34D399' }}>Treino confirmado hoje!</span>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => confirmWorkout()}
-                      disabled={confirming}
-                      style={{
-                        width: '100%', padding: '18px', borderRadius: 14, border: 'none',
-                        cursor: confirming ? 'not-allowed' : 'pointer',
-                        background: confirming ? 'rgba(52,211,153,0.3)' : 'linear-gradient(135deg,#34D399,#059669)',
-                        color: '#022c22', fontWeight: 800, fontSize: 16,
-                        boxShadow: confirming ? 'none' : '0 4px 24px rgba(52,211,153,0.4)',
-                        transition: 'all 0.2s',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                      }}>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-                      {confirming ? 'Confirmando...' : 'Confirmar Treino de Hoje'}
-                    </button>
-                  )}
-
-                  {/* ── Treinos perdidos desta semana ── */}
-                  {missedDays.length > 0 && (
-                    <div style={{ marginTop: 12 }}>
-                      <button
-                        onClick={() => setShowMakeup(v => !v)}
-                        style={{ width: '100%', padding: '13px', borderRadius: 12, border: '1px solid rgba(251,191,36,0.35)', background: showMakeup ? 'rgba(251,191,36,0.15)' : 'rgba(251,191,36,0.07)', color: '#D97706', fontWeight: 700, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'all 0.2s' }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
-                        {missedDays.length} treino{missedDays.length > 1 ? 's' : ''} perdido{missedDays.length > 1 ? 's' : ''} esta semana
-                        <span style={{ fontSize: 11, fontWeight: 400, opacity: 0.8 }}>— fazer agora?</span>
-                      </button>
-
-                      {showMakeup && (
-                        <div style={{ marginTop: 8, background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: 14, padding: '14px 16px' }}>
-                          <div style={{ fontSize: 12, color: '#92400E', fontWeight: 700, marginBottom: 10, textAlign: 'center' }}>
-                            Selecione o treino que quer recuperar hoje
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            {missedDays.map(missed => (
-                              <button
-                                key={missed.id}
-                                onClick={() => confirmWorkout(missed)}
-                                disabled={confirming}
-                                style={{ padding: '13px 16px', borderRadius: 12, border: '1px solid rgba(251,191,36,0.4)', background: 'rgba(255,255,255,0.6)', cursor: 'pointer', textAlign: 'left', transition: 'all 0.18s', display: 'flex', alignItems: 'center', gap: 12 }}>
-                                <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg,#F5C842,#D97706)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                  <span style={{ fontSize: 11, fontWeight: 900, color: '#431C00' }}>{missed.dia}</span>
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ fontSize: 13, fontWeight: 700, color: '#431C00' }}>{missed.name}</div>
-                                  {missed.focus && <div style={{ fontSize: 11, color: '#92400E', marginTop: 1 }}>{missed.focus}</div>}
-                                  <div style={{ fontSize: 10, color: '#92400E', opacity: 0.7, marginTop: 2 }}>
-                                    Treino de {missed.dia} — feito hoje como recuperação
-                                  </div>
-                                </div>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="#D97706"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-                              </button>
-                            ))}
-                          </div>
-                          <div style={{ fontSize: 10, color: '#92400E', opacity: 0.6, textAlign: 'center', marginTop: 10, lineHeight: 1.5 }}>
-                            O treino será registrado como feito hoje.<br/>O cronograma vai mostrar que foi recuperado.
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </>
+              <WorkoutCarousel
+                days={days}
+                activePlan={activePlan}
+                confirmedToday={confirmedToday}
+                confirming={confirming}
+                confirmWorkout={confirmWorkout}
+                missedDays={missedDays}
+                showMakeup={showMakeup}
+                setShowMakeup={setShowMakeup}
+                studentId={studentId}
+                isMobile={isMobile}
+              />
             )}
           </>
         )}
@@ -2021,7 +2159,9 @@ export default function StudentView({ studentId }) {
                 </div>
               </div>
             ) : (
-              progress.map((p, i) => {
+              <>
+                <ProgressChart progress={progress} />
+              {progress.map((p, i) => {
                 const m = p.measurements || {}
                 const itens = [
                   { label:'Peso',        val: p.weight            ? `${p.weight} kg`    : null },
@@ -2055,7 +2195,8 @@ export default function StudentView({ studentId }) {
                     )}
                   </div>
                 )
-              })
+              })}
+            </>
             )}
           </div>
         )}
