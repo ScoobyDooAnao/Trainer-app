@@ -2161,42 +2161,42 @@ export default function StudentView({ studentId }) {
             ) : (
               <>
                 <ProgressChart progress={progress} />
-              {progress.map((p, i) => {
-                const m = p.measurements || {}
-                const itens = [
-                  { label:'Peso',        val: p.weight            ? `${p.weight} kg`    : null },
-                  { label:'Cintura',     val: m.waist || p.waist  ? `${m.waist  || p.waist} cm`  : null },
-                  { label:'Quadril',     val: m.hip   || p.hip    ? `${m.hip    || p.hip} cm`    : null },
-                  { label:'Peito',       val: m.chest || p.chest  ? `${m.chest  || p.chest} cm`  : null },
-                  { label:'Braço',       val: m.arm               ? `${m.arm} cm`       : null },
-                  { label:'Coxa',        val: m.thigh || p.thigh  ? `${m.thigh  || p.thigh} cm`  : null },
-                  { label:'Panturrilha', val: m.calf              ? `${m.calf} cm`      : null },
-                ].filter(x => x.val)
-                return (
-                  <div key={p.id} style={{ ...CARD, marginBottom:10 }}>
-                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:8 }}>
-                      <div style={{ fontSize:13, color:'#34D399', fontWeight:700 }}>
-                        {new Date(p.date + 'T12:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' })}
-                      </div>
-                      {i === 0 && <span style={{ fontSize:10, background:'#34D39918', color:'#34D399', padding:'2px 10px', borderRadius:20, border:'1px solid #34D39930' }}>Mais recente</span>}
-                    </div>
-                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px 16px' }}>
-                      {itens.map(it => (
-                        <div key={it.label} style={{ background:'rgba(255,255,255,0.03)', borderRadius:10, padding:'10px 12px' }}>
-                          <div style={{ fontSize:9, color:'#475569', textTransform:'uppercase', letterSpacing:0.8, marginBottom:3 }}>{it.label}</div>
-                          <div style={{ fontSize:16, fontWeight:800, color:'#E2E8F0' }}>{it.val}</div>
+                {progress.map((p, i) => {
+                  const m = p.measurements || {}
+                  const itens = [
+                    { label:'Peso',        val: p.weight           ? p.weight + ' kg'              : null },
+                    { label:'Cintura',     val: m.waist || p.waist ? (m.waist || p.waist) + ' cm'  : null },
+                    { label:'Quadril',     val: m.hip   || p.hip   ? (m.hip   || p.hip)   + ' cm'  : null },
+                    { label:'Peito',       val: m.chest || p.chest ? (m.chest || p.chest) + ' cm'  : null },
+                    { label:'Braço',       val: m.arm              ? m.arm   + ' cm'               : null },
+                    { label:'Coxa',        val: m.thigh || p.thigh ? (m.thigh || p.thigh) + ' cm'  : null },
+                    { label:'Panturrilha', val: m.calf             ? m.calf  + ' cm'               : null },
+                  ].filter(x => x.val)
+                  return (
+                    <div key={p.id} style={{ ...CARD, marginBottom:10 }}>
+                      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:8 }}>
+                        <div style={{ fontSize:13, color:'#34D399', fontWeight:700 }}>
+                          {new Date(p.date + 'T12:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' })}
                         </div>
-                      ))}
-                    </div>
-                    {p.notes && (
-                      <div style={{ fontSize:12, color:'#64748B', marginTop:10, borderTop:'1px solid rgba(255,255,255,0.05)', paddingTop:8 }}>
-                        📝 {p.notes}
+                        {i === 0 && <span style={{ fontSize:10, background:'#34D39918', color:'#34D399', padding:'2px 10px', borderRadius:20, border:'1px solid #34D39930' }}>Mais recente</span>}
                       </div>
-                    )}
-                  </div>
-                )
-              })}
-            </>
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px 16px' }}>
+                        {itens.map(it => (
+                          <div key={it.label} style={{ background:'rgba(255,255,255,0.03)', borderRadius:10, padding:'10px 12px' }}>
+                            <div style={{ fontSize:9, color:'#475569', textTransform:'uppercase', letterSpacing:0.8, marginBottom:3 }}>{it.label}</div>
+                            <div style={{ fontSize:16, fontWeight:800, color:'#E2E8F0' }}>{it.val}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {p.notes && (
+                        <div style={{ fontSize:12, color:'#64748B', marginTop:10, borderTop:'1px solid rgba(255,255,255,0.05)', paddingTop:8 }}>
+                          {p.notes}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </>
             )}
           </div>
         )}
