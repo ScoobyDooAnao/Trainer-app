@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
-import TabEscolinha from './TabEscolinha'
-const useIsMobile = () => { const [m,setM]=useState(()=>window.innerWidth<768); useEffect(()=>{const h=()=>setM(window.innerWidth<768);window.addEventListener('resize',h);return()=>window.removeEventListener('resize',h)},[]);return m }
 import { supabase } from '../supabase'
+import TabEscolinha from './TabEscolinha'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, ReferenceLine,
 } from 'recharts'
+
+const useIsMobile = () => { const [m,setM]=useState(()=>window.innerWidth<768); useEffect(()=>{const h=()=>setM(window.innerWidth<768);window.addEventListener('resize',h);return()=>window.removeEventListener('resize',h)},[]);return m }
 
 const SIDEBAR_BG    = '#155E8E'
 const SIDEBAR_TEXT  = '#E0F2FE'
