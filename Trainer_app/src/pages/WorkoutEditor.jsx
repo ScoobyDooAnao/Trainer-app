@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
-import MotorSkillsSection from './MotorSkillsSection'
 
 // ── Paleta Vestiário Pré-Jogo ─────────────────────────────────────────────────
 const V = {
@@ -1161,14 +1160,6 @@ export default function WorkoutEditor({ navigate, studentId, planId }) {
                   />
 
                   <NoEquipmentSection onAddExercise={(ex) => addExercise(day.id, ex)} />
-
-                  {/* Habilidades Motoras — só criança/adolescente */}
-                  <MotorSkillsSection
-                    dayId={day.id}
-                    ageGroup={ageGroup}
-                    studentAge={studentAge}
-                    onAddExercise={(ex) => addExercise(day.id, ex)}
-                  />
 
                   {/* Formulário manual */}
                   <div style={{ marginTop:10 }}>
