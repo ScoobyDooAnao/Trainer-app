@@ -1775,7 +1775,7 @@ const PRESCRICAO = {
     volume: '120–200 min/semana',
     mixCardio: 60, // % de cardio vs musculação na semana
     obs: 'Priorize esforço contínuo e controlado. Evite intensidade alta demais — compromete a recuperação e aumenta o apetite.',
-    dicaCientifica: '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline;verticalAlign:-2px;marginRight:4px;flexShrink:0"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg> Sem controle alimentar, o cardio isolado tem eficácia limitada. Estudos mostram que o corpo compensa o gasto do exercício reduzindo o metabolismo basal (Pontzer et al., 2016). Combine com treino de força para melhores resultados.',
+    dicaCientifica: 'Sem controle alimentar, o cardio isolado tem eficácia limitada. Estudos mostram que o corpo compensa o gasto do exercício reduzindo o metabolismo basal (Pontzer et al., 2016). Combine com treino de força para melhores resultados.',
   },
   'Ganho de Massa': {
     tipo: ['esteira','bike','eliptico','natacao'],
@@ -2200,7 +2200,7 @@ function TabCardio({ students }) {
 
               {/* Observação clínica */}
               <div style={{ background: 'rgba(12,74,110,0.06)', borderRadius: 10, padding: '10px 14px', borderLeft: '3px solid #155E8E' }}>
-                <span style={{ fontSize: 12, color: '#334155', lineHeight: 1.6 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:inline;verticalAlign:-2px;marginRight:4px;flexShrink:0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg> {presc.obs}</span>
+                <span style={{ fontSize: 12, color: '#334155', lineHeight: 1.6 }}><IcoInfoSm />{presc.obs}</span>
               </div>
 
               {/* ── Alerta de faixa etária ── */}
