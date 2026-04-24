@@ -1759,10 +1759,9 @@ export default function StudentDetail({ navigate, studentId }) {
         {/* Tabs */}
         <div style={s.tabs}>
           {[['plans', 'Treinos'], ['progress', 'Evolução'], ['metas', 'Metas'], ['avaliacao', 'Avaliação'],
-            ...(student.age < 18 ? [['motor', 'Desenv. Motor']] : []),
             ['notes', 'Obs.']
           ].map(([id, label]) => (
-            <button key={id} style={s.tab(tab === id, id === 'avaliacao' || id === 'motor')} onClick={() => setTab(id)}>{label}</button>
+            <button key={id} style={s.tab(tab === id, id === 'avaliacao')} onClick={() => setTab(id)}>{label}</button>
           ))}
         </div>
 
@@ -1910,14 +1909,7 @@ export default function StudentDetail({ navigate, studentId }) {
           />
         )}
 
-        {/* MOTOR DEVELOPMENT TAB */}
-        {tab === 'motor' && student.age < 18 && (
-          <TabDesenvolvimentoMotor
-            student={student}
-            studentId={studentId}
-            onUpdate={fetchAll}
-          />
-        )}
+        {/* Motor Development moved to Escolinha > Banco de Atividades */}
 
         {/* NOTES TAB */}
         {tab === 'notes' && (
