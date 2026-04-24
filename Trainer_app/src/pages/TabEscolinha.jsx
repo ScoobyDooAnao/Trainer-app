@@ -1517,11 +1517,314 @@ function FeedbackPlanSelector({ plan, onSelectBloco }) {
 }
 
 // ── Componente Principal ──────────────────────────────────────────────────────
+
+// ── Banco de Atividades — sugestões baseadas no TGMD-3 ───────────────────────
+const CATEGORIA_COLORS = {
+  'Locomoção':       { bg:'#DBEAFE', border:'#BFDBFE', text:'#1E40AF', dot:'#3B82F6' },
+  'Controle de Objeto': { bg:'#D1FAE5', border:'#A7F3D0', text:'#065F46', dot:'#10B981' },
+  'Lúdico':          { bg:'#EDE9FE', border:'#DDD6FE', text:'#5B21B6', dot:'#8B5CF6' },
+  'Coordenação':     { bg:'#FEF3C7', border:'#FDE68A', text:'#92400E', dot:'#F59E0B' },
+  'Cognitivo':       { bg:'#FEE2E2', border:'#FECACA', text:'#991B1B', dot:'#EF4444' },
+  'Personalizada':   { bg:'#F1F5F9', border:'#E2E8F0', text:'#475569', dot:'#94A3B8' },
+}
+
+const FAIXA_COLORS = {
+  '6-8 anos':  { bg:'rgba(59,130,246,0.08)',  text:'#1E40AF'  },
+  '9-12 anos': { bg:'rgba(16,185,129,0.08)', text:'#065F46'  },
+  '13+ anos':  { bg:'rgba(124,58,237,0.08)', text:'#5B21B6'  },
+  'Todas':     { bg:'rgba(100,116,139,0.08)', text:'#475569'  },
+}
+
+const BANCO_SUGERIDO = [
+  // ── Locomoção (TGMD-3) ──────────────────────────────────────────────────────
+  { id:'s1',  titulo:'Corrida em Zigue-Zague',    categoria:'Locomoção',          faixa:'6-8 anos',  duracao:10, material:'Cones', habilidade:'corrida',   desc:'Monte cones em linha reta com 1,5m de distância. Criança corre em zigue-zague o mais rápido possível. Trabalha coordenação, mudança de direção e aceleração.', objetivo:'Padrão maduro de corrida, fase aérea visível, apoio no antepé.' },
+  { id:'s2',  titulo:'Galope com Obstáculos',     categoria:'Locomoção',          faixa:'6-8 anos',  duracao:8,  material:'Bambolês', habilidade:'galope', desc:'Coloque bambolês no chão. A criança galopa dentro e fora dos bambolês em ritmo constante. Exagere o movimento de passo-toque.', objetivo:'Ritmo de galope, posição lateral do corpo, coordenação.' },
+  { id:'s3',  titulo:'Skip Alfabeto',             categoria:'Locomoção',          faixa:'9-12 anos', duracao:12, material:'Escada de agilidade', habilidade:'passada', desc:'Usando escada de agilidade, realize skip (passo+salto alternado) em diferentes velocidades. Varie: lento-médio-rápido ao sinal do professor.', objetivo:'Alternância braço-perna, extensão do joelho, coordenação bilateral.' },
+  { id:'s4',  titulo:'Estafeta de Salto Horizontal', categoria:'Locomoção',       faixa:'9-12 anos', duracao:15, material:'Fita métrica, giz', habilidade:'salto_h', desc:'Equipes competem medindo o salto horizontal de cada integrante. Somar as distâncias. Corrija: pré-balanço de braços, impulsão bilateral, aterrissagem amortecida.', objetivo:'Ativação de membros inferiores, potência, aterrissagem segura.' },
+  { id:'s5',  titulo:'Salto Vertical com Marcação', categoria:'Locomoção',        faixa:'9-12 anos', duracao:10, material:'Parede, fita', habilidade:'salto_v', desc:'Criança marca a altura que alcança em pé. Depois salta e marca o ponto máximo. Meça a diferença. Trabalhe a extensão completa do corpo.', objetivo:'Geração de força vertical, coordenação braço-tronco, aterrissagem suave.' },
+  { id:'s6',  titulo:'Corrida Lateral Espelho',   categoria:'Locomoção',          faixa:'6-8 anos',  duracao:10, material:'Sem material', habilidade:'lateral', desc:'Professor e criança frente a frente. Professor faz movimentos laterais, criança espelha. Trabalha reatividade, equilíbrio e deslocamento lateral.', objetivo:'Passos cruzados, centro de gravidade baixo, mudança de direção.' },
+  // ── Controle de Objeto (TGMD-3) ────────────────────────────────────────────
+  { id:'s7',  titulo:'Chute ao Alvo',             categoria:'Controle de Objeto', faixa:'6-8 anos',  duracao:10, material:'Bola, cones', habilidade:'chutar', desc:'Monte um gol com cones a 5m de distância. Criança chuta bola parada com pé dominante e não-dominante. Corrija: passo de aproximação, balanço de braço oposto, follow-through.', objetivo:'Passo de aproximação correto, transferência de peso, follow-through.' },
+  { id:'s8',  titulo:'Boliche Humano',            categoria:'Controle de Objeto', faixa:'6-8 anos',  duracao:12, material:'Garrafas PET, bola pequena', habilidade:'rolar', desc:'Monte 6 garrafas em triângulo a 5m. Criança rola a bola tentando derrubar todas. Corrija: abaixamento do corpo, balanço pendular do braço, liberação na altura do joelho.', objetivo:'Padrão maduro de rolamento, mira, transferência de peso.' },
+  { id:'s9',  titulo:'Arremesso Progressivo',     categoria:'Controle de Objeto', faixa:'9-12 anos', duracao:15, material:'Bola de tênis, alvos', habilidade:'arremesso', desc:'Marque alvos na parede em alturas diferentes (2m, 3m, 4m). Criança arremessa acima do ombro tentando acertar. Aumente a distância a cada rodada.', objetivo:'Rotação de tronco, transferência de peso, liberação acima do ombro.' },
+  { id:'s10', titulo:'Recepção em Movimento',     categoria:'Controle de Objeto', faixa:'9-12 anos', duracao:12, material:'Bola, parceiro', habilidade:'receber', desc:'Em duplas, um jogador caminha e o outro arremessa. Receptor deve pegar sem parar. Varie altura e força. Corrija: preparação das mãos, olhos no alvo, absorção com dedos.', objetivo:'Tracking visual, preparação antecipatória, absorção do impacto.' },
+  { id:'s11', titulo:'Drible com Obstáculos',     categoria:'Controle de Objeto', faixa:'9-12 anos', duracao:15, material:'Bola de basquete, cones', habilidade:'driblar', desc:'Percurso em zigue-zague com cones, driblando com mão dominante e depois não-dominante. Olhos devem ficar longe da bola ao final do percurso.', objetivo:'Contato nos dedos, altura do quadril, controle sem olhar para a bola.' },
+  { id:'s12', titulo:'Rebater Balão',             categoria:'Controle de Objeto', faixa:'6-8 anos',  duracao:10, material:'Balões, raquete de isopor', habilidade:'rebater', desc:'Criança tenta manter o balão no ar usando raquete de isopor. Progrida: use bola de espuma e tee (suporte). Corrija: rotação de quadril, zona de contato, follow-through.', objetivo:'Timing de contato, rotação, acompanhamento do movimento.' },
+  // ── Lúdico / Coordenação ────────────────────────────────────────────────────
+  { id:'s13', titulo:'Pega-Rabo',                 categoria:'Lúdico',             faixa:'6-8 anos',  duracao:10, material:'Coletes ou fitas', habilidade:null, desc:'Cada criança coloca uma fita no shorts. O objetivo é pegar o rabo dos outros sem perder o seu. Desenvolve fuga, perseguição, consciência espacial e agilidade.', objetivo:'Agilidade, consciência corporal, tomada de decisão rápida.' },
+  { id:'s14', titulo:'Bambolê Musical',           categoria:'Lúdico',             faixa:'6-8 anos',  duracao:8,  material:'Bambolês, música', habilidade:null, desc:'Bambolês no chão, um a menos que o número de crianças. Música toca: todos correm em volta. Música para: entrar em um bambolê. Quem ficar fora vai para fora.', objetivo:'Reação auditiva, corrida, lateralidade, convivência.' },
+  { id:'s15', titulo:'Circuito Motor Completo',   categoria:'Coordenação',        faixa:'9-12 anos', duracao:20, material:'Cones, bambolês, escada, bola', habilidade:null, desc:'6 estações: 1-Salto horizontal, 2-Drible, 3-Skip na escada, 4-Recepção, 5-Corrida lateral, 6-Arremesso ao alvo. 2 min em cada. Rotação por sinal.', objetivo:'Integração de múltiplas habilidades motoras em sequência.' },
+  { id:'s16', titulo:'Estátua Tática',            categoria:'Cognitivo',          faixa:'9-12 anos', duracao:12, material:'Cones coloridos', habilidade:null, desc:'Crianças correm livres. Quando professor gritar uma cor, todas correm para o cone daquela cor. Varie com "esquerda", "direita", "frente". Desenvolve atenção e percepção espacial.', objetivo:'Atenção, reação a estímulo auditivo, orientação espacial.' },
+  { id:'s17', titulo:'4 Cantos + Bola',           categoria:'Lúdico',             faixa:'13+ anos',  duracao:15, material:'Cones, bola', habilidade:null, desc:'4 cones formam um quadrado. Uma criança no meio com bola. As outras nos cantos trocam de lugar enquanto o centro tenta acertar alguém com a bola (abaixo da cintura). Desenvolve arremesso, desvio e percepção espacial.', objetivo:'Arremesso com precisão, desvio de corpo, leitura espacial.' },
+  { id:'s18', titulo:'Caçador e Presa',           categoria:'Lúdico',             faixa:'6-8 anos',  duracao:10, material:'Bolas de espuma', habilidade:null, desc:'2 caçadores com bolas de espuma tentam acertar as presas. Quem for acertado vira caçador. Desenvolve arremesso, desvio, corrida e consciência do espaço.', objetivo:'Reação, corrida, desvio, arremesso com intenção.' },
+]
+
+// ── Modal de nova atividade ───────────────────────────────────────────────────
+function ModalNovaAtividade({ teacherId, onSave, onClose }) {
+  const [form, setForm] = useState({
+    titulo: '', categoria: 'Personalizada', faixa: 'Todas',
+    duracao: '', material: '', desc: '', objetivo: '',
+  })
+  const [saving, setSaving] = useState(false)
+  const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
+
+  const save = async () => {
+    if (!form.titulo.trim()) return
+    setSaving(true)
+    await supabase.from('atividades_escolinha').insert([{
+      teacher_id: teacherId,
+      titulo:     form.titulo.trim(),
+      categoria:  form.categoria,
+      faixa_etaria: form.faixa,
+      duracao_min:  parseInt(form.duracao) || null,
+      material:   form.material || null,
+      descricao:  form.desc || null,
+      objetivo:   form.objetivo || null,
+      sugerida:   false,
+    }])
+    setSaving(false)
+    onSave()
+    onClose()
+  }
+
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:300, padding:16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:'#fff', borderRadius:20, padding:24, width:'100%', maxWidth:520, maxHeight:'90vh', overflowY:'auto' }}>
+        <div style={{ fontSize:17, fontWeight:800, color:'#0C3251', marginBottom:18 }}>Nova Atividade</div>
+
+        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          <div>
+            <div style={S.label}>Título *</div>
+            <input style={S.input} placeholder="Ex: Circuito de saltos" value={form.titulo} onChange={e => f('titulo', e.target.value)} />
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <div>
+              <div style={S.label}>Categoria</div>
+              <select style={S.input} value={form.categoria} onChange={e => f('categoria', e.target.value)}>
+                {Object.keys(CATEGORIA_COLORS).map(k => <option key={k}>{k}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={S.label}>Faixa etária</div>
+              <select style={S.input} value={form.faixa} onChange={e => f('faixa', e.target.value)}>
+                {Object.keys(FAIXA_COLORS).map(k => <option key={k}>{k}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <div>
+              <div style={S.label}>Duração (min)</div>
+              <input style={S.input} type="number" placeholder="Ex: 10" value={form.duracao} onChange={e => f('duracao', e.target.value)} />
+            </div>
+            <div>
+              <div style={S.label}>Material</div>
+              <input style={S.input} placeholder="Ex: Cones, bola" value={form.material} onChange={e => f('material', e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <div style={S.label}>Como executar</div>
+            <textarea style={{ ...S.input, minHeight:75, resize:'vertical' }} placeholder="Descreva o passo a passo da atividade..." value={form.desc} onChange={e => f('desc', e.target.value)} />
+          </div>
+          <div>
+            <div style={S.label}>Objetivo / Habilidade trabalhada</div>
+            <input style={S.input} placeholder="Ex: Coordenação bilateral, reação auditiva" value={form.objetivo} onChange={e => f('objetivo', e.target.value)} />
+          </div>
+        </div>
+
+        <div style={{ display:'flex', gap:8, marginTop:20 }}>
+          <button onClick={save} disabled={saving || !form.titulo.trim()} style={{ ...S.btn('#059669'), flex:1, padding:'12px' }}>
+            {saving ? 'Salvando...' : 'Salvar Atividade'}
+          </button>
+          <button onClick={onClose} style={{ ...S.ghost, flex:1, padding:'12px' }}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Card de atividade ─────────────────────────────────────────────────────────
+function AtividadeCard({ at, isSugestao, onDelete }) {
+  const [expanded, setExpanded] = useState(false)
+  const cat = CATEGORIA_COLORS[at.categoria] || CATEGORIA_COLORS['Personalizada']
+  const faixa = FAIXA_COLORS[at.faixa_etaria || at.faixa] || FAIXA_COLORS['Todas']
+
+  return (
+    <div style={{ background:'rgba(255,255,255,0.7)', border:'1px solid rgba(255,255,255,0.9)', borderRadius:14, overflow:'hidden', transition:'all 0.2s' }}>
+      {/* Topo colorido */}
+      <div style={{ height:3, background:cat.dot }} />
+      <div style={{ padding:'14px 16px' }}>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
+          <div style={{ flex:1 }}>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:7 }}>
+              <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:20, background:cat.bg, color:cat.text, border:'1px solid '+cat.border }}>{at.categoria}</span>
+              <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:20, background:faixa.bg, color:faixa.text }}>{at.faixa_etaria || at.faixa}</span>
+              {at.duracao_min || at.duracao ? <span style={{ fontSize:10, color:'#94A3B8', padding:'2px 6px', background:'rgba(0,0,0,0.04)', borderRadius:20 }}>{at.duracao_min || at.duracao} min</span> : null}
+              {isSugestao && <span style={{ fontSize:9, fontWeight:800, padding:'2px 8px', borderRadius:20, background:'rgba(5,150,105,0.1)', color:'#059669', border:'1px solid rgba(5,150,105,0.2)' }}>TGMD-3</span>}
+            </div>
+            <div style={{ fontSize:14, fontWeight:800, color:'#0C3251', marginBottom:4 }}>{at.titulo}</div>
+            {at.material && <div style={{ fontSize:11, color:'#64748B', marginBottom:4 }}>Material: {at.material}</div>}
+          </div>
+          <button onClick={() => setExpanded(v => !v)} style={{ background:'rgba(12,74,110,0.07)', border:'none', borderRadius:8, padding:'6px 10px', cursor:'pointer', color:'#0C4A6E', fontWeight:700, fontSize:12, flexShrink:0 }}>
+            {expanded ? '▲' : '▼'}
+          </button>
+        </div>
+
+        {expanded && (
+          <div style={{ marginTop:10, borderTop:'1px solid rgba(0,0,0,0.06)', paddingTop:10, display:'flex', flexDirection:'column', gap:8 }}>
+            {(at.desc || at.descricao) && (
+              <div>
+                <div style={{ fontSize:10, fontWeight:700, color:'#475569', textTransform:'uppercase', letterSpacing:1, marginBottom:4 }}>Como Executar</div>
+                <div style={{ fontSize:12, color:'#334155', lineHeight:1.6 }}>{at.desc || at.descricao}</div>
+              </div>
+            )}
+            {(at.objetivo) && (
+              <div style={{ padding:'8px 12px', background:'rgba(5,150,105,0.07)', borderRadius:8, border:'1px solid rgba(5,150,105,0.15)' }}>
+                <div style={{ fontSize:10, fontWeight:700, color:'#059669', marginBottom:2 }}>Objetivo Motor</div>
+                <div style={{ fontSize:12, color:'#065F46' }}>{at.objetivo}</div>
+              </div>
+            )}
+            {!isSugestao && onDelete && (
+              <button onClick={onDelete} style={{ alignSelf:'flex-start', background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.2)', borderRadius:8, padding:'5px 12px', color:'#DC2626', fontSize:11, fontWeight:700, cursor:'pointer' }}>
+                Excluir
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── BancoAtividades — tab completo ────────────────────────────────────────────
+function BancoAtividades({ teacherId }) {
+  const [ativas, setAtivas]         = useState([])  // salvas pelo professor
+  const [showModal, setShowModal]   = useState(false)
+  const [filterCat, setFilterCat]   = useState('Todas')
+  const [filterFaixa, setFilterFaixa] = useState('Todas')
+  const [search, setSearch]         = useState('')
+  const [loading, setLoading]       = useState(true)
+  const [abaSel, setAbaSel]         = useState('sugeridas') // 'sugeridas' | 'minhas'
+
+  const fetchAtivas = async () => {
+    const { data } = await supabase.from('atividades_escolinha')
+      .select('*').eq('teacher_id', teacherId).order('created_at')
+    setAtivas(data || [])
+    setLoading(false)
+  }
+
+  useEffect(() => { if (teacherId) fetchAtivas() }, [teacherId])
+
+  const deleteAt = async (id) => {
+    await supabase.from('atividades_escolinha').delete().eq('id', id)
+    fetchAtivas()
+  }
+
+  const cats = ['Todas', ...Object.keys(CATEGORIA_COLORS)]
+  const faixas = ['Todas', ...Object.keys(FAIXA_COLORS).filter(k => k !== 'Todas')]
+
+  const applyFilters = (list) => list.filter(at => {
+    const catOk   = filterCat === 'Todas' || at.categoria === filterCat
+    const faixaOk = filterFaixa === 'Todas' || (at.faixa_etaria || at.faixa) === filterFaixa
+    const searchOk = !search || at.titulo.toLowerCase().includes(search.toLowerCase())
+    return catOk && faixaOk && searchOk
+  })
+
+  const sugeridosFiltrados = applyFilters(BANCO_SUGERIDO)
+  const minhasFiltradas    = applyFilters(ativas)
+
+  return (
+    <div>
+      {showModal && <ModalNovaAtividade teacherId={teacherId} onSave={fetchAtivas} onClose={() => setShowModal(false)} />}
+
+      {/* Header */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+        <div>
+          <div style={{ fontSize:18, fontWeight:800, color:'#0C4A6E' }}>Banco de Atividades</div>
+          <div style={{ fontSize:12, color:'#64748B', marginTop:2 }}>{BANCO_SUGERIDO.length} sugeridas · {ativas.length} suas</div>
+        </div>
+        <button onClick={() => setShowModal(true)} style={S.btn('#059669')}>+ Nova Atividade</button>
+      </div>
+
+      {/* Sub-tabs */}
+      <div style={{ display:'flex', gap:8, marginBottom:16 }}>
+        {[
+          { id:'sugeridas', label:'Sugestões TGMD-3', count: sugeridosFiltrados.length },
+          { id:'minhas',    label:'Minhas Atividades', count: minhasFiltradas.length },
+        ].map(t => (
+          <button key={t.id} onClick={() => setAbaSel(t.id)}
+            style={{ padding:'8px 18px', borderRadius:10, border:'none', cursor:'pointer', fontWeight:700, fontSize:13, transition:'all 0.15s',
+              background: abaSel === t.id ? 'linear-gradient(135deg,#0C4A6E,#155E8E)' : 'rgba(255,255,255,0.65)',
+              color: abaSel === t.id ? '#fff' : '#0C4A6E',
+              boxShadow: abaSel === t.id ? '0 4px 14px rgba(12,74,110,0.3)' : 'none' }}>
+            {t.label} <span style={{ fontSize:10, opacity:0.7 }}>({t.count})</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Filtros */}
+      <div style={{ background:'rgba(255,255,255,0.6)', borderRadius:12, padding:'12px 14px', marginBottom:16, display:'flex', flexDirection:'column', gap:10 }}>
+        <input placeholder="Buscar atividade..." value={search} onChange={e => setSearch(e.target.value)}
+          style={{ ...S.input, background:'rgba(255,255,255,0.9)' }} />
+        <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+          {cats.map(c => (
+            <button key={c} onClick={() => setFilterCat(c)}
+              style={{ padding:'4px 12px', borderRadius:20, fontSize:11, fontWeight:700, cursor:'pointer', border:'none',
+                background: filterCat === c ? (CATEGORIA_COLORS[c]?.dot || '#0C4A6E') : 'rgba(255,255,255,0.8)',
+                color: filterCat === c ? '#fff' : '#475569' }}>
+              {c}
+            </button>
+          ))}
+        </div>
+        <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+          {['Todas', ...Object.keys(FAIXA_COLORS).filter(k => k !== 'Todas')].map(f => (
+            <button key={f} onClick={() => setFilterFaixa(f)}
+              style={{ padding:'4px 12px', borderRadius:20, fontSize:11, fontWeight:700, cursor:'pointer', border:'none',
+                background: filterFaixa === f ? '#0C4A6E' : 'rgba(255,255,255,0.8)',
+                color: filterFaixa === f ? '#fff' : '#475569' }}>
+              {f}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Conteúdo */}
+      {abaSel === 'sugeridas' && (
+        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          {sugeridosFiltrados.length === 0
+            ? <div style={{ textAlign:'center', padding:'40px 0', color:'#94A3B8', fontSize:13 }}>Nenhuma atividade encontrada com esse filtro.</div>
+            : sugeridosFiltrados.map(at => <AtividadeCard key={at.id} at={at} isSugestao />)
+          }
+        </div>
+      )}
+
+      {abaSel === 'minhas' && (
+        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          {loading
+            ? <div style={{ textAlign:'center', padding:30, color:'#94A3B8' }}>Carregando...</div>
+            : minhasFiltradas.length === 0
+              ? (
+                <div style={{ textAlign:'center', padding:'48px 20px', color:'#94A3B8' }}>
+                  <div style={{ fontSize:36, marginBottom:10 }}>📋</div>
+                  <div style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>Nenhuma atividade criada ainda</div>
+                  <div style={{ fontSize:12 }}>Clique em "+ Nova Atividade" para adicionar</div>
+                </div>
+              )
+              : minhasFiltradas.map(at => (
+                  <AtividadeCard key={at.id} at={at} isSugestao={false} onDelete={() => deleteAt(at.id)} />
+                ))
+          }
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function TabEscolinha({ session, students }) {
   const [turmas, setTurmas]           = useState([])
   const [loading, setLoading]         = useState(true)
   const [showModal, setShowModal]     = useState(false)
   const [selectedTurma, setSelectedTurma] = useState(null)
+  const [navEsc, setNavEsc]           = useState('turmas') // 'turmas' | 'banco'
 
   const teacherId = session?.user?.id
 
@@ -1582,14 +1885,31 @@ export default function TabEscolinha({ session, students }) {
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-        <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0C4A6E', marginBottom: 3 }}>Escolinha</h1>
-          <p style={{ fontSize: 13, color: '#0C4A6E', fontWeight: 600 }}>
-            <span style={{ color: '#34D399', fontWeight: 700 }}>{turmas.length}</span> turma{turmas.length !== 1 ? 's' : ''} ativa{turmas.length !== 1 ? 's' : ''}
-          </p>
+      {/* Header + Nav tabs */}
+      <div style={{ marginBottom: 22 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0C4A6E', marginBottom: 12 }}>Escolinha</h1>
+        <div style={{ display:'flex', gap:8 }}>
+          {[
+            { id:'turmas', label:'Turmas', count: turmas.length },
+            { id:'banco',  label:'Banco de Atividades', count: null },
+          ].map(t => (
+            <button key={t.id} onClick={() => setNavEsc(t.id)}
+              style={{ padding:'9px 20px', borderRadius:10, border:'none', cursor:'pointer', fontWeight:700, fontSize:13, transition:'all 0.15s',
+                background: navEsc === t.id ? 'linear-gradient(135deg,#0C4A6E,#155E8E)' : 'rgba(255,255,255,0.65)',
+                color: navEsc === t.id ? '#fff' : '#0C4A6E',
+                boxShadow: navEsc === t.id ? '0 4px 14px rgba(12,74,110,0.3)' : 'none' }}>
+              {t.label}{t.count !== null ? ` (${t.count})` : ''}
+            </button>
+          ))}
         </div>
+      </div>
+
+      {/* ── ABA BANCO DE ATIVIDADES ── */}
+      {navEsc === 'banco' && <BancoAtividades teacherId={teacherId} />}
+
+      {/* ── ABA TURMAS ── */}
+      {navEsc === 'turmas' && <>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
         <button onClick={() => setShowModal(true)} style={S.btn()}>+ Nova Turma</button>
       </div>
 
@@ -1649,6 +1969,8 @@ export default function TabEscolinha({ session, students }) {
           })}
         </div>
       )}
+
+      </> }
 
       {showModal && (
         <ModalNovaTurma teacherId={teacherId} students={students} onSave={fetchTurmas} onClose={() => setShowModal(false)} />
