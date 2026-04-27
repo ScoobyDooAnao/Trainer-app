@@ -1158,7 +1158,7 @@ function TabAvaliacao({ student, studentId }) {
       try {
         // Step 1: fetch plan and logs in parallel
         const [plansRes, exLogsRes] = await Promise.all([
-          supabase.from('workout_plans').select('id,status').eq('student_id', studentId).eq('status','active').limit(1),
+          supabase.from('workout_plans').select('id,title,status').eq('student_id', studentId).eq('status','active').limit(1),
           supabase.from('exercise_logs').select('exercise_id,date,sets,exercises(name,type,rest_seconds)').eq('student_id', studentId).order('date',{ascending:false}).limit(200),
         ])
         const plans  = plansRes.data  || []
@@ -1170,7 +1170,7 @@ function TabAvaliacao({ student, studentId }) {
           const { data: wd } = await supabase
             .from('workout_days')
             .select('id,day_of_week,exercises(id,name,sets,reps,rest_seconds,type)')
-            .eq('workout_plan_id', plans[0].id)
+            .eq('plan_id', plans[0].id)
           wDays = wd || []
         }
 
@@ -1196,10 +1196,10 @@ function TabAvaliacao({ student, studentId }) {
   // ── helpers ────────────────────────────────────────────────────────────────
   const semaforo = (status) => {
     const map = {
-      ok:      { cor:'#16A34A', bg:'rgba(22,163,74,0.1)',  border:'rgba(22,163,74,0.25)',  label:'Adequado'    },
-      atencao: { cor:'#D97706', bg:'rgba(217,119,6,0.1)',  border:'rgba(217,119,6,0.25)',  label:'Atenção'     },
-      critico: { cor:'#DC2626', bg:'rgba(220,38,38,0.1)',  border:'rgba(220,38,38,0.25)',  label:'Crítico'     },
-      sem:     { cor:'#94A3B8', bg:'rgba(148,163,184,0.1)',border:'rgba(148,163,184,0.2)', label:'Sem dados'   },
+      ok:      { cor:'#34D399', bg:'rgba(52,211,153,0.07)',  border:'rgba(52,211,153,0.2)',  label:'Adequado'    },
+      atencao: { cor:'#FBBF24', bg:'rgba(251,191,36,0.07)',  border:'rgba(251,191,36,0.2)',  label:'Atenção'     },
+      critico: { cor:'#F87171', bg:'rgba(248,113,113,0.07)', border:'rgba(248,113,113,0.2)', label:'Crítico'     },
+      sem:     { cor:'#475569', bg:'rgba(255,255,255,0.03)', border:'rgba(255,255,255,0.07)',label:'Sem dados'   },
     }
     return map[status] || map.sem
   }
@@ -1461,8 +1461,8 @@ function TabAvaliacao({ student, studentId }) {
     <div style={s.card}>
       {/* Header */}
       <div style={{ marginBottom:20 }}>
-        <div style={{ fontSize:16, fontWeight:800, color:'#0C3251', marginBottom:4 }}>Avaliação de Treino</div>
-        <div style={{ fontSize:12, color:'#64748B' }}>Análise automática baseada no plano ativo e logs de carga</div>
+        <div style={{ fontSize:16, fontWeight:800, color:'#E2E8F0', marginBottom:4 }}>Avaliação de Treino</div>
+        <div style={{ fontSize:12, color:'#475569' }}>Análise automática baseada no plano ativo e logs de carga</div>
         {!hasPlan && (
           <div style={{ marginTop:10, padding:'10px 14px', background:'rgba(217,119,6,0.08)', borderRadius:10, border:'1px solid rgba(217,119,6,0.2)', fontSize:12, color:'#92400E', fontWeight:600 }}>
             Nenhum plano ativo encontrado. Crie um plano de treino para ativar a análise completa.
@@ -1471,7 +1471,7 @@ function TabAvaliacao({ student, studentId }) {
       </div>
 
       {/* Semáforo geral */}
-      <div style={{ display:'flex', gap:8, marginBottom:20, padding:'12px 16px', background:'rgba(255,255,255,0.6)', borderRadius:12, border:'1px solid rgba(255,255,255,0.9)' }}>
+      <div style={{ display:'flex', gap:8, marginBottom:20, padding:'12px 16px', background:'rgba(255,255,255,0.04)', borderRadius:12, border:'1px solid rgba(255,255,255,0.08)' }}>
         {[
           { k:'ok',      label:'Adequado', cor:'#16A34A' },
           { k:'atencao', label:'Atenção',  cor:'#D97706' },
@@ -1500,7 +1500,7 @@ function TabAvaliacao({ student, studentId }) {
                 {/* Semáforo dot */}
                 <div style={{ width:12, height:12, borderRadius:'50%', background:sem.cor, boxShadow:'0 0 8px '+sem.cor+'80', flexShrink:0 }} />
                 <div style={{ flex:1 }}>
-                  <div style={{ fontSize:13, fontWeight:800, color:'#0C3251' }}>{f.label}</div>
+                  <div style={{ fontSize:13, fontWeight:800, color:'#E2E8F0' }}>{f.label}</div>
                   {f.valor && <div style={{ fontSize:11, color:sem.cor, fontWeight:700, marginTop:2 }}>{f.valor}</div>}
                   {!f.valor && <div style={{ fontSize:11, color:'#94A3B8', marginTop:2 }}>Sem dados suficientes</div>}
                 </div>
@@ -1514,9 +1514,9 @@ function TabAvaliacao({ student, studentId }) {
               {open && (
                 <div style={{ padding:'0 16px 14px', borderTop:'1px solid '+sem.border }}>
                   {f.detail && (
-                    <div style={{ fontSize:11, color:'#475569', lineHeight:1.6, marginTop:10, marginBottom:8 }}>{f.detail}</div>
+                    <div style={{ fontSize:11, color:'#64748B', lineHeight:1.6, marginTop:10, marginBottom:8 }}>{f.detail}</div>
                   )}
-                  <div style={{ padding:'10px 12px', borderRadius:9, background:'rgba(255,255,255,0.7)', border:'1px solid rgba(255,255,255,0.9)', fontSize:12, color:'#334155', lineHeight:1.6 }}>
+                  <div style={{ padding:'10px 12px', borderRadius:9, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.08)', fontSize:12, color:'#CBD5E1', lineHeight:1.6 }}>
                     <span style={{ fontWeight:700, color:sem.cor }}>Recomendação: </span>{f.rec}
                   </div>
                   <div style={{ marginTop:6, fontSize:9, color:'#94A3B8', fontStyle:'italic' }}>Ref: {f.ref}</div>
