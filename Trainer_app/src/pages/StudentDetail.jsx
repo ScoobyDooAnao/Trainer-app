@@ -1146,15 +1146,10 @@ function TabDesenvolvimentoMotor({ student, studentId, onUpdate }) {
   )
 }
 
-// ── TabAvaliacao UI v2 ────────────────────────────────────────────────────
-function TabAvaliacao({ student, studentId, progress }) {
-  const [loading,   setLoading]  = useState(true)
-  const [result,    setResult]   = useState(null)
-  const [history,   setHistory]  = useState([])
-  const [confidence,setConf]     = useState(null)
-  const [recs,      setRecs]     = useState([])
-  const [expanded,  setExpanded] = useState(null)
-  const [activeTab, setActiveTab] = useState('pilares') // 'pilares' | 'recs' | 'history'
+// ── TabAvaliacao — Painel de 6 Fatores (automático) ──────────────────────────
+function TabAvaliacao({ student, studentId }) {
+  const [data,    setData]    = useState(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const load = async () => {
@@ -1162,281 +1157,365 @@ function TabAvaliacao({ student, studentId, progress }) {
       const [
         { data: plans },
         { data: exLogs },
-        { data: cardio },
+        { data: wDays  },
       ] = await Promise.all([
-        supabase.from('workout_plans')
-          .select('*, workout_days(*, exercises(*))')
-          .eq('student_id', studentId)
-          .eq('status', 'active')
-          .order('updated_at', { ascending: false })
-          .limit(1),
-        supabase.from('exercise_logs')
-          .select('*, exercises(name)')
-          .eq('student_id', studentId)
-          .order('date', { ascending: false })
-          .limit(300),
-        supabase.from('cardio_sessions')
-          .select('*')
-          .eq('student_id', studentId)
-          .order('date', { ascending: false })
-          .limit(120),
+        supabase.from('workout_plans').select('id,status').eq('student_id', studentId).eq('status','active').limit(1),
+        supabase.from('exercise_logs').select('exercise_id,date,sets,exercises(name,type,rest_seconds)').eq('student_id', studentId).order('date',{ascending:false}).limit(200),
+        supabase.from('workout_days').select('id,day_of_week,exercises(id,name,sets,reps,rest_seconds,type)').eq('workout_plan_id', plans?.[0]?.id || '00000000-0000-0000-0000-000000000000'),
       ])
 
-      const activePlan   = plans?.[0]
-      const allDays      = activePlan?.workout_days || []
-      const allExercises = allDays.flatMap(d => d.exercises || [])
-      const plannedDays  = allDays.map(d => d.day_of_week).filter(Boolean)
-
-      const evalResult = runEvaluation({
-        student, allExercises, allDays, plannedDays,
-        exerciseLogs:   exLogs   || [],
-        cardioSessions: cardio   || [],
-        progress:       progress || [],
-      })
-
-      const conf  = getConfidence({ allExercises, exerciseLogs: exLogs||[], cardioSessions: cardio||[], progress: progress||[], student, allDays })
-      const hist  = computeHistoricalScores({ student, allDays, allExercises, plannedDays, exerciseLogs: exLogs||[], cardioSessions: cardio||[], progress: progress||[] })
-      const recsList = generateRecommendations(evalResult.pilares)
-
-      setResult(evalResult)
-      setConf(conf)
-      setHistory(hist)
-      setRecs(recsList)
+      setData({ plans: plans||[], exLogs: exLogs||[], wDays: wDays||[] })
       setLoading(false)
     }
     load()
-  }, [studentId, student, progress])
+  }, [studentId])
 
-  if (loading) return (
-    <div style={{ textAlign: 'center', padding: '60px 20px', color: '#475569' }}>
-      <div style={{ width:24, height:24, border:'2px solid rgba(71,85,105,0.3)', borderTopColor:'#6366F1', borderRadius:'50%', margin:'0 auto 12px', animation:'spin 1s linear infinite' }}/>
-      <div style={{ fontSize: 13, letterSpacing:0.5 }}>Analisando prescrição…</div>
-    </div>
-  )
-  if (!result) return null
+  if (loading) return <div style={{ padding:40, textAlign:'center', color:'#64748B' }}>Analisando treinos...</div>
 
-  const final = getScoreColor(result.finalScore)
-  const confColor = confidence?.pct >= 70 ? '#4ADE80' : confidence?.pct >= 40 ? '#FBBF24' : '#F87171'
-  const confLabel = confidence?.pct >= 70 ? 'Alta' : confidence?.pct >= 40 ? 'Moderada' : 'Baixa'
+  const { plans, exLogs, wDays } = data
+  const hasPlan = plans.length > 0
+  const age     = parseInt(student.age) || null
+  const nivel   = student.level || 'Iniciante'
+  const goal    = student.goal  || ''
 
-  const GaugeArc = ({ score }) => {
-    const r = 70, cx = 90, cy = 90
-    const startAngle = 220 * (Math.PI/180)
-    const sweepAngle = 280 * (Math.PI/180)
-    const endAngle   = startAngle - sweepAngle * (score/100)
-    const arcPath = angle => ({ x: cx + r*Math.cos(angle), y: cy - r*Math.sin(angle) })
-    const start  = arcPath(startAngle - sweepAngle)
-    const end    = arcPath(startAngle)
-    const scored = arcPath(endAngle)
-    const large  = sweepAngle > Math.PI ? 1 : 0
-    const sLarge = sweepAngle*(score/100) > Math.PI ? 1 : 0
-    return (
-      <svg width="180" height="130" viewBox="0 0 180 130">
-        <defs>
-          <linearGradient id="gaugeGrad2" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%"   stopColor="#F87171" />
-            <stop offset="40%"  stopColor="#FBBF24" />
-            <stop offset="75%"  stopColor="#A3E635" />
-            <stop offset="100%" stopColor="#4ADE80" />
-          </linearGradient>
-          <filter id="glow2"><feGaussianBlur stdDeviation="2.5" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-        </defs>
-        <path d={`M ${start.x} ${start.y} A ${r} ${r} 0 ${large} 1 ${end.x} ${end.y}`} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="10" strokeLinecap="round" />
-        <path d={`M ${start.x} ${start.y} A ${r} ${r} 0 ${sLarge} 1 ${scored.x} ${scored.y}`} fill="none" stroke="url(#gaugeGrad2)" strokeWidth="10" strokeLinecap="round" filter="url(#glow2)" />
-        <text x="90" y="82" textAnchor="middle" fontSize="32" fontWeight="900" fill={final.text} fontFamily="'DM Sans',sans-serif">{score}</text>
-        <text x="90" y="100" textAnchor="middle" fontSize="11" fontWeight="700" fill={final.text} fontFamily="'DM Sans',sans-serif" opacity="0.85">{final.label}</text>
-      </svg>
-    )
+  // ── helpers ────────────────────────────────────────────────────────────────
+  const semaforo = (status) => {
+    const map = {
+      ok:      { cor:'#16A34A', bg:'rgba(22,163,74,0.1)',  border:'rgba(22,163,74,0.25)',  label:'Adequado'    },
+      atencao: { cor:'#D97706', bg:'rgba(217,119,6,0.1)',  border:'rgba(217,119,6,0.25)',  label:'Atenção'     },
+      critico: { cor:'#DC2626', bg:'rgba(220,38,38,0.1)',  border:'rgba(220,38,38,0.25)',  label:'Crítico'     },
+      sem:     { cor:'#94A3B8', bg:'rgba(148,163,184,0.1)',border:'rgba(148,163,184,0.2)', label:'Sem dados'   },
+    }
+    return map[status] || map.sem
   }
 
+  // ── 1. INTENSIDADE (1RM via Epley) ─────────────────────────────────────────
+  const calcIntensidade = () => {
+    if (!exLogs.length) return { status:'sem', valor:null, rec:'', detail:'' }
+
+    // Agrupar logs por exercício, pegar carga máx por série
+    const byEx = {}
+    exLogs.forEach(l => {
+      if (!l.sets) return
+      const maxW = Math.max(...l.sets.map(s => +(s.weight||0)))
+      const maxR = Math.max(...l.sets.map(s => +(s.reps||0)))
+      if (maxW > 0 && maxR > 0) {
+        const rm = maxW * (1 + maxR / 30) // Epley
+        const name = l.exercises?.name || l.exercise_id
+        if (!byEx[name] || rm > byEx[name].rm) byEx[name] = { rm, w: maxW, r: maxR }
+      }
+    })
+
+    const entries = Object.entries(byEx)
+    if (!entries.length) return { status:'sem', valor:null, rec:'', detail:'' }
+
+    // Calcular % média de intensidade relativa ao 1RM estimado
+    const pcts = entries.map(([, v]) => {
+      const pct = (v.w / v.rm) * 100
+      return pct
+    })
+    const avgPct = pcts.reduce((a,b) => a+b, 0) / pcts.length
+
+    // Faixas por objetivo
+    const zonas = {
+      'Força e Performance': { ideal:[80,95], nome:'Força (80–95% 1RM)' },
+      'Ganho de Massa':      { ideal:[67,80], nome:'Hipertrofia (67–80% 1RM)' },
+      'Emagrecimento':       { ideal:[50,70], nome:'Resistência (50–70% 1RM)' },
+      'Condicionamento':     { ideal:[50,70], nome:'Resistência (50–70% 1RM)' },
+    }
+    const zona = zonas[goal] || { ideal:[60,80], nome:'Moderada (60–80% 1RM)' }
+    const [min, max] = zona.ideal
+
+    let status = avgPct >= min && avgPct <= max ? 'ok'
+               : avgPct < min - 10 || avgPct > max + 10 ? 'critico' : 'atencao'
+
+    return {
+      status,
+      valor: avgPct.toFixed(0) + '% 1RM médio',
+      detail: `Zona alvo: ${zona.nome}. Baseado em ${entries.length} exercício(s) com carga registrada.`,
+      rec: status === 'ok'
+        ? 'Intensidade dentro da zona ideal para o objetivo. Mantenha a progressão de carga gradual.'
+        : status === 'atencao'
+        ? 'Intensidade fora da zona ideal. Revise as cargas dos principais exercícios.'
+        : avgPct < min
+        ? 'Cargas abaixo do necessário para o objetivo. Aumente progressivamente 5% por semana.'
+        : 'Cargas muito elevadas — risco de fadiga acumulada. Reduza 10% e reconstrua progressão.',
+    }
+  }
+
+  // ── 2. VOLUME (séries × reps por músculo) ──────────────────────────────────
+  const calcVolume = () => {
+    if (!wDays.length) return { status:'sem', valor:null, rec:'', detail:'' }
+
+    // Contar sets totais por semana (somando todos os dias)
+    let totalSets = 0
+    wDays.forEach(d => (d.exercises||[]).forEach(ex => { totalSets += +(ex.sets||0) }))
+
+    // Referência: 10–20 sets/músculo/semana (Schoenfeld 2017)
+    // Aproximamos: total de sets do plano
+    const nivelVolume = {
+      'Iniciante':           { min:10, max:15, label:'10–15 sets/semana (iniciante)' },
+      'Intermediário':       { min:15, max:20, label:'15–20 sets/semana (intermediário)' },
+      'Avançado':            { min:18, max:25, label:'18–25 sets/semana (avançado)' },
+      'Atleta Jovem':        { min:15, max:22, label:'15–22 sets/semana' },
+      'Atleta Competitivo':  { min:20, max:30, label:'20–30 sets/semana' },
+    }
+    const ref = nivelVolume[nivel] || nivelVolume['Iniciante']
+
+    const status = totalSets >= ref.min && totalSets <= ref.max ? 'ok'
+                 : totalSets < ref.min * 0.7 || totalSets > ref.max * 1.3 ? 'critico' : 'atencao'
+
+    return {
+      status,
+      valor: totalSets + ' sets/semana',
+      detail: `Referência para ${nivel}: ${ref.label}. (Schoenfeld et al., 2017)`,
+      rec: status === 'ok'
+        ? 'Volume dentro da faixa ideal para o nível. Continue monitorando a progressão.'
+        : totalSets < ref.min
+        ? 'Volume abaixo do mínimo efetivo. Adicione séries ou exercícios para atingir o estímulo necessário.'
+        : 'Volume acima do recomendado — risco de overreaching. Reduza séries ou aumente o descanso entre sessões.',
+    }
+  }
+
+  // ── 3. FREQUÊNCIA (vezes por músculo por semana) ───────────────────────────
+  const calcFrequencia = () => {
+    if (!wDays.length) return { status:'sem', valor:null, rec:'', detail:'' }
+
+    const diasComTreino = wDays.filter(d => (d.exercises||[]).length > 0).length
+
+    const refFreq = {
+      'Iniciante':    { min:2, max:3, label:'2–3x/semana' },
+      'Intermediário':{ min:3, max:4, label:'3–4x/semana' },
+      'Avançado':     { min:4, max:6, label:'4–6x/semana' },
+      'Atleta Jovem': { min:3, max:5, label:'3–5x/semana' },
+      'Atleta Competitivo': { min:4, max:6, label:'4–6x/semana' },
+    }
+    const ref = refFreq[nivel] || refFreq['Iniciante']
+    const status = diasComTreino >= ref.min && diasComTreino <= ref.max ? 'ok'
+                 : diasComTreino < ref.min - 1 || diasComTreino > ref.max + 1 ? 'critico' : 'atencao'
+
+    return {
+      status,
+      valor: diasComTreino + 'x/semana',
+      detail: `Referência para ${nivel}: ${ref.label}. Cada grupo muscular deve ser estimulado 2x/semana para hipertrofia ideal.`,
+      rec: status === 'ok'
+        ? 'Frequência adequada para o nível. Garanta que grupos musculares principais apareçam em pelo menos 2 dias.'
+        : diasComTreino < ref.min
+        ? 'Frequência abaixo do ideal. Adicione mais dias de treino ou redistribua os grupos musculares.'
+        : 'Frequência elevada — verifique se há descanso suficiente entre os dias de mesmo grupo muscular.',
+    }
+  }
+
+  // ── 4. DENSIDADE (tempo estimado de sessão) ────────────────────────────────
+  const calcDensidade = () => {
+    if (!wDays.length) return { status:'sem', valor:null, rec:'', detail:'' }
+
+    // Estimativa: (sets × tempo_série) + (sets × descanso)
+    // Tempo por série: ~40s execução. Descanso padrão: 90s se não cadastrado
+    let totalMinEstimado = 0
+    let diasCount = 0
+
+    wDays.forEach(d => {
+      if (!(d.exercises||[]).length) return
+      diasCount++
+      let minDia = 0
+      d.exercises.forEach(ex => {
+        const sets     = +(ex.sets || 3)
+        const descanso = +(ex.rest_seconds || 90)
+        const execucao = 40 // segundos por série
+        minDia += sets * (execucao + descanso)
+      })
+      totalMinEstimado += minDia / 60
+    })
+
+    if (!diasCount) return { status:'sem', valor:null, rec:'', detail:'' }
+    const mediaPorDia = Math.round(totalMinEstimado / diasCount)
+
+    // Referência: 45–75 min por sessão (ACSM)
+    const status = mediaPorDia >= 45 && mediaPorDia <= 75 ? 'ok'
+                 : mediaPorDia < 30 || mediaPorDia > 90 ? 'critico' : 'atencao'
+
+    return {
+      status,
+      valor: '~' + mediaPorDia + ' min/sessão',
+      detail: 'Estimativa baseada nos sets, execução (~40s/série) e descanso prescrito. Referência ACSM: 45–75 min.',
+      rec: status === 'ok'
+        ? 'Duração de sessão dentro do ideal. Sessões muito longas reduzem cortisol e prejudicam a recuperação.'
+        : mediaPorDia < 45
+        ? 'Sessão curta — pode indicar volume insuficiente ou descanso muito curto entre séries.'
+        : 'Sessão longa demais. Acima de 75–90 min, o nível de cortisol e fadiga comprometem o ganho. Reduza volume ou aumente o descanso.',
+    }
+  }
+
+  // ── 5. ORDEM DOS EXERCÍCIOS ────────────────────────────────────────────────
+  const calcOrdem = () => {
+    if (!wDays.length) return { status:'sem', valor:null, rec:'', detail:'' }
+
+    const MULTIARTICULARES = ['agachamento','supino','levantamento','terra','remada','barra','desenvolvimento','leg press','hack','stiff','avanço','afundo','paralelas','mergulho','clean','snatch']
+    const ISOLADOS = ['curl','rosca','extensão','crucifixo','voador','pulldown','puxada','tríceps','bíceps','panturrilha','elevação']
+
+    let diasOk = 0, diasTotal = 0
+
+    wDays.forEach(d => {
+      const exs = (d.exercises || [])
+      if (exs.length < 2) return
+      diasTotal++
+      const names = exs.map(e => (e.name||'').toLowerCase())
+
+      const firstMulti = names.findIndex(n => MULTIARTICULARES.some(m => n.includes(m)))
+      const firstIsolado = names.findIndex(n => ISOLADOS.some(i => n.includes(i)))
+
+      // Ok se: não tem isolado (tudo é multi), ou multi vem antes do isolado
+      if (firstIsolado === -1 || firstMulti === -1 || firstMulti < firstIsolado) diasOk++
+    })
+
+    if (!diasTotal) return { status:'sem', valor:null, rec:'', detail:'' }
+
+    const pct = Math.round((diasOk / diasTotal) * 100)
+    const status = pct >= 80 ? 'ok' : pct >= 50 ? 'atencao' : 'critico'
+
+    return {
+      status,
+      valor: pct + '% dos dias com ordem correta',
+      detail: 'Multiarticulares (agachamento, supino, terra) devem preceder isolados (curl, extensão). Pesos livres antes de máquinas quando possível.',
+      rec: status === 'ok'
+        ? 'Ordem dos exercícios adequada. Exercícios compostos no início garantem máximo recrutamento neural.'
+        : 'Revise a ordem dos exercícios. Coloque multiarticulares (agachamento, supino, terra) antes dos isolados para otimizar o estímulo neuromuscular.',
+    }
+  }
+
+  // ── 6. RECUPERAÇÃO ─────────────────────────────────────────────────────────
+  const calcRecuperacao = () => {
+    if (!exLogs.length) return { status:'sem', valor:null, rec:'', detail:'' }
+
+    // Verificar dias consecutivos de treino (sem folga)
+    const datesSet = [...new Set(exLogs.map(l => l.date?.slice(0,10)).filter(Boolean))].sort()
+    if (datesSet.length < 2) return { status:'sem', valor:null, rec:'', detail:'' }
+
+    let maxConsec = 1, currConsec = 1, alerts = 0
+    for (let i = 1; i < datesSet.length; i++) {
+      const diff = (new Date(datesSet[i]) - new Date(datesSet[i-1])) / 86400000
+      if (diff === 1) {
+        currConsec++
+        if (currConsec > 3) alerts++
+      } else {
+        maxConsec = Math.max(maxConsec, currConsec)
+        currConsec = 1
+      }
+    }
+    maxConsec = Math.max(maxConsec, currConsec)
+
+    // Descanso médio entre os dias do plano
+    const descansosPlan = []
+    if (wDays.length > 1) {
+      const DIA_JS = { Dom:0,Seg:1,Ter:2,Qua:3,Qui:4,Sex:5,Sáb:6 }
+      const diasJS = wDays.map(d => DIA_JS[d.day_of_week]).filter(x => x !== undefined).sort((a,b)=>a-b)
+      for (let i = 1; i < diasJS.length; i++) descansosPlan.push(diasJS[i] - diasJS[i-1])
+    }
+    const minDescanso = descansosPlan.length ? Math.min(...descansosPlan) : 1
+
+    const status = maxConsec <= 3 && minDescanso >= 1 ? 'ok'
+                 : maxConsec > 5 || minDescanso === 0 ? 'critico' : 'atencao'
+
+    return {
+      status,
+      valor: maxConsec + ' dias consecutivos máx · ' + (minDescanso) + 'd descanso mín entre sessões',
+      detail: 'Baseado nos logs de treino registrados. Recomendado: máx 3 dias consecutivos, mínimo 48h entre grupos musculares iguais.',
+      rec: status === 'ok'
+        ? 'Padrão de recuperação adequado. Mantenha pelo menos 1 dia de descanso a cada 3 dias de treino.'
+        : maxConsec > 3
+        ? 'Muitos dias consecutivos sem descanso detectados. Inclua dias de recuperação ativa ou descanso completo.'
+        : 'Dias de treino consecutivos no plano sem descanso suficiente. Redistribua os dias para garantir 48h de recuperação por grupo muscular.',
+    }
+  }
+
+  const fatores = [
+    { id:'intensidade', label:'Intensidade das Cargas', icone:'🏋️', ...calcIntensidade(), ref:'Zatsiorsky & Kraemer, 2006' },
+    { id:'volume',      label:'Volume Semanal',         icone:'📊', ...calcVolume(),      ref:'Schoenfeld et al., 2017' },
+    { id:'frequencia',  label:'Frequência',             icone:'📅', ...calcFrequencia(),  ref:'Ralston et al., 2017' },
+    { id:'densidade',   label:'Densidade (estimada)',   icone:'⏱️', ...calcDensidade(),   ref:'ACSM Guidelines, 2022' },
+    { id:'ordem',       label:'Ordem dos Exercícios',   icone:'🔢', ...calcOrdem(),       ref:'NSCA, 2016' },
+    { id:'recuperacao', label:'Recuperação',            icone:'😴', ...calcRecuperacao(), ref:'Meeusen et al., 2013' },
+  ]
+
+  const semCount = { ok:0, atencao:0, critico:0, sem:0 }
+  fatores.forEach(f => semCount[f.status]++)
+
+  const [expandido, setExpandido] = useState(null)
+
   return (
-    <div>
-      {/* ── Laudo Header ── */}
-      <div style={{ background: '#0A0F1A', borderRadius: 16, marginBottom: 16, border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-        {/* Report title bar */}
-        <div style={{ background: 'rgba(99,102,241,0.12)', borderBottom: '1px solid rgba(99,102,241,0.2)', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <div style={{ fontSize: 9, color: '#6366F1', letterSpacing: 2.5, textTransform: 'uppercase', fontWeight: 700, marginBottom: 2 }}>Relatório de Avaliação — {new Date().toLocaleDateString('pt-BR')}</div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#94A3B8' }}>Índice de Qualidade da Prescrição · 12 Pilares</div>
+    <div style={s.card}>
+      {/* Header */}
+      <div style={{ marginBottom:20 }}>
+        <div style={{ fontSize:16, fontWeight:800, color:'#0C3251', marginBottom:4 }}>Avaliação de Treino</div>
+        <div style={{ fontSize:12, color:'#64748B' }}>Análise automática baseada no plano ativo e logs de carga</div>
+        {!hasPlan && (
+          <div style={{ marginTop:10, padding:'10px 14px', background:'rgba(217,119,6,0.08)', borderRadius:10, border:'1px solid rgba(217,119,6,0.2)', fontSize:12, color:'#92400E', fontWeight:600 }}>
+            Nenhum plano ativo encontrado. Crie um plano de treino para ativar a análise completa.
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 9, color: '#475569', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 2 }}>Confiança dos dados</div>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: confColor, flexShrink: 0 }} />
-              <span style={{ fontSize: 12, color: confColor, fontWeight: 700 }}>{confLabel} · {confidence?.pct}%</span>
-            </div>
-          </div>
-        </div>
-        {/* Score + gauge */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 24, padding: '20px 24px', flexWrap: 'wrap' }}>
-          <div style={{ flexShrink: 0 }}><GaugeArc score={result.finalScore} /></div>
-          <div style={{ flex: 1, minWidth: 180 }}>
-            <div style={{ fontSize: 42, fontWeight: 900, color: final.text, lineHeight: 1, marginBottom: 4, fontFamily: "'DM Sans',sans-serif" }}>{result.finalScore}<span style={{ fontSize: 18, color: '#475569', fontWeight: 400 }}>/100</span></div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: final.text, marginBottom: 14, letterSpacing: 0.3 }}>{final.label}</div>
-            {/* Pillar score summary — compact table */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 4 }}>
-              {result.pilares.map(p => {
-                const c = getScoreColor(p.score)
-                return (
-                  <div key={p.id} style={{ padding: '5px 8px', borderRadius: 6, background: c.bg, border: `1px solid ${c.border}`, cursor: 'pointer', textAlign: 'center' }} onClick={() => { setActiveTab('pilares'); setExpanded(p.id) }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: c.text, lineHeight: 1 }}>{p.score}</div>
-                    <div style={{ fontSize: 8, color: c.text, opacity: 0.7, marginTop: 1, letterSpacing: 0.3, textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name.split(' ')[0]}</div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* ── Sub-tabs ── */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+      {/* Semáforo geral */}
+      <div style={{ display:'flex', gap:8, marginBottom:20, padding:'12px 16px', background:'rgba(255,255,255,0.6)', borderRadius:12, border:'1px solid rgba(255,255,255,0.9)' }}>
         {[
-          { id: 'pilares', label: `${result.pilares.length} Pilares`, },
-          { id: 'recs',    label: `${recs.length} Recomendações`, badge: recs.filter(r=>r.score<45).length },
-          { id: 'history', label: 'Histórico', },
-        ].map(t => (
-          <button key={t.id} onClick={() => setActiveTab(t.id)}
-            style={{ flex:1, padding:'10px 12px', borderRadius:10, border:'none', background: activeTab===t.id ? 'linear-gradient(135deg,#6366F1,#8B5CF6)' : 'rgba(255,255,255,0.04)', color: activeTab===t.id ? '#fff' : '#64748B', fontWeight:700, fontSize:12, cursor:'pointer', position:'relative', boxShadow: activeTab===t.id ? '0 4px 14px rgba(99,102,241,0.35)' : 'none' }}>
-            {t.label}
-            {t.badge > 0 && <span style={{ position:'absolute', top:4, right:6, background:'#F87171', color:'#fff', borderRadius:'50%', width:16, height:16, fontSize:9, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900 }}>{t.badge}</span>}
-          </button>
+          { k:'ok',      label:'Adequado', cor:'#16A34A' },
+          { k:'atencao', label:'Atenção',  cor:'#D97706' },
+          { k:'critico', label:'Crítico',  cor:'#DC2626' },
+          { k:'sem',     label:'Sem dados',cor:'#94A3B8' },
+        ].map(({ k, label, cor }) => (
+          <div key={k} style={{ display:'flex', alignItems:'center', gap:6, flex:1, justifyContent:'center' }}>
+            <div style={{ width:10, height:10, borderRadius:'50%', background:cor, boxShadow: semCount[k] > 0 ? '0 0 8px '+cor : 'none' }} />
+            <span style={{ fontSize:12, fontWeight:700, color:cor }}>{semCount[k]}</span>
+            <span style={{ fontSize:10, color:'#64748B' }}>{label}</span>
+          </div>
         ))}
       </div>
 
-      {/* ── Tab: Pilares ── */}
-      {activeTab === 'pilares' && (
-        <div>
-          <div style={{ marginBottom: 8, fontSize: 11, color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>Clique em cada pilar para expandir</div>
-          {result.pilares.map(p => {
-            const c   = getScoreColor(p.score)
-            const open = expanded === p.id
-            return (
-              <div key={p.id} style={{ marginBottom: 8 }}>
-                <div onClick={() => setExpanded(open ? null : p.id)}
-                  style={{ background: '#0A0F1A', border: `1px solid ${open ? c.border : 'rgba(255,255,255,0.06)'}`, borderRadius: open ? '10px 10px 0 0' : 10, padding: '12px 16px', cursor: 'pointer', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 12 }}>
-                  {/* Numbered index */}
-                  <div style={{ width: 28, height: 28, borderRadius: 6, background: open ? c.bg : 'rgba(255,255,255,0.04)', border: `1px solid ${open ? c.border : 'rgba(255,255,255,0.07)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: open ? c.text : '#475569' }}>{String(result.pilares.indexOf(p)+1).padStart(2,'0')}</span>
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#E2E8F0', letterSpacing: 0.1 }}>{p.name}</span>
-                      <span style={{ fontSize: 9, color: '#334155', background: 'rgba(255,255,255,0.03)', padding: '1px 6px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.06)', letterSpacing: 0.5, textTransform: 'uppercase' }}>{p.peso}</span>
-                    </div>
-                    <div style={{ height: 4, borderRadius: 99, background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${p.score}%`, borderRadius: 99, background: `linear-gradient(90deg,${c.text}99,${c.text})`, transition: 'width 0.7s ease' }} />
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 18, fontWeight: 900, color: c.text, lineHeight: 1 }}>{p.score}</div>
-                      <div style={{ fontSize: 8, color: '#334155', textTransform: 'uppercase', letterSpacing: 0.5 }}>/ 100</div>
-                    </div>
-                    <span style={{ fontSize: 11, color: '#334155', marginLeft: 2 }}>{open ? '▲' : '▼'}</span>
-                  </div>
+      {/* Fatores */}
+      <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+        {fatores.map(f => {
+          const sem  = semaforo(f.status)
+          const open = expandido === f.id
+          return (
+            <div key={f.id}
+              style={{ borderRadius:12, border:'1.5px solid '+sem.border, background:sem.bg, overflow:'hidden', transition:'all 0.2s' }}>
+              {/* Linha principal — clicável */}
+              <div onClick={() => setExpandido(open ? null : f.id)}
+                style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', cursor:'pointer' }}>
+                {/* Semáforo dot */}
+                <div style={{ width:12, height:12, borderRadius:'50%', background:sem.cor, boxShadow:'0 0 8px '+sem.cor+'80', flexShrink:0 }} />
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, fontWeight:800, color:'#0C3251' }}>{f.label}</div>
+                  {f.valor && <div style={{ fontSize:11, color:sem.cor, fontWeight:700, marginTop:2 }}>{f.valor}</div>}
+                  {!f.valor && <div style={{ fontSize:11, color:'#94A3B8', marginTop:2 }}>Sem dados suficientes</div>}
                 </div>
-                {open && (
-                  <div style={{ background: '#080B12', border: `1px solid ${c.border}`, borderTop: 'none', borderRadius: '0 0 14px 14px', padding: '16px 18px' }}>
-                    <div style={{ fontSize: 13, color: '#CBD5E1', lineHeight: 1.65, marginBottom: 12, paddingLeft: 4 }}>{p.msg}</div>
-                    <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)' }}>
-                        <span style={{ fontSize: 11, color: '#818CF8', fontWeight: 600 }}>{p.ref}</span>
-                      </div>
-                      {(RECS[p.id]?.(p.score)||[]).length > 0 && (
-                        <button onClick={e => { e.stopPropagation(); setActiveTab('recs') }} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 20, background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)', fontSize: 11, color: '#FBBF24', fontWeight: 600, cursor: 'pointer' }}>
-                          Ver recomendações
-                        </button>
-                      )}
-                    </div>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <span style={{ fontSize:10, fontWeight:800, padding:'3px 10px', borderRadius:20, background:sem.cor+'18', color:sem.cor, border:'1px solid '+sem.cor+'40' }}>{sem.label}</span>
+                  <span style={{ color:'#94A3B8', fontSize:14 }}>{open ? '▲' : '▼'}</span>
+                </div>
+              </div>
+
+              {/* Expandido */}
+              {open && (
+                <div style={{ padding:'0 16px 14px', borderTop:'1px solid '+sem.border }}>
+                  {f.detail && (
+                    <div style={{ fontSize:11, color:'#475569', lineHeight:1.6, marginTop:10, marginBottom:8 }}>{f.detail}</div>
+                  )}
+                  <div style={{ padding:'10px 12px', borderRadius:9, background:'rgba(255,255,255,0.7)', border:'1px solid rgba(255,255,255,0.9)', fontSize:12, color:'#334155', lineHeight:1.6 }}>
+                    <span style={{ fontWeight:700, color:sem.cor }}>Recomendação: </span>{f.rec}
                   </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* ── Tab: Recomendações ── */}
-      {activeTab === 'recs' && (
-        <div>
-          {recs.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 20px', color: '#4ADE80' }}>
-              <div style={{ width:40, height:40, borderRadius:8, background:"rgba(74,222,128,0.1)", border:"1px solid rgba(74,222,128,0.2)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 12px" }}><svg width="20" height="20" viewBox="0 0 24 24" fill="#4ADE80"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
-              <div style={{ fontSize: 14, fontWeight: 700 }}>Nenhuma recomendação crítica</div>
-              <div style={{ fontSize: 12, color: '#475569', marginTop: 4 }}>Todos os pilares estão com score adequado.</div>
+                  <div style={{ marginTop:6, fontSize:9, color:'#94A3B8', fontStyle:'italic' }}>Ref: {f.ref}</div>
+                </div>
+              )}
             </div>
-          ) : (
-            <div>
-              <div style={{ fontSize: 11, color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
-                {recs.length} ação{recs.length > 1 ? 'ões' : ''} sugerida{recs.length > 1 ? 's' : ''} — ordenadas por prioridade
-              </div>
-              {recs.map((rec, i) => {
-                const c = getScoreColor(rec.score)
-                return (
-                  <div key={i} style={{ background: '#0D1117', border: `1px solid ${c.border}`, borderRadius: 14, padding: '14px 18px', marginBottom: 10, display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-                    <div style={{ width: 32, height: 32, borderRadius: 6, background: c.bg, border: `1px solid ${c.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: c.text, flexShrink: 0 }}>#{i+1}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 10, color: c.text, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{rec.pilar} — score {rec.score}</div>
-                      <div style={{ fontSize: 13, color: '#CBD5E1', lineHeight: 1.6 }}>{rec.txt}</div>
-                    </div>
-                    <div style={{ flexShrink: 0, fontSize: 11, color: '#334155', fontWeight: 700, background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '4px 8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                      #{i+1}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Tab: Histórico ── */}
-      {activeTab === 'history' && (
-        <div>
-          {history.length < 2 ? (
-            <div style={{ textAlign:'center', padding:'40px 20px', color:'#475569' }}>
-              <div style={{ width:32, height:32, borderRadius:6, background:"rgba(148,163,184,0.08)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="#475569"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg></div>
-              <div style={{ fontSize:14, fontWeight:700, color:'#94A3B8' }}>Histórico insuficiente</div>
-              <div style={{ fontSize:12, marginTop:4 }}>São necessários pelo menos 2 semanas de registros para gerar o gráfico de evolução do índice.</div>
-            </div>
-          ) : (
-            <div style={{ background:'#0D1117', borderRadius:16, padding:'20px 16px', border:'1px solid rgba(255,255,255,0.07)' }}>
-              <div style={{ fontSize:12, fontWeight:700, color:'#94A3B8', marginBottom:16, textTransform:'uppercase', letterSpacing:1 }}>📈 Evolução do Índice de Prescrição</div>
-              <ResponsiveContainer width="100%" height={180}>
-                <LineChart data={history}>
-                  <XAxis dataKey="label" tick={{ fill:'#475569', fontSize:11 }} axisLine={false} tickLine={false} />
-                  <YAxis domain={[0,100]} tick={{ fill:'#475569', fontSize:11 }} axisLine={false} tickLine={false} width={30} />
-                  <Tooltip
-                    contentStyle={{ background:'rgba(4,8,32,0.97)', border:'1px solid rgba(99,102,241,0.3)', borderRadius:10, fontSize:12, color:'#E2E8F0' }}
-                    formatter={v => [`${v}/100`, 'Score']}
-                  />
-                  <Line type="monotone" dataKey="score" stroke="#6366F1" strokeWidth={3} dot={{ fill:'#818CF8', r:4, strokeWidth:2, stroke:'#6366F1' }} activeDot={{ r:6, fill:'#A78BFA' }} />
-                </LineChart>
-              </ResponsiveContainer>
-              <div style={{ marginTop:12, display:'flex', gap:16, justifyContent:'center', flexWrap:'wrap' }}>
-                {history.length >= 2 && (
-                  <TgmdDeltaRow history={history} />
-                )}
-              </div>
-            </div>
-          )}
-          <div style={{ marginTop:12, padding:'10px 14px', background:'rgba(99,102,241,0.04)', borderRadius:10, border:'1px solid rgba(99,102,241,0.10)', fontSize:11, color:'#475569', lineHeight:1.6 }}>
-            O histórico é calculado retroativamente usando os dados de cargas e cárdio registrados. Reflete a qualidade da prescrição ao longo do tempo com base nos dados disponíveis em cada período.
-          </div>
-        </div>
-      )}
-
-      {/* ── Rodapé ── */}
-      <div style={{ marginTop: 20, padding: '14px 18px', background: 'rgba(99,102,241,0.05)', borderRadius: 12, border: '1px solid rgba(99,102,241,0.12)' }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#6366F1', marginBottom: 5 }}>🔬 Sobre este avaliador v2</div>
-        <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.7 }}>
-          12 pilares ponderados com confiança baseada em dados disponíveis. Referências: ACSM 2022, Schoenfeld 2017, Foster 1998 (ACWR), Boyle 2016, Balyi LTAD 2013, Faigenbaum 2009, Fonseca 2014, WHO 2020, NSCA 2021, Kohrt 2004, Sherrington 2019. Ferramenta de suporte ao julgamento clínico — não substitui avaliação presencial.
-        </div>
+          )
+        })}
       </div>
     </div>
   )
 }
+
 
 
 
@@ -1905,7 +1984,6 @@ export default function StudentDetail({ navigate, studentId }) {
           <TabAvaliacao
             student={student}
             studentId={studentId}
-            progress={progress}
           />
         )}
 
