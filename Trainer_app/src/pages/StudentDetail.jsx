@@ -1154,18 +1154,32 @@ function TabAvaliacao({ student, studentId }) {
   useEffect(() => {
     const load = async () => {
       setLoading(true)
-      const [
-        { data: plans },
-        { data: exLogs },
-        { data: wDays  },
-      ] = await Promise.all([
-        supabase.from('workout_plans').select('id,status').eq('student_id', studentId).eq('status','active').limit(1),
-        supabase.from('exercise_logs').select('exercise_id,date,sets,exercises(name,type,rest_seconds)').eq('student_id', studentId).order('date',{ascending:false}).limit(200),
-        supabase.from('workout_days').select('id,day_of_week,exercises(id,name,sets,reps,rest_seconds,type)').eq('workout_plan_id', plans?.[0]?.id || '00000000-0000-0000-0000-000000000000'),
-      ])
+      try {
+        // Step 1: fetch plan and logs in parallel
+        const [plansRes, exLogsRes] = await Promise.all([
+          supabase.from('workout_plans').select('id,status').eq('student_id', studentId).eq('status','active').limit(1),
+          supabase.from('exercise_logs').select('exercise_id,date,sets,exercises(name,type,rest_seconds)').eq('student_id', studentId).order('date',{ascending:false}).limit(200),
+        ])
+        const plans  = plansRes.data  || []
+        const exLogs = exLogsRes.data || []
 
-      setData({ plans: plans||[], exLogs: exLogs||[], wDays: wDays||[] })
-      setLoading(false)
+        // Step 2: fetch workout days only if a plan exists
+        let wDays = []
+        if (plans.length > 0) {
+          const { data: wd } = await supabase
+            .from('workout_days')
+            .select('id,day_of_week,exercises(id,name,sets,reps,rest_seconds,type)')
+            .eq('workout_plan_id', plans[0].id)
+          wDays = wd || []
+        }
+
+        setData({ plans, exLogs, wDays })
+      } catch (err) {
+        console.error('TabAvaliacao load error:', err)
+        setData({ plans:[], exLogs:[], wDays:[] })
+      } finally {
+        setLoading(false)
+      }
     }
     load()
   }, [studentId])
