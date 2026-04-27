@@ -1156,21 +1156,24 @@ function TabAvaliacao({ student, studentId }) {
     const load = async () => {
       setLoading(true)
       try {
-        // Step 1: fetch plan and logs in parallel
+        // Step 1: fetch all plans (sem filtro de status) + logs em paralelo
         const [plansRes, exLogsRes] = await Promise.all([
-          supabase.from('workout_plans').select('id,title,status').eq('student_id', studentId).eq('status','active').limit(1),
+          supabase.from('workout_plans').select('id,title,status').eq('student_id', studentId).order('created_at',{ascending:false}),
           supabase.from('exercise_logs').select('exercise_id,date,sets,exercises(name,type,rest_seconds)').eq('student_id', studentId).order('date',{ascending:false}).limit(200),
         ])
-        const plans  = plansRes.data  || []
+        // Prefere plano ativo, se não tiver pega o primeiro
+        const allPlans = plansRes.data || []
+        const activePlan = allPlans.find(p => p.status === 'active') || allPlans[0] || null
+        const plans  = activePlan ? [activePlan] : []
         const exLogs = exLogsRes.data || []
 
-        // Step 2: fetch workout days only if a plan exists
+        // Step 2: buscar dias do plano encontrado
         let wDays = []
-        if (plans.length > 0) {
+        if (activePlan) {
           const { data: wd } = await supabase
             .from('workout_days')
             .select('id,day_of_week,exercises(id,name,sets,reps,rest_seconds,type)')
-            .eq('plan_id', plans[0].id)
+            .eq('plan_id', activePlan.id)
           wDays = wd || []
         }
 
