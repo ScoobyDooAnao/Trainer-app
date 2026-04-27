@@ -1150,6 +1150,7 @@ function TabDesenvolvimentoMotor({ student, studentId, onUpdate }) {
 function TabAvaliacao({ student, studentId }) {
   const [data,    setData]    = useState(null)
   const [loading, setLoading] = useState(true)
+  const [expandido, setExpandido] = useState(null)
 
   useEffect(() => {
     const load = async () => {
@@ -1455,7 +1456,6 @@ function TabAvaliacao({ student, studentId }) {
   const semCount = { ok:0, atencao:0, critico:0, sem:0 }
   fatores.forEach(f => semCount[f.status]++)
 
-  const [expandido, setExpandido] = useState(null)
 
   return (
     <div style={s.card}>
