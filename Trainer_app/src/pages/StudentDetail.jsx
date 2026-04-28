@@ -1678,10 +1678,236 @@ function EditFormFields({ form, setForm }) {
   )
 }
 
+
+// ── ProgressTab — Medidas e Força ────────────────────────────────────────────
+function ProgressTab({ progress, exLogs, showProgressForm, setShowProgressForm, newProgress, setNewProgress, addProgress, deleteProgress, saving, s }) {
+  const [subTab, setSubTab] = useState('medidas')
+  const [selEx,  setSelEx]  = useState(null)
+
+  const fmtDate = (d) => {
+    if (!d) return ''
+    const [,m,day] = String(d).slice(0,10).split('-')
+    return day + '/' + m
+  }
+
+  // ── Força: agrupar logs por exercício ──────────────────────────────────────
+  const exercicios = useMemo(() => {
+    const map = {}
+    ;(exLogs || []).forEach(l => {
+      const name = l.exercises?.name || l.exercise_id
+      if (!map[name]) map[name] = []
+      const maxW = Math.max(...(l.sets||[]).map(s => +(s.weight||0)))
+      if (maxW > 0) map[name].push({ date: l.date?.slice(0,10), max: maxW })
+    })
+    // Sort each exercise by date
+    Object.values(map).forEach(arr => arr.sort((a,b) => a.date > b.date ? 1 : -1))
+    return map
+  }, [exLogs])
+
+  const exNames = Object.keys(exercicios)
+  const exSel   = selEx || exNames[0] || null
+  const exData  = exSel ? exercicios[exSel] || [] : []
+
+  // Deduplicate by date (keep max per date)
+  const exDataDedup = useMemo(() => {
+    const byDate = {}
+    exData.forEach(e => { if (!byDate[e.date] || e.max > byDate[e.date]) byDate[e.date] = e.max })
+    return Object.entries(byDate).sort().map(([date, max]) => ({ date, max }))
+  }, [exData])
+
+  // ── Mini SVG chart ─────────────────────────────────────────────────────────
+  const MiniChart = ({ data, color }) => {
+    if (data.length < 2) return (
+      <div style={{ textAlign:'center', padding:'24px 0', color:'#334155', fontSize:12 }}>
+        Registre pelo menos 2 sessões com carga para ver o gráfico.
+      </div>
+    )
+    const W=320, H=100, PL=36, PR=12, PT=8, PB=24
+    const vals = data.map(d => d.max)
+    const minV = Math.min(...vals), maxV = Math.max(...vals)
+    const range = maxV - minV || 1
+    const cx = (i) => PL + (i/(data.length-1))*(W-PL-PR)
+    const cy = (v) => PT + (1-(v-minV)/range)*(H-PT-PB)
+    const pts = data.map((d,i) => cx(i)+','+cy(d.max)).join(' ')
+    const area = 'M'+cx(0)+','+cy(data[0].max)+' '+
+      data.slice(1).map((d,i)=>'L'+cx(i+1)+','+cy(d.max)).join(' ')+
+      ' L'+cx(data.length-1)+','+(H-PB)+' L'+cx(0)+','+(H-PB)+' Z'
+    const first = data[0].max, last = data[data.length-1].max
+    const delta = +(last-first).toFixed(1)
+    const pr = exDataDedup.length > 0 ? Math.max(...exDataDedup.map(d=>d.max)) : 0
+    const isNewPr = last >= pr && data.length > 1
+
+    return (
+      <div>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+          <div style={{ fontSize:11, color:'#475569' }}>
+            <span style={{ fontWeight:700, color:'#E2E8F0', fontSize:20 }}>{last}kg</span>
+            {' '}
+            <span style={{ fontSize:11, fontWeight:700, color: delta >= 0 ? '#34D399' : '#F87171', background: (delta>=0?'#34D399':'#F87171')+'18', padding:'2px 8px', borderRadius:20 }}>
+              {delta >= 0 ? '+' : ''}{delta}kg
+            </span>
+          </div>
+          {isNewPr && (
+            <div style={{ fontSize:10, fontWeight:800, color:'#A78BFA', background:'rgba(167,139,250,0.15)', padding:'3px 10px', borderRadius:20, border:'1px solid rgba(167,139,250,0.3)' }}>
+              PR {pr}kg
+            </div>
+          )}
+        </div>
+        <div style={{ overflowX:'auto' }}>
+          <svg width={W} height={H} style={{ display:'block', minWidth:W }}>
+            {[0,0.5,1].map(t => {
+              const y = PT + t*(H-PT-PB)
+              const v = (maxV - t*range).toFixed(1)
+              return (
+                <g key={t}>
+                  <line x1={PL} y1={y} x2={W-PR} y2={y} stroke="rgba(255,255,255,0.04)" />
+                  <text x={PL-4} y={y+4} textAnchor="end" fontSize={8} fill="#334155">{v}</text>
+                </g>
+              )
+            })}
+            {data.map((d,i) => (
+              (i===0||i===data.length-1||(data.length>4&&i===Math.floor(data.length/2)))
+                ? <text key={i} x={cx(i)} y={H-PB+14} textAnchor="middle" fontSize={8} fill="#334155">{fmtDate(d.date)}</text>
+                : null
+            ))}
+            <path d={area} fill={color+'10'} />
+            <polyline points={pts} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+            {data.map((d,i) => (
+              <circle key={i} cx={cx(i)} cy={cy(d.max)} r={i===data.length-1?5:3}
+                fill={color} stroke="#0D1117" strokeWidth={2} />
+            ))}
+          </svg>
+        </div>
+        <div style={{ fontSize:10, color:'#334155', marginTop:4 }}>{data.length} sessões registradas · {fmtDate(data[0].date)} → {fmtDate(data[data.length-1].date)}</div>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      {/* Sub-tabs */}
+      <div style={{ display:'flex', gap:8, marginBottom:16 }}>
+        {[['medidas','Medidas'],['forca','Força']].map(([id,label]) => (
+          <button key={id} onClick={() => setSubTab(id)}
+            style={{ padding:'8px 20px', borderRadius:10, border:'none', cursor:'pointer', fontWeight:700, fontSize:13,
+              background: subTab===id ? 'linear-gradient(135deg,#7C3AED,#6D28D9)' : 'rgba(255,255,255,0.05)',
+              color: subTab===id ? '#fff' : '#475569',
+              boxShadow: subTab===id ? '0 4px 14px rgba(124,58,237,0.35)' : 'none' }}>
+            {label}
+          </button>
+        ))}
+        <button style={{ ...s.btn(), marginLeft:'auto' }} onClick={() => setShowProgressForm(!showProgressForm)}>
+          + Registrar Evolução
+        </button>
+      </div>
+
+      {/* Form */}
+      {showProgressForm && (
+        <div style={{ ...s.card, marginBottom:16 }}>
+          <div style={{ fontSize:15, fontWeight:700, color:'#fff', marginBottom:16 }}>Novo Registro de Medidas</div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            {[['Data','date','date'],['Peso (kg)','weight','number'],['Cintura (cm)','waist','number'],['Peito (cm)','chest','number'],['Quadril (cm)','hip','number'],['Coxa (cm)','thigh','number']].map(([l,f,t]) => (
+              <div key={f}>
+                <div style={{ fontSize:10, color:'#64748B', marginBottom:4, textTransform:'uppercase' }}>{l}</div>
+                <input style={s.input} type={t} value={newProgress[f]} onChange={e => setNewProgress(x => ({ ...x, [f]: e.target.value }))} />
+              </div>
+            ))}
+            <div style={{ gridColumn:'1/-1' }}>
+              <div style={{ fontSize:10, color:'#64748B', marginBottom:4, textTransform:'uppercase' }}>Observações</div>
+              <textarea style={{ ...s.input, minHeight:60, resize:'vertical' }} value={newProgress.notes} onChange={e => setNewProgress(x => ({ ...x, notes: e.target.value }))} placeholder="Ex: Aluno relatou cansaço, aumentou carga no supino..." />
+            </div>
+          </div>
+          <button style={s.btn()} onClick={addProgress} disabled={saving}>{saving ? 'Salvando...' : 'Salvar Registro'}</button>
+        </div>
+      )}
+
+      {/* ── MEDIDAS ── */}
+      {subTab === 'medidas' && (
+        <>
+          {progress.length === 0
+            ? <div style={{ textAlign:'center', padding:60, color:'#334155' }}>Nenhum registro ainda</div>
+            : progress.map((p, i) => (
+              <div key={p.id} style={{ ...s.card, marginBottom:10 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                  <div>
+                    <div style={{ fontSize:13, color:'#34D399', fontWeight:700, marginBottom:8 }}>
+                      {new Date(p.date+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'})}
+                      {i===0 && <span style={{ marginLeft:8, fontSize:10, background:'#34D39920', color:'#34D399', padding:'2px 8px', borderRadius:20, border:'1px solid #34D39940' }}>Mais recente</span>}
+                    </div>
+                    <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
+                      {p.weight && <div><span style={{ fontSize:10, color:'#475569' }}>Peso: </span><span style={{ fontWeight:700, color:'#E2E8F0' }}>{p.weight} kg</span></div>}
+                      {p.measurements?.waist && <div><span style={{ fontSize:10, color:'#475569' }}>Cintura: </span><span style={{ fontWeight:700, color:'#E2E8F0' }}>{p.measurements.waist} cm</span></div>}
+                      {p.measurements?.chest && <div><span style={{ fontSize:10, color:'#475569' }}>Peito: </span><span style={{ fontWeight:700, color:'#E2E8F0' }}>{p.measurements.chest} cm</span></div>}
+                      {p.measurements?.hip && <div><span style={{ fontSize:10, color:'#475569' }}>Quadril: </span><span style={{ fontWeight:700, color:'#E2E8F0' }}>{p.measurements.hip} cm</span></div>}
+                      {p.measurements?.thigh && <div><span style={{ fontSize:10, color:'#475569' }}>Coxa: </span><span style={{ fontWeight:700, color:'#E2E8F0' }}>{p.measurements.thigh} cm</span></div>}
+                    </div>
+                    {p.notes && <div style={{ fontSize:12, color:'#64748B', marginTop:8 }}>{p.notes}</div>}
+                  </div>
+                  <button onClick={() => deleteProgress(p.id)} style={{ background:'none', border:'none', color:'#334155', cursor:'pointer', fontSize:16 }}>🗑</button>
+                </div>
+              </div>
+            ))
+          }
+        </>
+      )}
+
+      {/* ── FORÇA ── */}
+      {subTab === 'forca' && (
+        <div>
+          {exNames.length === 0 ? (
+            <div style={{ textAlign:'center', padding:60, color:'#334155', fontSize:13 }}>
+              Nenhuma carga registrada ainda. O aluno precisa registrar as cargas nos exercícios pelo link dele.
+            </div>
+          ) : (
+            <>
+              {/* Seletor de exercício */}
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:16 }}>
+                {exNames.map(name => (
+                  <button key={name} onClick={() => setSelEx(name)}
+                    style={{ padding:'5px 12px', borderRadius:20, fontSize:11, fontWeight:700, cursor:'pointer', border:'none',
+                      background: (exSel===name) ? '#7C3AED' : 'rgba(255,255,255,0.05)',
+                      color: (exSel===name) ? '#fff' : '#475569',
+                      transition:'all 0.15s' }}>
+                    {name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Gráfico */}
+              {exSel && (
+                <div style={{ ...s.card, marginBottom:12 }}>
+                  <div style={{ fontSize:13, fontWeight:800, color:'#E2E8F0', marginBottom:12 }}>{exSel}</div>
+                  <MiniChart data={exDataDedup} color="#A78BFA" />
+                </div>
+              )}
+
+              {/* Histórico de cargas */}
+              {exSel && exDataDedup.length > 0 && (
+                <div style={{ ...s.card }}>
+                  <div style={{ fontSize:11, color:'#475569', fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:10 }}>Histórico</div>
+                  <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:200, overflowY:'auto' }}>
+                    {[...exDataDedup].reverse().map((d,i) => (
+                      <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'7px 10px', background:'rgba(255,255,255,0.03)', borderRadius:8 }}>
+                        <span style={{ fontSize:12, color:'#475569' }}>{new Date(d.date+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'short'})}</span>
+                        <span style={{ fontSize:14, fontWeight:800, color:'#A78BFA' }}>{d.max} kg</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function StudentDetail({ navigate, studentId }) {
   const [student, setStudent] = useState(null)
   const [plans, setPlans] = useState([])
   const [progress, setProgress] = useState([])
+  const [exLogs,   setExLogs]   = useState([])
   const [tab, setTab] = useState('plans')
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({})
@@ -1703,11 +1929,12 @@ export default function StudentDetail({ navigate, studentId }) {
     setLoadingPage(true)
     setFetchError(null)
     try {
-      const [stRes, plRes, prRes, gsRes] = await Promise.all([
+      const [stRes, plRes, prRes, gsRes, elRes] = await Promise.all([
         supabase.from('students').select('id,name,age,weight,height,goal,level,notes,teacher_id,birth_date,sport,sport_position,experience_years,guardian_name,guardian_phone,parent_message,parent_message_date,parent_height_father,parent_height_mother,height_sitting,tgmd_scores,tgmd_date').eq('id', studentId).single(),
         supabase.from('workout_plans').select('*').eq('student_id', studentId).order('created_at', { ascending: false }),
         supabase.from('progress_entries').select('*').eq('student_id', studentId).order('date', { ascending: false }),
         supabase.from('student_goals').select('*').eq('student_id', studentId).order('created_at', { ascending: false }),
+        supabase.from('exercise_logs').select('exercise_id,date,sets,exercises(name)').eq('student_id', studentId).order('date', { ascending: true }).limit(300),
       ])
 
       // Se a query de student falhar por coluna nova inexistente, tenta com colunas básicas
@@ -1720,6 +1947,7 @@ export default function StudentDetail({ navigate, studentId }) {
       }
 
       if (plRes.data) setPlans(plRes.data)
+      if (elRes.data) setExLogs(elRes.data)
       if (prRes.data) setProgress(prRes.data)
       if (gsRes.data) setGoals(gsRes.data)
 
@@ -1904,53 +2132,18 @@ export default function StudentDetail({ navigate, studentId }) {
 
         {/* PROGRESS TAB */}
         {tab === 'progress' && (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-              <button style={s.btn()} onClick={() => setShowProgressForm(!showProgressForm)}>+ Registrar Evolução</button>
-            </div>
-
-            {showProgressForm && (
-              <div style={{ ...s.card, marginBottom: 16 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 16 }}>Novo Registro</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  {[['Data', 'date', 'date'], ['Peso (kg)', 'weight', 'number'], ['Cintura (cm)', 'waist', 'number'], ['Peito (cm)', 'chest', 'number'], ['Quadril (cm)', 'hip', 'number'], ['Coxa (cm)', 'thigh', 'number']].map(([l, f, t]) => (
-                    <div key={f}>
-                      <div style={{ fontSize: 10, color: '#64748B', marginBottom: 4, textTransform: 'uppercase' }}>{l}</div>
-                      <input style={s.input} type={t} value={newProgress[f]} onChange={e => setNewProgress(x => ({ ...x, [f]: e.target.value }))} />
-                    </div>
-                  ))}
-                  <div style={{ gridColumn: '1/-1' }}>
-                    <div style={{ fontSize: 10, color: '#64748B', marginBottom: 4, textTransform: 'uppercase' }}>Observações</div>
-                    <textarea style={{ ...s.input, minHeight: 60, resize: 'vertical' }} value={newProgress.notes} onChange={e => setNewProgress(x => ({ ...x, notes: e.target.value }))} placeholder="Ex: Aluno relatou cansaço, aumentou carga no supino..." />
-                  </div>
-                </div>
-                <button style={s.btn()} onClick={addProgress} disabled={saving}>{saving ? 'Salvando...' : 'Salvar Registro'}</button>
-              </div>
-            )}
-
-            {progress.length === 0 && <div style={{ textAlign: 'center', padding: 60, color: '#334155' }}>Nenhum registro ainda</div>}
-            {progress.map((p, i) => (
-              <div key={p.id} style={{ ...s.card, marginBottom: 10 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <div style={{ fontSize: 13, color: '#34D399', fontWeight: 700, marginBottom: 8 }}>
-                      {new Date(p.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-                      {i === 0 && <span style={{ marginLeft: 8, fontSize: 10, background: '#34D39920', color: '#34D399', padding: '2px 8px', borderRadius: 20, border: '1px solid #34D39940' }}>Mais recente</span>}
-                    </div>
-                    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                      {p.weight && <div><span style={{ fontSize: 10, color: '#475569' }}>Peso: </span><span style={{ fontWeight: 700, color: '#E2E8F0' }}>{p.weight} kg</span></div>}
-                      {p.measurements?.waist && <div><span style={{ fontSize: 10, color: '#475569' }}>Cintura: </span><span style={{ fontWeight: 700, color: '#E2E8F0' }}>{p.measurements.waist} cm</span></div>}
-                      {p.measurements?.chest && <div><span style={{ fontSize: 10, color: '#475569' }}>Peito: </span><span style={{ fontWeight: 700, color: '#E2E8F0' }}>{p.measurements.chest} cm</span></div>}
-                      {p.measurements?.hip && <div><span style={{ fontSize: 10, color: '#475569' }}>Quadril: </span><span style={{ fontWeight: 700, color: '#E2E8F0' }}>{p.measurements.hip} cm</span></div>}
-                      {p.measurements?.thigh && <div><span style={{ fontSize: 10, color: '#475569' }}>Coxa: </span><span style={{ fontWeight: 700, color: '#E2E8F0' }}>{p.measurements.thigh} cm</span></div>}
-                    </div>
-                    {p.notes && <div style={{ fontSize: 12, color: '#64748B', marginTop: 8 }}>📝 {p.notes}</div>}
-                  </div>
-                  <button onClick={() => deleteProgress(p.id)} style={{ background: 'none', border: 'none', color: '#334155', cursor: 'pointer', fontSize: 16 }}>🗑</button>
-                </div>
-              </div>
-            ))}
-          </div>
+          <ProgressTab
+            progress={progress}
+            exLogs={exLogs}
+            showProgressForm={showProgressForm}
+            setShowProgressForm={setShowProgressForm}
+            newProgress={newProgress}
+            setNewProgress={setNewProgress}
+            addProgress={addProgress}
+            deleteProgress={deleteProgress}
+            saving={saving}
+            s={s}
+          />
         )}
 
 
