@@ -911,6 +911,25 @@ export default function WorkoutEditor({ navigate, studentId, planId }) {
     setSaving(false)
   }
 
+  const saveStatus = async (newStatus) => {
+    setSaving(true)
+    await supabase.from('workout_plans').update({ status:newStatus, updated_at:new Date().toISOString() }).eq('id', planId)
+    setSaving(false)
+  }
+
+  const deletePlan = async () => {
+    if (!window.confirm('Excluir este plano de treino? Todos os dias e exercícios serão removidos permanentemente.')) return
+    setSaving(true)
+    // Delete exercises first, then days, then plan
+    const dayIds = days.map(d => d.id)
+    if (dayIds.length > 0) {
+      await supabase.from('exercises').delete().in('workout_day_id', dayIds)
+      await supabase.from('workout_days').delete().in('id', dayIds)
+    }
+    await supabase.from('workout_plans').delete().eq('id', planId)
+    navigate('student-detail', { id: studentId })
+  }
+
   const addDay = async () => {
     const name = 'Treino ' + String.fromCharCode(65 + days.length)
     const { data } = await supabase.from('workout_days').insert([{ plan_id:planId, name, focus:'', day_of_week:'', order_index:days.length }]).select().single()
@@ -1003,11 +1022,17 @@ export default function WorkoutEditor({ navigate, studentId, planId }) {
         <div style={{ maxWidth:860, margin:'0 auto' }}>
 
           {/* Voltar */}
-          <button
-            style={{ background:'none', border:'none', color:V.accentDim, fontSize:13, cursor:'pointer', marginBottom:20, display:'flex', alignItems:'center', gap:6, fontFamily:'inherit', fontWeight:600 }}
-            onClick={() => navigate('student-detail', { id:studentId })}>
-            ← Voltar ao Aluno
-          </button>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+            <button
+              style={{ background:'none', border:'none', color:V.accentDim, fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', gap:6, fontFamily:'inherit', fontWeight:600 }}
+              onClick={() => navigate('student-detail', { id:studentId })}>
+              ← Voltar ao Aluno
+            </button>
+            <button onClick={deletePlan} disabled={saving}
+              style={{ background:'rgba(239,68,68,0.1)', border:'1px solid rgba(239,68,68,0.3)', borderRadius:8, padding:'6px 14px', color:'#F87171', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:6 }}>
+              🗑 Excluir Plano
+            </button>
+          </div>
 
           {/* ── Header do plano ── */}
           <div style={{ background:V.bgCard, borderRadius:16, padding:20, border:`1px solid ${V.border}`, marginBottom:20, display:'flex', gap:12, alignItems:'center', flexWrap:'wrap', backdropFilter:'blur(8px)' }}>
@@ -1018,7 +1043,7 @@ export default function WorkoutEditor({ navigate, studentId, planId }) {
               onBlur={savePlanTitle}
               placeholder="Nome do plano..."
             />
-            <select style={{ ...ss.input, fontSize:13 }} value={plan.status} onChange={e => { setPlan(p => ({ ...p, status:e.target.value })); setTimeout(savePlanTitle, 100) }}>
+            <select style={{ ...ss.input, fontSize:13 }} value={plan.status} onChange={e => { const v=e.target.value; setPlan(p => ({ ...p, status:v })); saveStatus(v) }}>
               {STATUS_OPTIONS.map(o => <option key={o} value={o}>{STATUS_LABEL[o]}</option>)}
             </select>
             {student && (
