@@ -1351,9 +1351,9 @@ function TabAvaliacao({ student, studentId }) {
       let minDia = 0
       d.exercises.forEach(ex => {
         const sets     = +(ex.sets || 3)
-        const descanso = +(ex.rest_seconds || 90)
-        const execucao = 40 // segundos por série
-        minDia += sets * (execucao + descanso)
+        const descanso = +(ex.rest_seconds || 90) // segundos de descanso entre séries
+        // 1 min (60s) por série + descanso entre séries (sets-1 intervalos)
+        minDia += sets * 60 + (sets - 1) * descanso
       })
       totalMinEstimado += minDia / 60
     })
