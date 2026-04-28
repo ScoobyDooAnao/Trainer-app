@@ -1167,14 +1167,26 @@ function TabAvaliacao({ student, studentId }) {
         const plans  = activePlan ? [activePlan] : []
         const exLogs = exLogsRes.data || []
 
-        // Step 2: buscar dias do plano encontrado
+        // Step 2: buscar dias do plano encontrado, depois exercícios separadamente
         let wDays = []
         if (activePlan) {
           const { data: wd } = await supabase
             .from('workout_days')
-            .select('id,day_of_week,exercises(id,name,sets,reps,rest_seconds,type)')
+            .select('id,day_of_week,name')
             .eq('plan_id', activePlan.id)
-          wDays = wd || []
+          if (wd && wd.length > 0) {
+            const dayIds = wd.map(d => d.id)
+            const { data: exs } = await supabase
+              .from('exercises')
+              .select('id,name,sets,reps,rest,type,day_id')
+              .in('day_id', dayIds)
+            const exByDay = {}
+            ;(exs || []).forEach(e => {
+              if (!exByDay[e.day_id]) exByDay[e.day_id] = []
+              exByDay[e.day_id].push({ ...e, rest_seconds: e.rest })
+            })
+            wDays = wd.map(d => ({ ...d, exercises: exByDay[d.id] || [] }))
+          }
         }
 
         setData({ plans, exLogs, wDays })
