@@ -1273,37 +1273,106 @@ function TabAvaliacao({ student, studentId }) {
     }
   }
 
-  // ── 2. VOLUME (séries × reps por músculo) ──────────────────────────────────
+  // ── 2. VOLUME por grupo muscular (Schoenfeld et al., 2017) ──────────────────
   const calcVolume = () => {
     if (!wDays.length) return { status:'sem', valor:null, rec:'', detail:'' }
 
-    // Contar sets totais por semana (somando todos os dias)
-    let totalSets = 0
-    wDays.forEach(d => (d.exercises||[]).forEach(ex => { totalSets += +(ex.sets||0) }))
-
-    // Referência: 10–20 sets/músculo/semana (Schoenfeld 2017)
-    // Aproximamos: total de sets do plano
-    const nivelVolume = {
-      'Iniciante':           { min:10, max:15, label:'10–15 sets/semana (iniciante)' },
-      'Intermediário':       { min:15, max:20, label:'15–20 sets/semana (intermediário)' },
-      'Avançado':            { min:18, max:25, label:'18–25 sets/semana (avançado)' },
-      'Atleta Jovem':        { min:15, max:22, label:'15–22 sets/semana' },
-      'Atleta Competitivo':  { min:20, max:30, label:'20–30 sets/semana' },
+    // Mapeamento exercício → grupo muscular primário
+    const MUSCLE_MAP = {
+      // Peito
+      supino: 'Peito', 'supino reto': 'Peito', 'supino inclinado': 'Peito',
+      'supino declinado': 'Peito', crucifixo: 'Peito', voador: 'Peito',
+      'crossover': 'Peito', 'peck deck': 'Peito', 'flexão': 'Peito', 'push up': 'Peito',
+      // Costas
+      remada: 'Costas', 'puxada': 'Costas', 'barra fixa': 'Costas',
+      'levantamento terra': 'Costas', 'pulldown': 'Costas', 'pull': 'Costas',
+      'serrote': 'Costas', 'cavalinho': 'Costas', 'hiperextensão': 'Costas',
+      // Ombro
+      desenvolvimento: 'Ombro', 'elevação lateral': 'Ombro', 'elevação frontal': 'Ombro',
+      'arnold': 'Ombro', 'face pull': 'Ombro', 'encolhimento': 'Ombro',
+      // Bíceps
+      'rosca direta': 'Bíceps', 'rosca alternada': 'Bíceps', 'rosca martelo': 'Bíceps',
+      'rosca concentrada': 'Bíceps', 'rosca scott': 'Bíceps', 'curl': 'Bíceps',
+      // Tríceps
+      'tríceps': 'Tríceps', 'triceps': 'Tríceps', 'mergulho': 'Tríceps',
+      'extensão': 'Tríceps', 'testa': 'Tríceps', 'corda': 'Tríceps', 'paralelas': 'Tríceps',
+      // Quadríceps
+      agachamento: 'Quadríceps', 'leg press': 'Quadríceps', 'hack': 'Quadríceps',
+      'cadeira extensora': 'Quadríceps', 'avanço': 'Quadríceps', 'afundo': 'Quadríceps',
+      'passada': 'Quadríceps', 'búlgaro': 'Quadríceps',
+      // Posterior/Isquiotibiais
+      stiff: 'Posterior', 'mesa flexora': 'Posterior', 'flexora': 'Posterior',
+      'leg curl': 'Posterior', 'good morning': 'Posterior',
+      // Glúteo
+      'glúteo': 'Glúteo', 'gluteo': 'Glúteo', 'hip thrust': 'Glúteo',
+      'elevação pélvica': 'Glúteo', 'abdução': 'Glúteo',
+      // Panturrilha
+      'panturrilha': 'Panturrilha', 'gêmeos': 'Panturrilha', 'gemeos': 'Panturrilha',
+      'calf': 'Panturrilha',
+      // Abdômen
+      'abdominal': 'Abdômen', 'prancha': 'Abdômen', 'crunch': 'Abdômen',
+      'oblíquo': 'Abdômen', 'obliquo': 'Abdômen', 'plank': 'Abdômen',
     }
-    const ref = nivelVolume[nivel] || nivelVolume['Iniciante']
 
-    const status = totalSets >= ref.min && totalSets <= ref.max ? 'ok'
-                 : totalSets < ref.min * 0.7 || totalSets > ref.max * 1.3 ? 'critico' : 'atencao'
+    const findGroup = (name) => {
+      const n = (name || '').toLowerCase()
+      for (const [key, group] of Object.entries(MUSCLE_MAP)) {
+        if (n.includes(key)) return group
+      }
+      return 'Outros'
+    }
+
+    // Contar sets por grupo muscular
+    const setsByGroup = {}
+    wDays.forEach(d => {
+      ;(d.exercises || []).forEach(ex => {
+        const group = findGroup(ex.name)
+        const sets  = +(ex.sets || 0)
+        setsByGroup[group] = (setsByGroup[group] || 0) + sets
+      })
+    })
+
+    const grupos = Object.entries(setsByGroup).filter(([g]) => g !== 'Outros')
+    if (!grupos.length) return { status:'sem', valor:null, rec:'', detail:'Nenhum exercício mapeado para grupo muscular.' }
+
+    // Faixa de referência por nível (sets/grupo/semana)
+    const REF = {
+      'Iniciante':          { min:10, max:15 },
+      'Intermediário':      { min:12, max:18 },
+      'Avançado':           { min:16, max:22 },
+      'Atleta Jovem':       { min:12, max:20 },
+      'Atleta Competitivo': { min:18, max:25 },
+    }
+    const ref = REF[nivel] || REF['Iniciante']
+
+    // Avaliar cada grupo
+    const baixos   = grupos.filter(([,s]) => s < ref.min).map(([g,s]) => `${g} (${s} sets)`)
+    const altos    = grupos.filter(([,s]) => s > ref.max).map(([g,s]) => `${g} (${s} sets)`)
+    const ok       = grupos.filter(([,s]) => s >= ref.min && s <= ref.max).length
+    const total    = grupos.length
+
+    // Score geral: % de grupos dentro da faixa
+    const pctOk = total > 0 ? ok / total : 0
+    const status = pctOk >= 0.8 ? 'ok' : pctOk >= 0.5 ? 'atencao' : 'critico'
+
+    // Texto de recomendação focado nos grupos problemáticos
+    let rec = ''
+    if (status === 'ok') {
+      rec = 'Volume equilibrado entre os grupos musculares. Mantenha a progressão gradual.'
+    } else {
+      const partes = []
+      if (baixos.length) partes.push(`Volume insuficiente em: ${baixos.join(', ')} — adicione séries ou um dia extra para esses grupos.`)
+      if (altos.length)  partes.push(`Volume excessivo em: ${altos.join(', ')} — reduza séries ou distribua em mais dias para evitar overreaching.`)
+      rec = partes.join(' ')
+    }
+
+    const totalSets = grupos.reduce((a,[,s]) => a+s, 0)
 
     return {
       status,
-      valor: totalSets + ' sets/semana',
-      detail: `Referência para ${nivel}: ${ref.label}. (Schoenfeld et al., 2017)`,
-      rec: status === 'ok'
-        ? 'Volume dentro da faixa ideal para o nível. Continue monitorando a progressão.'
-        : totalSets < ref.min
-        ? 'Volume abaixo do mínimo efetivo. Adicione séries ou exercícios para atingir o estímulo necessário.'
-        : 'Volume acima do recomendado — risco de overreaching. Reduza séries ou aumente o descanso entre sessões.',
+      valor: `${ok}/${total} grupos musculares no volume ideal`,
+      detail: `Análise por grupo: ${grupos.map(([g,s])=>`${g}: ${s} sets`).join(' · ')}. Ref. ${nivel}: ${ref.min}–${ref.max} sets/grupo/semana. (Schoenfeld et al., 2017)`,
+      rec,
     }
   }
 
