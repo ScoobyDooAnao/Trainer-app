@@ -607,7 +607,99 @@ function TabMetas({ studentId, student, goals, onUpdate }) {
 }
 
 // ── STUDENT CARDIO TAB ────────────────────────────────────────────────────────
-function StudentCardioTab({ studentId, student, sessions, onNewSession }) {
+
+// ── CardioSimplificadoModal — versão para adolescentes (13–17 anos) ──────────
+function CardioSimplificadoModal({ studentId, onSave, onClose }) {
+  const today = new Date().toISOString().slice(0,10)
+  const [date,     setDate]     = useState(today)
+  const [tipo,     setTipo]     = useState('corrida')
+  const [duracao,  setDuracao]  = useState('')
+  const [distancia,setDistancia]= useState('')
+  const [pse,      setPse]      = useState(5)
+  const [notes,    setNotes]    = useState('')
+  const [saving,   setSaving]   = useState(false)
+
+  const TIPOS = [
+    { id:'corrida', label:'Corrida' },
+    { id:'bike',    label:'Bike' },
+    { id:'natacao', label:'Natação' },
+    { id:'outro',   label:'Outro' },
+  ]
+  const PSE_LABELS = ['','Muito fácil','Fácil','Tranquilo','Ok','Cansou um pouco','Cansou','Puxado','Muito puxado','Quase no limite','No limite']
+
+  const save = async () => {
+    setSaving(true)
+    await supabase.from('cardio_sessions').insert([{
+      student_id: studentId, date, type: tipo,
+      duration_minutes: +duracao || null,
+      distance_km: +distancia || null,
+      pse: +pse, notes,
+    }])
+    setSaving(false)
+    onSave()
+    onClose()
+  }
+
+  const inp = { width:'100%', background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:10, padding:'11px 14px', color:'#E2E8F0', fontSize:14, outline:'none', boxSizing:'border-box' }
+  const lbl = { fontSize:11, color:'#64748B', fontWeight:700, textTransform:'uppercase', letterSpacing:0.8, marginBottom:5, display:'block', marginTop:14 }
+
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:16 }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:'#0D1117', borderRadius:20, padding:24, width:'100%', maxWidth:400, border:'1px solid rgba(255,255,255,0.08)', boxShadow:'0 20px 60px rgba(0,0,0,0.5)' }}>
+        <div style={{ fontSize:16, fontWeight:800, color:'#E2E8F0', marginBottom:4 }}>Registrar Atividade</div>
+        <div style={{ fontSize:12, color:'#475569', marginBottom:18 }}>Como foi sua atividade hoje?</div>
+
+        <label style={lbl}>Tipo de atividade</label>
+        <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+          {TIPOS.map(t => (
+            <button key={t.id} onClick={() => setTipo(t.id)}
+              style={{ padding:'8px 14px', borderRadius:20, fontSize:12, fontWeight:700, cursor:'pointer', border:'none',
+                background: tipo===t.id ? '#34D399' : 'rgba(255,255,255,0.06)',
+                color: tipo===t.id ? '#022c22' : '#475569' }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginTop:4 }}>
+          <div>
+            <label style={lbl}>Duração (min)</label>
+            <input style={inp} type="number" placeholder="Ex: 30" value={duracao} onChange={e=>setDuracao(e.target.value)} />
+          </div>
+          <div>
+            <label style={lbl}>Distância (km)</label>
+            <input style={inp} type="number" step="0.1" placeholder="Ex: 3.0" value={distancia} onChange={e=>setDistancia(e.target.value)} />
+          </div>
+        </div>
+
+        <label style={{ ...lbl, marginTop:18 }}>
+          Como você se sentiu? <span style={{ color:'#34D399', fontWeight:800 }}>{pse}/10 — {PSE_LABELS[pse]}</span>
+        </label>
+        <input type="range" min="1" max="10" value={pse} onChange={e=>setPse(+e.target.value)}
+          style={{ width:'100%', accentColor:'#34D399', marginBottom:4 }} />
+        <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:'#334155' }}>
+          <span>1 — Fácil</span><span>10 — No limite</span>
+        </div>
+
+        <label style={lbl}>Observações</label>
+        <textarea style={{ ...inp, minHeight:55, resize:'vertical' }} placeholder="Como foi? Algo diferente?" value={notes} onChange={e=>setNotes(e.target.value)} />
+
+        <div style={{ display:'flex', gap:8, marginTop:20 }}>
+          <button onClick={save} disabled={saving}
+            style={{ flex:1, padding:'13px', borderRadius:12, border:'none', cursor:'pointer', background:'linear-gradient(135deg,#34D399,#059669)', color:'#022c22', fontWeight:800, fontSize:14 }}>
+            {saving ? 'Salvando...' : 'Salvar'}
+          </button>
+          <button onClick={onClose}
+            style={{ flex:1, padding:'13px', borderRadius:12, border:'1px solid rgba(255,255,255,0.08)', background:'transparent', color:'#475569', fontWeight:600, fontSize:13, cursor:'pointer' }}>
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function StudentCardioTab({ studentId, student, sessions, onNewSession, simplified=false }) {
   const [modal, setModal]   = useState(false)
   const [filter, setFilter] = useState('todos')
   const presc = SV_PRESCRICAO[student?.goal]
@@ -623,7 +715,22 @@ function StudentCardioTab({ studentId, student, sessions, onNewSession }) {
 
   return (
     <div style={{ animation:'fadeUp 0.4s ease' }}>
-      {modal && <SvCardioModal studentId={studentId} onSave={()=>{onNewSession();setModal(false)}} onClose={()=>setModal(false)} />}
+      {modal && (
+        simplified
+          ? <CardioSimplificadoModal studentId={studentId} onSave={()=>{onNewSession();setModal(false)}} onClose={()=>setModal(false)} />
+          : <SvCardioModal studentId={studentId} onSave={()=>{onNewSession();setModal(false)}} onClose={()=>setModal(false)} />
+      )}
+      {simplified && (
+        <div style={{ ...CARD, marginBottom:14, display:'flex', alignItems:'center', gap:12, padding:'12px 16px' }}>
+          <div style={{ fontSize:26 }}>🟡</div>
+          <div>
+            <div style={{ fontSize:13, fontWeight:800, color:'#FBBF24' }}>Cardio para Adolescentes</div>
+            <div style={{ fontSize:11, color:'#64748B', marginTop:2, lineHeight:1.5 }}>
+              Mantenha o esforço entre 5–7/10. Evite intensidade máxima sem orientação do professor.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20 }}>
@@ -2109,16 +2216,38 @@ export default function StudentView({ studentId }) {
 
         {/* ── ABA CÁRDIO ── */}
         {tab === 'cardio' && (
-          <StudentCardioTab
-            studentId={studentId}
-            student={student}
-            sessions={cardio}
-            onNewSession={async () => {
-              const { data: cs } = await supabase.from('cardio_sessions').select('*')
-                .eq('student_id', studentId).order('date', { ascending: false }).limit(120)
-              if (cs) setCardio(cs)
-            }}
-          />
+          (parseInt(student?.age)||0) > 0 && (parseInt(student?.age)||0) <= 12
+          ? (
+            <div style={{ ...CARD, textAlign:'center', padding:'48px 24px' }}>
+              <div style={{ fontSize:52, marginBottom:16 }}>🏃</div>
+              <div style={{ fontSize:18, fontWeight:800, color:'#E2E8F0', marginBottom:10 }}>
+                Seu cardio é feito correndo e brincando!
+              </div>
+              <div style={{ fontSize:14, color:'#64748B', lineHeight:1.8, maxWidth:320, margin:'0 auto' }}>
+                Nessa fase, as brincadeiras, os jogos e as atividades em grupo já desenvolvem
+                todo o condicionamento que você precisa. Continue se movimentando e se
+                divertindo — isso é o mais importante!
+              </div>
+              <div style={{ marginTop:20, padding:'12px 18px', background:'rgba(52,211,153,0.08)', borderRadius:12, border:'1px solid rgba(52,211,153,0.2)', display:'inline-block' }}>
+                <div style={{ fontSize:12, color:'#34D399', fontWeight:700 }}>
+                  Dica: participe das aulas, corra, pule e jogue bastante!
+                </div>
+              </div>
+            </div>
+          )
+          : (
+            <StudentCardioTab
+              studentId={studentId}
+              student={student}
+              sessions={cardio}
+              simplified={(parseInt(student?.age)||0) >= 13 && (parseInt(student?.age)||0) <= 17}
+              onNewSession={async () => {
+                const { data: cs } = await supabase.from('cardio_sessions').select('*')
+                  .eq('student_id', studentId).order('date', { ascending: false }).limit(120)
+                if (cs) setCardio(cs)
+              }}
+            />
+          )
         )}
 
         {/* ── ABA EVOLUÇÃO ── */}
