@@ -883,6 +883,7 @@ export default function WorkoutEditor({ navigate, studentId, planId }) {
   const [openCalc,     setOpenCalc]     = useState(null)
   const [showTemplate, setShowTemplate] = useState(false)
   const [semAcademia,  setSemAcademia]  = useState(false)
+  const [showAval,     setShowAval]     = useState(false)
 
   const ageGroup   = getAgeGroup(student?.birth_date, student?.age)
   const studentAge = student?.birth_date
@@ -917,7 +918,104 @@ export default function WorkoutEditor({ navigate, studentId, planId }) {
     setSaving(false)
   }
 
-  const deletePlan = async () => {
+  // ── Análise de avaliação — calculada em tempo real a partir dos days ────────
+  const avalAnalysis = (() => {
+    if (!days.length) return {}
+
+    const MUSCLE_MAP = {
+      supino:'Peito','supino reto':'Peito','supino inclinado':'Peito','supino declinado':'Peito',
+      crucifixo:'Peito',voador:'Peito',crossover:'Peito','peck deck':'Peito','flexão':'Peito','push up':'Peito',
+      remada:'Costas',puxada:'Costas','barra fixa':'Costas','levantamento terra':'Costas',
+      pulldown:'Costas',serrote:'Costas',cavalinho:'Costas',hiperextensão:'Costas',
+      desenvolvimento:'Ombro','elevação lateral':'Ombro','elevação frontal':'Ombro',
+      arnold:'Ombro','face pull':'Ombro',encolhimento:'Ombro',
+      'rosca direta':'Bíceps','rosca alternada':'Bíceps','rosca martelo':'Bíceps',
+      'rosca concentrada':'Bíceps','rosca scott':'Bíceps',curl:'Bíceps',
+      tríceps:'Tríceps',triceps:'Tríceps',mergulho:'Tríceps',extensão:'Tríceps',
+      testa:'Tríceps',corda:'Tríceps',paralelas:'Tríceps',
+      agachamento:'Quadríceps','leg press':'Quadríceps',hack:'Quadríceps',
+      'cadeira extensora':'Quadríceps',avanço:'Quadríceps',afundo:'Quadríceps',passada:'Quadríceps',búlgaro:'Quadríceps',
+      stiff:'Posterior','mesa flexora':'Posterior',flexora:'Posterior','leg curl':'Posterior',
+      glúteo:'Glúteo',gluteo:'Glúteo','hip thrust':'Glúteo','elevação pélvica':'Glúteo',abdução:'Glúteo',
+      panturrilha:'Panturrilha',gêmeos:'Panturrilha',gemeos:'Panturrilha',calf:'Panturrilha',
+      abdominal:'Abdômen',prancha:'Abdômen',crunch:'Abdômen',oblíquo:'Abdômen',obliquo:'Abdômen',plank:'Abdômen',
+    }
+    const findGroup = (name) => {
+      const n = (name||'').toLowerCase()
+      for (const [k,g] of Object.entries(MUSCLE_MAP)) { if (n.includes(k)) return g }
+      return null
+    }
+
+    const nivel = student?.level || 'Iniciante'
+    const REF_VOL = { 'Iniciante':{min:10,max:15},'Intermediário':{min:12,max:18},'Avançado':{min:16,max:22},'Atleta Jovem':{min:12,max:20},'Atleta Competitivo':{min:18,max:25} }
+    const ref = REF_VOL[nivel] || REF_VOL['Iniciante']
+
+    const MULTI = ['agachamento','supino','levantamento','terra','remada','barra','desenvolvimento','leg press','hack','stiff','avanço','afundo','paralelas','mergulho']
+    const ISOL  = ['curl','rosca','extensão','crucifixo','voador','pulldown','puxada','tríceps','bíceps','panturrilha','elevação']
+    const isMulti = (n) => MULTI.some(k => (n||'').toLowerCase().includes(k))
+    const isIsol  = (n) => ISOL.some(k  => (n||'').toLowerCase().includes(k))
+
+    // Volume por grupo
+    const setsByGroup = {}
+    days.forEach(d => {
+      (d.exercises||[]).forEach(ex => {
+        const g = findGroup(ex.name)
+        if (g) setsByGroup[g] = (setsByGroup[g]||0) + (+(ex.sets)||0)
+      })
+    })
+
+    // Analisa cada dia
+    const dayResults = {}
+    days.forEach(d => {
+      const exs = d.exercises || []
+      const issues = []
+      const tags   = {}
+
+      // Ordem: multi antes de isol
+      const firstMulti = exs.findIndex(e => isMulti(e.name))
+      const firstIsol  = exs.findIndex(e => isIsol(e.name))
+      if (firstIsol !== -1 && firstMulti !== -1 && firstIsol < firstMulti) {
+        issues.push({ type:'critico', msg:'Ordem incorreta: coloque multiarticulares antes dos isolados' })
+        exs.forEach((e,i) => {
+          if (i < firstMulti && isIsol(e.name)) tags[e.id] = 'critico'
+        })
+      }
+
+      // Sets por exercício — muito baixo ou alto
+      exs.forEach(ex => {
+        const s = +(ex.sets||0)
+        const r = (ex.reps||'').replace(/[^0-9–-]/g,'')
+        if (s === 0) { tags[ex.id] = tags[ex.id]==='critico'?'critico':'atencao'; issues.push({ type:'atencao', msg:`${ex.name}: séries não definidas` }) }
+        else if (s < 2) { tags[ex.id] = tags[ex.id]==='critico'?'critico':'atencao'; issues.push({ type:'atencao', msg:`${ex.name}: menos de 2 séries` }) }
+        else if (s > 5) { tags[ex.id] = tags[ex.id]==='critico'?'critico':'atencao'; issues.push({ type:'atencao', msg:`${ex.name}: mais de 5 séries por exercício` }) }
+        if (!ex.reps || ex.reps === '') { tags[ex.id] = tags[ex.id]==='critico'?'critico':'atencao' }
+      })
+
+      // Exercícios sem volume de grupo no range
+      exs.forEach(ex => {
+        const g = findGroup(ex.name)
+        if (g) {
+          const total = setsByGroup[g]||0
+          if (total < ref.min && !tags[ex.id]) tags[ex.id] = 'atencao'
+          else if (total > ref.max && !tags[ex.id]) tags[ex.id] = 'atencao'
+          else if (!tags[ex.id]) tags[ex.id] = 'ok'
+        }
+      })
+
+      // Status geral do dia
+      const hasC = issues.some(i=>i.type==='critico')
+      const hasA = issues.some(i=>i.type==='atencao')
+      dayResults[d.id] = {
+        status: hasC ? 'critico' : hasA ? 'atencao' : 'ok',
+        issues,
+        exTags: tags,
+      }
+    })
+
+    return dayResults
+  })()
+
+    const deletePlan = async () => {
     if (!window.confirm('Excluir este plano de treino? Todos os dias e exercícios serão removidos permanentemente.')) return
     setSaving(true)
     // Delete exercises first, then days, then plan
@@ -1060,6 +1158,10 @@ export default function WorkoutEditor({ navigate, studentId, planId }) {
             <button onClick={() => setShowTemplate(true)} style={{ ...ss.btn(V.accent), display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
               ⚡ Gerar Estrutura
             </button>
+            <button onClick={() => setShowAval(v => !v)}
+              style={{ padding:'7px 14px', borderRadius:8, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:6, border: showAval ? '1.5px solid #34D399' : `1px solid ${V.border}`, background: showAval ? 'rgba(52,211,153,0.12)' : V.accentFaint, color: showAval ? '#34D399' : V.textSub, transition:'all 0.2s' }}>
+              {showAval ? '✓ Avaliando' : '🔍 Avaliar Plano'}
+            </button>
             <div style={{ fontSize:11, color:V.textMuted }}>
               {saving ? <span style={{ color:V.accentBr }}>Salvando...</span> : 'Salvo automaticamente'}
             </div>
@@ -1114,6 +1216,19 @@ export default function WorkoutEditor({ navigate, studentId, planId }) {
                       {['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].map(d => <option key={d}>{d}</option>)}
                     </select>
                   </div>
+                  {showAval && avalAnalysis[day.id] && (
+                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      {avalAnalysis[day.id].status === 'ok' && (
+                        <span style={{ fontSize:10, fontWeight:800, padding:'3px 8px', borderRadius:20, background:'rgba(52,211,153,0.15)', color:'#34D399', border:'1px solid rgba(52,211,153,0.3)' }}>✓ OK</span>
+                      )}
+                      {avalAnalysis[day.id].status === 'atencao' && (
+                        <span style={{ fontSize:10, fontWeight:800, padding:'3px 8px', borderRadius:20, background:'rgba(251,191,36,0.15)', color:'#FBBF24', border:'1px solid rgba(251,191,36,0.3)' }}>⚠ Atenção</span>
+                      )}
+                      {avalAnalysis[day.id].status === 'critico' && (
+                        <span style={{ fontSize:10, fontWeight:800, padding:'3px 8px', borderRadius:20, background:'rgba(248,113,113,0.15)', color:'#F87171', border:'1px solid rgba(248,113,113,0.3)' }}>✕ Crítico</span>
+                      )}
+                    </div>
+                  )}
                   <button style={ss.delBtn} onClick={() => deleteDay(day.id)}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ opacity:0.35 }}><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
                   </button>
@@ -1129,12 +1244,23 @@ export default function WorkoutEditor({ navigate, studentId, planId }) {
                     </div>
                     {day.exercises.map(ex => {
                       const tc = getTypeColor(ex.type)
+                      const exTag = showAval ? (avalAnalysis[day.id]?.exTags?.[ex.id]) : null
+                      const TAG_STYLE = {
+                        ok:      { bg:'rgba(52,211,153,0.15)',  color:'#34D399', border:'rgba(52,211,153,0.3)',  label:'✓' },
+                        atencao: { bg:'rgba(251,191,36,0.15)',  color:'#FBBF24', border:'rgba(251,191,36,0.3)',  label:'⚠' },
+                        critico: { bg:'rgba(248,113,113,0.15)', color:'#F87171', border:'rgba(248,113,113,0.3)', label:'✕' },
+                      }
                       return (
-                        <div key={ex.id}>
+                        <div key={ex.id} style={{ outline: exTag && exTag!=='ok' ? `1.5px solid ${TAG_STYLE[exTag]?.color}30` : 'none', outlineOffset:-1 }}>
                           <div style={{ padding:'10px 16px', borderBottom:`1px solid rgba(255,255,255,0.03)`, display:'flex', gap:8, alignItems:'flex-start' }}>
                             <div style={{ flex:1, minWidth:0 }}>
                               <div style={{ display:'flex', gap:5, alignItems:'center', marginBottom:4 }}>
                                 <span style={{ fontSize:9, background:`${tc}18`, color:tc, border:`1px solid ${tc}35`, borderRadius:10, padding:'1px 6px', fontWeight:700, flexShrink:0, whiteSpace:'nowrap' }}>{ex.type}</span>
+                                {exTag && (
+                                  <span style={{ fontSize:9, fontWeight:800, padding:'1px 7px', borderRadius:10, background:TAG_STYLE[exTag].bg, color:TAG_STYLE[exTag].color, border:`1px solid ${TAG_STYLE[exTag].border}`, flexShrink:0 }}>
+                                    {TAG_STYLE[exTag].label}
+                                  </span>
+                                )}
                                 <input style={{ ...ss.smallInput, fontWeight:600, flex:1 }} value={ex.name} onChange={e => updateExercise(day.id, ex.id, 'name', e.target.value)} placeholder="Nome" />
                                 <button
                                   onClick={() => setOpenCalc(openCalc === ex.id ? null : ex.id)}
@@ -1173,6 +1299,16 @@ export default function WorkoutEditor({ navigate, studentId, planId }) {
                     })}
                   </div>
                 )}
+              {showAval && avalAnalysis[day.id]?.issues?.length > 0 && (
+                <div style={{ padding:'10px 16px', background:'rgba(0,0,0,0.2)', borderTop:'1px solid rgba(255,255,255,0.04)' }}>
+                  {avalAnalysis[day.id].issues.map((issue, i) => (
+                    <div key={i} style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 0', fontSize:11, color: issue.type==='critico' ? '#F87171' : '#FBBF24' }}>
+                      <span>{issue.type==='critico' ? '✕' : '⚠'}</span>
+                      <span>{issue.msg}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
                 {/* Adicionar exercício */}
                 <div style={{ padding:'16px 20px', background:'rgba(217,119,6,0.02)' }}>
