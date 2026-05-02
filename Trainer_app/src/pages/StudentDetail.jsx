@@ -1,2297 +1,1461 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
-const s = {
-  wrap: { minHeight: '100vh', background: '#080B12', padding: '24px 20px' },
-  inner: { maxWidth: 800, margin: '0 auto' },
-  back: { background: 'none', border: 'none', color: '#475569', fontSize: 14, cursor: 'pointer', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 6 },
-  header: { background: 'linear-gradient(135deg,#0f2027,#203a43)', borderRadius: 20, padding: 24, marginBottom: 20, border: '1px solid rgba(52,211,153,0.15)' },
-  tabs: { display: 'flex', gap: 8, marginBottom: 20 },
-  tab: (active, isEval) => ({ flex: 1, padding: '12px 8px', borderRadius: 10, border: isEval && !active ? '1px solid rgba(99,102,241,0.25)' : 'none', background: active ? (isEval ? 'linear-gradient(135deg,#6366F1,#8B5CF6)' : 'linear-gradient(135deg,#34D399,#059669)') : (isEval ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.05)'), color: active ? '#fff' : (isEval ? '#818CF8' : '#64748B'), fontWeight: 700, fontSize: 13, cursor: 'pointer', boxShadow: active && isEval ? '0 4px 16px rgba(99,102,241,0.4)' : 'none' }),
-  card: { background: '#0D1117', borderRadius: 16, padding: 20, border: '1px solid rgba(255,255,255,0.07)', marginBottom: 12 },
-  label: { fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 },
-  val: { fontSize: 15, fontWeight: 700, color: '#fff' },
-  input: { width: '100%', background: '#161B27', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '10px 12px', color: '#E2E8F0', fontSize: 14, outline: 'none', marginBottom: 10 },
-  select: { width: '100%', background: '#161B27', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '10px 12px', color: '#E2E8F0', fontSize: 14, outline: 'none', marginBottom: 10 },
-  btn: (color = '#34D399') => ({ background: `linear-gradient(135deg,${color},${color}99)`, border: 'none', borderRadius: 8, padding: '10px 16px', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }),
-  outlineBtn: { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '10px 16px', color: '#94A3B8', fontWeight: 600, fontSize: 13, cursor: 'pointer' },
-  shareBox: { background: 'rgba(0,201,255,0.08)', border: '1px solid rgba(0,201,255,0.25)', borderRadius: 10, padding: '12px 16px', fontSize: 12, color: '#7DD3FC', wordBreak: 'break-all', marginTop: 12 },
+// ── Paleta Vestiário Pré-Jogo ─────────────────────────────────────────────────
+const V = {
+  bg:          '#08050000',   // transparente — o SVG de fundo cobre
+  bgSolid:     '#080500',
+  bgCard:      'rgba(14,9,0,0.82)',
+  bgCardHov:   'rgba(20,13,0,0.9)',
+  bgInput:     'rgba(25,16,0,0.7)',
+  bgRow:       'rgba(255,255,255,0.015)',
+  border:      'rgba(217,119,6,0.18)',
+  borderLight: 'rgba(217,119,6,0.1)',
+  borderStrong:'rgba(217,119,6,0.35)',
+  accent:      '#D97706',
+  accentBr:    '#FBBF24',
+  accentDim:   '#92400E',
+  accentFaint: 'rgba(217,119,6,0.08)',
+  text:        '#FEF3C7',
+  textSub:     '#92400E',
+  textMuted:   '#44220A',
+  textDim:     '#2A1200',
+  white:       '#FFF8EC',
 }
 
-const GOALS  = ['Iniciação Esportiva', 'Desenvolvimento Atlético', 'Treinamento Competitivo', 'Saúde e Bem-Estar', 'Condicionamento', 'Ganho de Massa', 'Emagrecimento', 'Força e Performance']
-const LEVELS = ['Iniciante', 'Intermediário', 'Avançado', 'Atleta Jovem', 'Atleta Competitivo']
+// ── Fundo SVG — vestiário minimalista (apenas linhas/contornos) ───────────────
+// Inline como string para não criar nenhuma dependência extra
+const LOCKER_SVG = `
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none">
+  <rect width="1200" height="700" fill="#080500"/>
+  <!-- Piso -->
+  <line x1="0" y1="580" x2="1200" y2="580" stroke="#2A1400" stroke-width="1"/>
+  <!-- Linhas de perspectiva do piso -->
+  <line x1="600" y1="580" x2="0"    y2="700" stroke="#1A0C00" stroke-width="0.5"/>
+  <line x1="600" y1="580" x2="300"  y2="700" stroke="#1A0C00" stroke-width="0.5"/>
+  <line x1="600" y1="580" x2="600"  y2="700" stroke="#1A0C00" stroke-width="0.5"/>
+  <line x1="600" y1="580" x2="900"  y2="700" stroke="#1A0C00" stroke-width="0.5"/>
+  <line x1="600" y1="580" x2="1200" y2="700" stroke="#1A0C00" stroke-width="0.5"/>
+  <!-- Teto -->
+  <line x1="0" y1="60" x2="1200" y2="60" stroke="#1F1000" stroke-width="0.5"/>
+  <!-- Luminária esquerda -->
+  <rect x="80"  y="60" width="120" height="10" fill="none" stroke="#3D2000" stroke-width="0.8"/>
+  <rect x="90"  y="70" width="100" height="4"  fill="none" stroke="#3D2000" stroke-width="0.5"/>
+  <!-- Luminária centro -->
+  <rect x="540" y="60" width="120" height="10" fill="none" stroke="#3D2000" stroke-width="0.8"/>
+  <rect x="550" y="70" width="100" height="4"  fill="none" stroke="#3D2000" stroke-width="0.5"/>
+  <!-- Luminária direita -->
+  <rect x="1000" y="60" width="120" height="10" fill="none" stroke="#3D2000" stroke-width="0.8"/>
+  <rect x="1010" y="70" width="100" height="4"  fill="none" stroke="#3D2000" stroke-width="0.5"/>
 
-const SPORTS = [
-  { id: 'futebol',   label: 'Futebol',          icon: '⚽' },
-  { id: 'futsal',    label: 'Futsal',            icon: '🥅' },
-  { id: 'natacao',   label: 'Natação',           icon: '🏊' },
-  { id: 'tenis',     label: 'Tênis',             icon: '🎾' },
-  { id: 'basquete',  label: 'Basquete',          icon: '🏀' },
-  { id: 'volei',     label: 'Vôlei',             icon: '🏐' },
-  { id: 'atletismo', label: 'Atletismo',         icon: '🏃' },
-  { id: 'ginastica', label: 'Ginástica',         icon: '🤸' },
-  { id: 'judo',      label: 'Judô',              icon: '🥋' },
-  { id: 'ciclismo',  label: 'Ciclismo',          icon: '🚴' },
-  { id: 'handebol',  label: 'Handebol',          icon: '🤾' },
-  { id: 'saude',     label: 'Saúde e Bem-Estar', icon: '🌿' },
-  { id: 'custom',    label: 'Outro',             icon: '🏅' },
+  <!-- === FILEIRA ESQUERDA DE ARMÁRIOS === -->
+  <!-- Armário E1 -->
+  <rect x="20"  y="80" width="80" height="500" fill="none" stroke="#2A1600" stroke-width="1"/>
+  <rect x="25"  y="85" width="70" height="240" fill="none" stroke="#1E1000" stroke-width="0.5"/>
+  <rect x="25"  y="335" width="70" height="240" fill="none" stroke="#1E1000" stroke-width="0.5"/>
+  <line x1="55" y1="200" x2="65" y2="200" stroke="#3D2200" stroke-width="1.5"/>
+  <line x1="55" y1="452" x2="65" y2="452" stroke="#3D2200" stroke-width="1.5"/>
+  <!-- ventilação -->
+  <line x1="32" y1="95"  x2="88" y2="95"  stroke="#160D00" stroke-width="0.5"/>
+  <line x1="32" y1="100" x2="88" y2="100" stroke="#160D00" stroke-width="0.5"/>
+  <line x1="32" y1="105" x2="88" y2="105" stroke="#160D00" stroke-width="0.5"/>
+  <!-- Camisa pendurada E1 -->
+  <line x1="60"  y1="92"  x2="60"  y2="110" stroke="#3D2200" stroke-width="1"/>
+  <path d="M48 110 L60 107 L72 110" fill="none" stroke="#3D2200" stroke-width="1"/>
+  <rect x="51"  y="110" width="18" height="28" rx="2" fill="none" stroke="#B45309" stroke-width="0.8"/>
+  <line x1="51" y1="118" x2="69"  y2="118" stroke="#B45309" stroke-width="0.4"/>
+
+  <!-- Armário E2 -->
+  <rect x="105" y="80" width="80" height="500" fill="none" stroke="#2A1600" stroke-width="1"/>
+  <rect x="110" y="85" width="70" height="240" fill="none" stroke="#1E1000" stroke-width="0.5"/>
+  <rect x="110" y="335" width="70" height="240" fill="none" stroke="#1E1000" stroke-width="0.5"/>
+  <line x1="140" y1="200" x2="150" y2="200" stroke="#3D2200" stroke-width="1.5"/>
+  <line x1="140" y1="452" x2="150" y2="452" stroke="#3D2200" stroke-width="1.5"/>
+  <line x1="117" y1="95"  x2="173" y2="95"  stroke="#160D00" stroke-width="0.5"/>
+  <line x1="117" y1="100" x2="173" y2="100" stroke="#160D00" stroke-width="0.5"/>
+  <line x1="117" y1="105" x2="173" y2="105" stroke="#160D00" stroke-width="0.5"/>
+  <!-- Camisa E2 - número -->
+  <line x1="145" y1="92"  x2="145" y2="110" stroke="#3D2200" stroke-width="1"/>
+  <path d="M133 110 L145 107 L157 110" fill="none" stroke="#3D2200" stroke-width="1"/>
+  <rect x="136" y="110" width="18" height="28" rx="2" fill="none" stroke="#92400E" stroke-width="0.8"/>
+  <text x="145" y="128" text-anchor="middle" font-size="8" fill="#92400E" font-family="monospace">10</text>
+
+  <!-- Armário E3 -->
+  <rect x="190" y="80" width="80" height="500" fill="none" stroke="#2A1600" stroke-width="1"/>
+  <rect x="195" y="85" width="70" height="240" fill="none" stroke="#1E1000" stroke-width="0.5"/>
+  <rect x="195" y="335" width="70" height="240" fill="none" stroke="#1E1000" stroke-width="0.5"/>
+  <line x1="225" y1="200" x2="235" y2="200" stroke="#3D2200" stroke-width="1.5"/>
+  <line x1="225" y1="452" x2="235" y2="452" stroke="#3D2200" stroke-width="1.5"/>
+  <line x1="202" y1="95"  x2="258" y2="95"  stroke="#160D00" stroke-width="0.5"/>
+  <line x1="202" y1="100" x2="258" y2="100" stroke="#160D00" stroke-width="0.5"/>
+  <line x1="202" y1="105" x2="258" y2="105" stroke="#160D00" stroke-width="0.5"/>
+
+  <!-- Armário E4 -->
+  <rect x="275" y="80" width="80" height="500" fill="none" stroke="#2A1600" stroke-width="1"/>
+  <rect x="280" y="85" width="70" height="240" fill="none" stroke="#1E1000" stroke-width="0.5"/>
+  <rect x="280" y="335" width="70" height="240" fill="none" stroke="#1E1000" stroke-width="0.5"/>
+  <line x1="310" y1="200" x2="320" y2="200" stroke="#3D2200" stroke-width="1.5"/>
+  <line x1="310" y1="452" x2="320" y2="452" stroke="#3D2200" stroke-width="1.5"/>
+  <line x1="287" y1="95"  x2="343" y2="95"  stroke="#160D00" stroke-width="0.5"/>
+  <line x1="287" y1="100" x2="343" y2="100" stroke="#160D00" stroke-width="0.5"/>
+  <!-- Camisa E4 -->
+  <line x1="315" y1="92"  x2="315" y2="110" stroke="#3D2200" stroke-width="1"/>
+  <path d="M303 110 L315 107 L327 110" fill="none" stroke="#3D2200" stroke-width="1"/>
+  <rect x="306" y="110" width="18" height="28" rx="2" fill="none" stroke="#B45309" stroke-width="0.8"/>
+  <text x="315" y="128" text-anchor="middle" font-size="8" fill="#B45309" font-family="monospace">25</text>
+
+  <!-- Banco esquerdo -->
+  <rect x="20" y="580" width="340" height="12" rx="2" fill="none" stroke="#2A1600" stroke-width="1"/>
+  <line x1="50"  y1="592" x2="50"  y2="620" stroke="#1E1000" stroke-width="1"/>
+  <line x1="180" y1="592" x2="180" y2="620" stroke="#1E1000" stroke-width="1"/>
+  <line x1="330" y1="592" x2="330" y2="620" stroke="#1E1000" stroke-width="1"/>
+
+  <!-- === FILEIRA DIREITA DE ARMÁRIOS === -->
+  <!-- Armário D1 -->
+  <rect x="1100" y="80" width="80" height="500" fill="none" stroke="#2A1600" stroke-width="1"/>
+  <rect x="1105" y="85" width="70" height="240" fill="none" stroke="#1E1000" stroke-width="0.5"/>
+  <rect x="1105" y="335" width="70" height="240" fill="none" stroke="#1E1000" stroke-width="0.5"/>
+  <line x1="1135" y1="200" x2="1145" y2="200" stroke="#3D2200" stroke-width="1.5"/>
+  <line x1="1135" y1="452" x2="1145" y2="452" stroke="#3D2200" stroke-width="1.5"/>
+  <line x1="1112" y1="95"  x2="1168" y2="95"  stroke="#160D00" stroke-width="0.5"/>
+  <line x1="1112" y1="100" x2="1168" y2="100" stroke="#160D00" stroke-width="0.5"/>
+  <line x1="1112" y1="105" x2="1168" y2="105" stroke="#160D00" stroke-width="0.5"/>
+  <!-- Camisa D1 -->
+  <line x1="1140" y1="92"  x2="1140" y2="110" stroke="#3D2200" stroke-width="1"/>
+  <path d="M1128 110 L1140 107 L1152 110" fill="none" stroke="#3D2200" stroke-width="1"/>
+  <rect x="1131" y="110" width="18" height="28" rx="2" fill="none" stroke="#B45309" stroke-width="0.8"/>
+  <text x="1140" y="128" text-anchor="middle" font-size="8" fill="#B45309" font-family="monospace">7</text>
+
+  <!-- Armário D2 -->
+  <rect x="1015" y="80" width="80" height="500" fill="none" stroke="#2A1600" stroke-width="1"/>
+  <rect x="1020" y="85" width="70" height="240" fill="none" stroke="#1E1000" stroke-width="0.5"/>
+  <rect x="1020" y="335" width="70" height="240" fill="none" stroke="#1E1000" stroke-width="0.5"/>
+  <line x1="1050" y1="200" x2="1060" y2="200" stroke="#3D2200" stroke-width="1.5"/>
+  <line x1="1050" y1="452" x2="1060" y2="452" stroke="#3D2200" stroke-width="1.5"/>
+  <line x1="1027" y1="95"  x2="1083" y2="95"  stroke="#160D00" stroke-width="0.5"/>
+  <line x1="1027" y1="100" x2="1083" y2="100" stroke="#160D00" stroke-width="0.5"/>
+  <!-- Camisa D2 -->
+  <line x1="1055" y1="92"  x2="1055" y2="110" stroke="#3D2200" stroke-width="1"/>
+  <path d="M1043 110 L1055 107 L1067 110" fill="none" stroke="#3D2200" stroke-width="1"/>
+  <rect x="1046" y="110" width="18" height="28" rx="2" fill="none" stroke="#92400E" stroke-width="0.8"/>
+  <text x="1055" y="128" text-anchor="middle" font-size="8" fill="#92400E" font-family="monospace">11</text>
+
+  <!-- Armário D3 -->
+  <rect x="930" y="80" width="80" height="500" fill="none" stroke="#2A1600" stroke-width="1"/>
+  <rect x="935" y="85" width="70" height="240" fill="none" stroke="#1E1000" stroke-width="0.5"/>
+  <rect x="935" y="335" width="70" height="240" fill="none" stroke="#1E1000" stroke-width="0.5"/>
+  <line x1="965" y1="200" x2="975" y2="200" stroke="#3D2200" stroke-width="1.5"/>
+  <line x1="965" y1="452" x2="975" y2="452" stroke="#3D2200" stroke-width="1.5"/>
+  <line x1="942" y1="95"  x2="998" y2="95"  stroke="#160D00" stroke-width="0.5"/>
+  <line x1="942" y1="100" x2="998" y2="100" stroke="#160D00" stroke-width="0.5"/>
+
+  <!-- Armário D4 -->
+  <rect x="845" y="80" width="80" height="500" fill="none" stroke="#2A1600" stroke-width="1"/>
+  <rect x="850" y="85" width="70" height="240" fill="none" stroke="#1E1000" stroke-width="0.5"/>
+  <rect x="850" y="335" width="70" height="240" fill="none" stroke="#1E1000" stroke-width="0.5"/>
+  <line x1="880" y1="200" x2="890" y2="200" stroke="#3D2200" stroke-width="1.5"/>
+  <line x1="880" y1="452" x2="890" y2="452" stroke="#3D2200" stroke-width="1.5"/>
+  <line x1="857" y1="95"  x2="913" y2="95"  stroke="#160D00" stroke-width="0.5"/>
+  <line x1="857" y1="100" x2="913" y2="100" stroke="#160D00" stroke-width="0.5"/>
+  <!-- Camisa D4 -->
+  <line x1="885" y1="92"  x2="885" y2="110" stroke="#3D2200" stroke-width="1"/>
+  <path d="M873 110 L885 107 L897 110" fill="none" stroke="#3D2200" stroke-width="1"/>
+  <rect x="876" y="110" width="18" height="28" rx="2" fill="none" stroke="#B45309" stroke-width="0.8"/>
+  <text x="885" y="128" text-anchor="middle" font-size="8" fill="#B45309" font-family="monospace">9</text>
+
+  <!-- Banco direito -->
+  <rect x="840" y="580" width="340" height="12" rx="2" fill="none" stroke="#2A1600" stroke-width="1"/>
+  <line x1="870"  y1="592" x2="870"  y2="620" stroke="#1E1000" stroke-width="1"/>
+  <line x1="1000" y1="592" x2="1000" y2="620" stroke="#1E1000" stroke-width="1"/>
+  <line x1="1150" y1="592" x2="1150" y2="620" stroke="#1E1000" stroke-width="1"/>
+
+  <!-- Quadro tático ao fundo (centro) -->
+  <rect x="490" y="90" width="220" height="160" rx="3" fill="none" stroke="#2A1600" stroke-width="1"/>
+  <rect x="498" y="98" width="204" height="144" fill="none" stroke="#1A1000" stroke-width="0.5"/>
+  <!-- campo estilizado no quadro -->
+  <rect x="506" y="106" width="188" height="128" fill="none" stroke="#1E1000" stroke-width="0.5"/>
+  <line x1="600" y1="106" x2="600" y2="234" stroke="#1A0E00" stroke-width="0.4"/>
+  <ellipse cx="600" cy="170" rx="22" ry="16" fill="none" stroke="#1A0E00" stroke-width="0.4"/>
+  <!-- setas táticas âmbar tênue -->
+  <path d="M540 130 Q560 120 575 135" fill="none" stroke="#3D2000" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <path d="M660 140 Q640 155 620 148" fill="none" stroke="#3D2000" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <path d="M545 195 Q565 210 585 198" fill="none" stroke="#3D2000" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <!-- pontos jogadores -->
+  <circle cx="538" cy="128" r="3" fill="none" stroke="#3D2200" stroke-width="0.8"/>
+  <circle cx="660" cy="138" r="3" fill="none" stroke="#3D2200" stroke-width="0.8"/>
+  <circle cx="600" cy="170" r="3" fill="none" stroke="#3D2200" stroke-width="0.8"/>
+  <circle cx="543" cy="193" r="3" fill="none" stroke="#3D2200" stroke-width="0.8"/>
+  <circle cx="658" cy="195" r="3" fill="none" stroke="#3D2200" stroke-width="0.8"/>
+</svg>`
+
+// ── Constants ──────────────────────────────────────────────────────────────────
+const MUSCLE_TYPES = [
+  'Peito','Costas','Bíceps','Tríceps','Ombro',
+  'Quadríceps','Posterior','Glúteo','Panturrilha','Core','Cardio','Full Body',
+]
+const NEW_TYPES = ['Funcional','Elástico','Peso Corporal','Mobilidade']
+const EXERCISE_TYPES = [...MUSCLE_TYPES, ...NEW_TYPES]
+
+const MODALITY_MAP = {
+  'Musculação': MUSCLE_TYPES,
+  'Funcional':  ['Funcional','Full Body','Core','Cardio'],
+  'Elástico':   ['Elástico'],
+  'Corpo':      ['Peso Corporal','Mobilidade'],
+}
+const MODALITY_COLORS = {
+  'Musculação': '#A78BFA',
+  'Funcional':  '#34D399',
+  'Elástico':   '#FBBF24',
+  'Corpo':      '#60A5FA',
+}
+
+const STATUS_OPTIONS = ['draft','active','archived']
+const STATUS_LABEL   = { draft:'Rascunho', active:'Ativo', archived:'Arquivado' }
+const DAY_COLORS     = ['#D97706','#F97316','#FBBF24','#B45309','#D97706','#F59E0B']
+const emptyEx        = { name:'', sets:'3', reps:'10-12', rest:'60s', tip:'', type:'Peito' }
+
+const getAgeGroup = (birthDate, age) => {
+  const a = birthDate
+    ? Math.floor((Date.now() - new Date(birthDate)) / (365.25 * 24 * 3600 * 1000))
+    : age ? parseInt(age) : null
+  if (!a) return 'adulto_jovem'
+  if (a < 13) return 'crianca'
+  if (a < 18) return 'adolescente'
+  if (a < 40) return 'adulto_jovem'
+  if (a < 60) return 'adulto_maduro'
+  return 'idoso'
+}
+
+const AGE_GROUP_LABEL = {
+  crianca:'Criança', adolescente:'Adolescente',
+  adulto_jovem:'Adulto', adulto_maduro:'Adulto Maduro', idoso:'Idoso 60+',
+}
+const AGE_GROUP_COLOR = {
+  crianca:'#34D399', adolescente:'#60A5FA',
+  adulto_jovem:'#FBBF24', adulto_maduro:'#F97316', idoso:'#F87171',
+}
+const AGE_RESTRICTIONS = {
+  crianca:       { maxPct:60,  warning:'Criança: sem carga máxima. Prescrever por PSE e peso corporal.',     blockedZones:['Força Máxima','Hipertrofia'] },
+  adolescente:   { maxPct:70,  warning:'Adolescente: limitar a 70% 1RM durante fase de crescimento ósseo.', blockedZones:['Força Máxima'] },
+  adulto_jovem:  { maxPct:100, warning:null,                                                                 blockedZones:[] },
+  adulto_maduro: { maxPct:100, warning:'Adulto maduro: aumentar descanso entre séries (48-72h por grupo).', blockedZones:[] },
+  idoso:         { maxPct:75,  warning:'60+: iniciar com 40-50% 1RM. Avaliação médica recomendada.',        blockedZones:['Força Máxima'] },
+}
+const ZONES = [
+  { label:'Força Máxima',      pct:[85,100], reps:'1-5',   rest:'3-5min',  color:'#EF4444' },
+  { label:'Hipertrofia',       pct:[65,85],  reps:'6-12',  rest:'60-120s', color:'#A78BFA' },
+  { label:'Resistência Musc.', pct:[40,65],  reps:'15-30', rest:'30-60s',  color:'#34D399' },
 ]
 
-function calcLTAD(age, expYears, sport) {
-  if (!age || !sport) return null
-  const exp = expYears || 0
-  if (age < 9)               return { fase: 'FUNdamentals',     cor: '#0284C7', bg: 'rgba(2,132,199,0.1)',  icon: '🎮', desc: 'Habilidades motoras fundamentais e ludicidade' }
-  if (age <= 11 && exp < 3)  return { fase: 'FUNdamentals',     cor: '#0284C7', bg: 'rgba(2,132,199,0.1)',  icon: '🎮', desc: 'Habilidades motoras fundamentais e ludicidade' }
-  if (age <= 12)             return { fase: 'Learn to Train',   cor: '#059669', bg: 'rgba(5,150,105,0.1)',  icon: '📚', desc: 'Aprender habilidades esportivas gerais' }
-  if (age <= 15 && exp < 4)  return { fase: 'Learn to Train',   cor: '#059669', bg: 'rgba(5,150,105,0.1)',  icon: '📚', desc: 'Aprender habilidades esportivas gerais' }
-  if (age <= 16)             return { fase: 'Train to Train',   cor: '#D97706', bg: 'rgba(217,119,6,0.1)',  icon: '💪', desc: 'Construir base física específica ao esporte' }
-  if (age <= 17 && exp < 5)  return { fase: 'Train to Train',   cor: '#D97706', bg: 'rgba(217,119,6,0.1)',  icon: '💪', desc: 'Construir base física específica ao esporte' }
-  if (age <= 18)             return { fase: 'Train to Compete', cor: '#7C3AED', bg: 'rgba(124,58,237,0.1)', icon: '🏆', desc: 'Especialização e desempenho competitivo' }
-  return null
-}
-const STATUS_COLOR = { active: '#34D399', draft: '#FBBF24', archived: '#64748B' }
-const STATUS_LABEL = { active: 'Ativo', draft: 'Rascunho', archived: 'Arquivado' }
-
-// ── DuplicarPlanoModal ──────────────────────────────────────────────────────
-function DuplicarPlanoModal({ plan, student, onClose }) {
-  const [allStudents, setAllStudents] = useState([])
-  const [selected, setSelected]       = useState(null)
-  const [saving, setSaving]           = useState(false)
-  const [done, setDone]               = useState(false)
-
-  useEffect(() => {
-    supabase.from('students').select('id,name,goal')
-      .eq('teacher_id', student.teacher_id)
-      .neq('id', student.id)
-      .order('name')
-      .then(({ data }) => setAllStudents(data || []))
-  }, [])
-
-  const duplicate = async () => {
-    if (!selected) return
-    setSaving(true)
-    try {
-      // Busca plano completo com dias e exercícios
-      const { data: fullPlan } = await supabase
-        .from('workout_plans')
-        .select('*, workout_days(*, exercises(*))')
-        .eq('id', plan.id)
-        .single()
-
-      // Cria novo plano para o aluno destino
-      const { data: newPlan } = await supabase
-        .from('workout_plans')
-        .insert([{ student_id: selected, teacher_id: student.teacher_id, title: fullPlan.title + ' (cópia)', status: 'draft' }])
-        .select().single()
-
-      if (!newPlan) throw new Error('Falha ao criar plano')
-
-      // Copia dias e exercícios sequencialmente
-      for (const day of (fullPlan.workout_days || [])) {
-        const { data: newDay } = await supabase
-          .from('workout_days')
-          .insert([{ workout_plan_id: newPlan.id, day_of_week: day.day_of_week, name: day.name }])
-          .select().single()
-
-        if (newDay) {
-          const exs = (day.exercises || []).map(ex => ({
-            workout_day_id: newDay.id,
-            name:        ex.name,
-            sets:        ex.sets,
-            reps:        ex.reps,
-            weight:      ex.weight,
-            rest_seconds:ex.rest_seconds,
-            notes:       ex.notes,
-            order_index: ex.order_index,
-          }))
-          if (exs.length) await supabase.from('exercises').insert(exs)
-        }
-      }
-      setDone(true)
-    } catch(e) {
-      alert('Erro ao duplicar: ' + e.message)
-    }
-    setSaving(false)
-  }
-
-  const targetName = allStudents.find(s => s.id === selected)?.name
-
-  return (
-    <div onClick={onClose} style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200,padding:20 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background:'#0D1117',borderRadius:20,padding:28,width:'100%',maxWidth:440,border:'1px solid rgba(255,255,255,0.1)' }}>
-        {done ? (
-          <div style={{ textAlign:'center',padding:'20px 0' }}>
-            <div style={{ fontSize:48,marginBottom:12 }}>✅</div>
-            <div style={{ fontSize:18,fontWeight:800,color:'#34D399',marginBottom:6 }}>Plano duplicado!</div>
-            <div style={{ fontSize:13,color:'#64748B',marginBottom:24 }}>
-              "{plan.title}" foi copiado para <strong style={{ color:'#E2E8F0' }}>{targetName}</strong> como rascunho.
-            </div>
-            <button onClick={onClose} style={{ padding:'10px 28px',borderRadius:10,border:'none',background:'linear-gradient(135deg,#34D399,#059669)',color:'#FFF',fontWeight:800,fontSize:14,cursor:'pointer' }}>
-              Fechar
-            </button>
-          </div>
-        ) : (
-          <>
-            <div style={{ fontSize:18,fontWeight:800,color:'#E2E8F0',marginBottom:4 }}>📋 Duplicar Plano</div>
-            <div style={{ fontSize:13,color:'#475569',marginBottom:20 }}>"{plan.title}" → Selecione o aluno destino</div>
-
-            {allStudents.length === 0 ? (
-              <div style={{ textAlign:'center',padding:'30px 0',color:'#334155' }}>Nenhum outro aluno cadastrado.</div>
-            ) : (
-              <div style={{ display:'flex',flexDirection:'column',gap:8,maxHeight:280,overflowY:'auto',marginBottom:20 }}>
-                {allStudents.map(st => (
-                  <button key={st.id} onClick={() => setSelected(st.id)}
-                    style={{ padding:'12px 16px',borderRadius:12,border:`2px solid ${selected===st.id ? '#34D399' : 'rgba(255,255,255,0.07)'}`, background: selected===st.id ? 'rgba(52,211,153,0.1)' : 'rgba(255,255,255,0.03)', color:'#E2E8F0',fontWeight:600,fontSize:13,cursor:'pointer',textAlign:'left',display:'flex',alignItems:'center',gap:10,transition:'all 0.15s' }}>
-                    <span style={{ width:32,height:32,borderRadius:'50%',background:'rgba(255,255,255,0.08)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,flexShrink:0 }}>
-                      {st.name.charAt(0).toUpperCase()}
-                    </span>
-                    <div>
-                      <div>{st.name}</div>
-                      <div style={{ fontSize:11,color:'#475569' }}>{st.goal}</div>
-                    </div>
-                    {selected===st.id && <span style={{ marginLeft:'auto',color:'#34D399',fontSize:18 }}>✓</span>}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <div style={{ display:'flex',gap:10 }}>
-              <button onClick={onClose} style={{ flex:1,padding:'11px 0',borderRadius:10,border:'1px solid rgba(255,255,255,0.08)',background:'transparent',color:'#64748B',fontWeight:600,fontSize:13,cursor:'pointer' }}>
-                Cancelar
-              </button>
-              <button onClick={duplicate} disabled={!selected || saving}
-                style={{ flex:2,padding:'11px 0',borderRadius:10,border:'none',background: selected ? 'linear-gradient(135deg,#34D399,#059669)' : 'rgba(255,255,255,0.05)',color: selected ? '#FFF' : '#334155',fontWeight:800,fontSize:13,cursor: selected ? 'pointer' : 'default',transition:'all 0.2s' }}>
-                {saving ? 'Duplicando...' : `📋 Duplicar para ${targetName || 'aluno selecionado'}`}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// ── MOTOR DE AVALIAÇÃO CIENTÍFICA v2 ───────────────────────────────────────
-// 11 pilares ponderados + confiança + histórico + recomendações automáticas
-// Refs: ACSM 2022, Schoenfeld 2017, Kraemer 2004, Tanaka 2001,
-//       Balyi LTAD 2013, WHO 2020, Boyle 2016, Foster 1998 (ACWR),
-//       Fonseca 2014 (stimulus variation), NSCA Guidelines 2021
-// ═══════════════════════════════════════════════════════════════════════════
-
-function calcAge(student) {
-  if (student.birth_date) {
-    const birth = new Date(student.birth_date)
-    return Math.floor((new Date() - birth) / (365.25 * 24 * 3600000))
-  }
-  return student.age ? parseInt(student.age) : null
-}
-
-// ── PHV & Tanner (apenas para <18 anos) ──────────────────────────────────
-// Tanner 1970: altura alvo genética (approximação estatística, não diagnóstico)
-function calcTargetHeight(fatherCm, motherCm, sex) {
-  if (!fatherCm || !motherCm) return null
-  const raw = sex === 'M'
-    ? (fatherCm + motherCm + 13) / 2
-    : (fatherCm + motherCm - 13) / 2
-  return { target: Math.round(raw), low: Math.round(raw - 8.5), high: Math.round(raw + 8.5) }
-}
-
-// Mirwald 2002: Maturity Offset (anos antes/depois do PHV)
-// Requer: altura (cm), peso (kg), altura sentado (cm), idade decimal
-function calcMaturityOffset(heightCm, weightKg, sittingCm, ageDecimal, sex) {
-  if (!heightCm || !weightKg || !sittingCm || !ageDecimal) return null
-  const legLength = heightCm - sittingCm
-  let offset
-  if (sex === 'M') {
-    offset = -9.236
-      + 0.0002708 * (legLength * sittingCm)
-      - 0.001663  * (ageDecimal * legLength)
-      + 0.007216  * (ageDecimal * sittingCm)
-      + 0.02292   * (weightKg / heightCm * 100)
-  } else {
-    offset = -9.376
-      + 0.0001882 * (legLength * sittingCm)
-      + 0.0022    * (ageDecimal * legLength)
-      + 0.005841  * (ageDecimal * sittingCm)
-      - 0.002658  * (ageDecimal * weightKg)
-      + 0.07693   * (weightKg / heightCm * 100)
-  }
-  return +offset.toFixed(2)
-}
-
-function offsetLabel(offset) {
-  if (offset === null) return null
-  if (offset < -2)   return { label: 'Pré-puberdade', color: '#60A5FA', desc: 'Longe do pico de crescimento — fase ideal para velocidade e habilidades motoras' }
-  if (offset < -0.5) return { label: 'Pré-PHV',       color: '#34D399', desc: 'Aproximando do pico — priorizar técnica e padrões motores, carga moderada' }
-  if (offset < 0.5)  return { label: 'No PHV',         color: '#FBBF24', desc: 'Período de vulnerabilidade — crescimento ósseo à frente do muscular, reduzir carga axial intensa' }
-  if (offset < 2)    return { label: 'Pós-PHV',        color: '#F97316', desc: 'Janela de força — resposta hormonal elevada, progressão de carga pode ser acelerada' }
-  return               { label: 'Pós-puberdade',      color: '#C084FC', desc: 'Base consolidada — periodização de atleta jovem competitivo' }
-}
-
-// TGMD-3 — 13 padrões motores (Ulrich 2019)
-const TGMD3_LOCOMOTION = [
-  { id:'corrida',    label:'Corrida',           desc:'Padrão de corrida: braços em oposição, fase aérea visível, apoio no antepé' },
-  { id:'galope',     label:'Galope',            desc:'Passo-toque rítmico lateral, corpo levemente inclinado para frente' },
-  { id:'passada',    label:'Passada (skip)',    desc:'Alternância de passo+salto, coordenação braço-perna' },
-  { id:'salto_h',    label:'Salto horizontal',  desc:'Pré-balanço de braços, impulsão bilateral, aterrissagem amortecida' },
-  { id:'salto_v',    label:'Salto vertical',    desc:'Extensão completa do corpo, alcance dos braços, aterrissagem suave' },
-  { id:'lateral',    label:'Corrida lateral',   desc:'Passos cruzados, centro de gravidade baixo, mudança de direção' },
-]
-const TGMD3_OBJECT = [
-  { id:'chutar',     label:'Chute',             desc:'Passo de aproximação, balanço de braços, contato com peito do pé, follow-through' },
-  { id:'arremesso',  label:'Arremesso (acima)', desc:'Rotação de tronco, transferência de peso, liberação acima do ombro' },
-  { id:'receber',    label:'Recepção',          desc:'Preparação das mãos, olhos no alvo, absorção do impacto com dedos' },
-  { id:'driblar',    label:'Drible',            desc:'Contato com os dedos, altura do quadril, olhos longe da bola' },
-  { id:'rebater',    label:'Rebater',           desc:'Rotação de quadril, contato na zona de strike, follow-through' },
-  { id:'rolar',      label:'Rolar (boliche)',   desc:'Abaixamento do corpo, liberação na altura do joelho, follow-through' },
-  { id:'underhand',  label:'Arremesso (abaixo)',desc:'Balanço pendular, transferência de peso, liberação na altura do quadril' },
-]
-const TGMD3_LEVELS = [
-  { val: 0, label: 'Inicial',         color: '#F87171', short: 'I' },
-  { val: 1, label: 'Elementar',       color: '#FBBF24', short: 'E' },
-  { val: 2, label: 'Maduro',          color: '#34D399', short: 'M' },
+// ── Exercise Bank ──────────────────────────────────────────────────────────────
+const EXERCISE_BANK = [
+  { name:'Supino Reto (Barra)',           type:'Peito',        sets:'4', reps:'8-10',    rest:'90s',  tip:'Escápulas retraídas, barra desce até o peito' },
+  { name:'Supino Inclinado (Halter)',     type:'Peito',        sets:'3', reps:'10-12',   rest:'75s',  tip:'Ângulo de 30-45°, cotovelos a 45° do tronco' },
+  { name:'Crucifixo (Halter)',            type:'Peito',        sets:'3', reps:'12-15',   rest:'60s',  tip:'Leve flexão dos cotovelos, amplitude controlada' },
+  { name:'Peck Deck',                    type:'Peito',        sets:'3', reps:'12-15',   rest:'60s',  tip:'Adução horizontal controlada, sem hiperestender' },
+  { name:'Barra Fixa',                   type:'Costas',       sets:'4', reps:'6-10',    rest:'90s',  tip:'Escápulas deprimidas na fase excêntrica' },
+  { name:'Remada Curvada (Barra)',       type:'Costas',       sets:'4', reps:'8-10',    rest:'90s',  tip:'Tronco a 45°, cotovelos próximos ao corpo' },
+  { name:'Puxada Frontal (Polia)',       type:'Costas',       sets:'3', reps:'10-12',   rest:'75s',  tip:'Puxar até a clavícula, não atrás da nuca' },
+  { name:'Remada Baixa (Polia)',         type:'Costas',       sets:'3', reps:'10-12',   rest:'75s',  tip:'Peito ereto, escápulas se aproximam no final' },
+  { name:'Remada Unilateral (Halter)',   type:'Costas',       sets:'3', reps:'10-12',   rest:'60s',  tip:'Rotação mínima de quadril, cotovelo alto' },
+  { name:'Remada TRX',                  type:'Costas',       sets:'3', reps:'10-15',   rest:'60s',  tip:'Corpo em prancha, cotovelos passam o tronco' },
+  { name:'Rosca Direta (Barra)',         type:'Bíceps',       sets:'3', reps:'10-12',   rest:'60s',  tip:'Cotovelos fixos ao lado do tronco' },
+  { name:'Rosca Alternada (Halter)',     type:'Bíceps',       sets:'3', reps:'10-12',   rest:'60s',  tip:'Supinação completa no topo do movimento' },
+  { name:'Rosca Martelo',               type:'Bíceps',       sets:'3', reps:'12-15',   rest:'60s',  tip:'Neutro, treina braquial e braquiorradial' },
+  { name:'Rosca Scott',                 type:'Bíceps',       sets:'3', reps:'10-12',   rest:'60s',  tip:'Isola o bíceps, evita compensação de ombro' },
+  { name:'Tríceps Pulley (Polia)',       type:'Tríceps',      sets:'3', reps:'12-15',   rest:'60s',  tip:'Cotovelos fixos, extensão completa' },
+  { name:'Tríceps Testa (Barra EZ)',     type:'Tríceps',      sets:'3', reps:'10-12',   rest:'60s',  tip:'Cotovelos apontados para o teto' },
+  { name:'Tríceps Francês (Halter)',     type:'Tríceps',      sets:'3', reps:'12-15',   rest:'60s',  tip:'Controle na fase excêntrica' },
+  { name:'Desenvolvimento (Halter)',     type:'Ombro',        sets:'4', reps:'10-12',   rest:'75s',  tip:'Cotovelos a 90° na posição inicial' },
+  { name:'Elevação Lateral',            type:'Ombro',        sets:'3', reps:'12-15',   rest:'60s',  tip:'Leve flexão do cotovelo, evita trapézio' },
+  { name:'Elevação Frontal',            type:'Ombro',        sets:'3', reps:'12-15',   rest:'60s',  tip:'Até a altura dos ombros, movimento lento' },
+  { name:'Desenvolvimento Arnold',      type:'Ombro',        sets:'3', reps:'10-12',   rest:'75s',  tip:'Rotação completa, ativa todas as porções' },
+  { name:'Agachamento Livre',           type:'Quadríceps',   sets:'4', reps:'8-12',    rest:'90s',  tip:'Joelhos na linha dos pés, tronco ereto' },
+  { name:'Agachamento Goblet',          type:'Quadríceps',   sets:'3', reps:'12-15',   rest:'75s',  tip:'Ótimo para iniciantes e crianças' },
+  { name:'Leg Press',                   type:'Quadríceps',   sets:'4', reps:'10-15',   rest:'75s',  tip:'Não travar os joelhos na extensão' },
+  { name:'Afundo (Lunge)',              type:'Quadríceps',   sets:'3', reps:'10-12',   rest:'60s',  tip:'Joelho traseiro próximo ao chão, tronco ereto' },
+  { name:'Cadeira Extensora',           type:'Quadríceps',   sets:'3', reps:'12-15',   rest:'60s',  tip:'Extensão completa, fase excêntrica 3s' },
+  { name:'Levantamento Terra',          type:'Posterior',    sets:'4', reps:'6-8',     rest:'120s', tip:'Barra sobre os pés, empurre o chão' },
+  { name:'Mesa Flexora',                type:'Posterior',    sets:'3', reps:'10-12',   rest:'75s',  tip:'Quadril levemente inclinado, fase excêntrica lenta' },
+  { name:'Stiff (Terra Romeno)',         type:'Posterior',    sets:'4', reps:'8-12',    rest:'90s',  tip:'Joelhos semiflexionados, barra próxima ao corpo' },
+  { name:'Cadeira Flexora',             type:'Posterior',    sets:'3', reps:'12-15',   rest:'60s',  tip:'Evitar compensação de quadril' },
+  { name:'Hip Thrust (Barra)',           type:'Glúteo',       sets:'4', reps:'10-12',   rest:'75s',  tip:'Queixo no peito, extensão completa de quadril' },
+  { name:'Agachamento Sumô',            type:'Glúteo',       sets:'3', reps:'12-15',   rest:'75s',  tip:'Pés mais abertos, joelhos seguem os pés' },
+  { name:'Panturrilha em Pé',           type:'Panturrilha',  sets:'4', reps:'15-20',   rest:'45s',  tip:'Amplitude total, pausa no topo' },
+  { name:'Panturrilha Sentado',         type:'Panturrilha',  sets:'3', reps:'15-20',   rest:'45s',  tip:'Sóleo dominante, joelhos a 90°' },
+  { name:'Prancha Frontal',             type:'Core',         sets:'3', reps:'30-60s',  rest:'45s',  tip:'Quadril neutro, não elevar o quadril' },
+  { name:'Prancha Lateral',             type:'Core',         sets:'3', reps:'20-40s',  rest:'45s',  tip:'Corpo em linha reta, apoio no antebraço' },
+  { name:'Abdominal Crunch',            type:'Core',         sets:'3', reps:'15-20',   rest:'45s',  tip:'Cervical neutra, foco na contração' },
+  { name:'Dead Bug',                    type:'Core',         sets:'3', reps:'8-10',    rest:'45s',  tip:'Lombar no chão, extensão contralateral' },
+  { name:'Pallof Press',                type:'Core',         sets:'3', reps:'10-12',   rest:'45s',  tip:'Resistência à rotação, excelente para esporte' },
+  { name:'Rotação de Tronco',           type:'Core',         sets:'3', reps:'12-15',   rest:'45s',  tip:'Movimento controlado, não usar impulso' },
+  { name:'Kettlebell Swing',            type:'Full Body',    sets:'4', reps:'12-15',   rest:'60s',  tip:'Impulsão de quadril, não é um agachamento' },
+  { name:'Pular Corda',                 type:'Cardio',       sets:'3', reps:'2-3min',  rest:'60s',  tip:'Pulos baixos, aterrissagem no antepé' },
+  { name:'Corrida (Esteira)',           type:'Cardio',       sets:'1', reps:'20-40min',rest:'-',    tip:'PSE 3-5, conversa possível' },
+  { name:'Bicicleta Ergométrica',       type:'Cardio',       sets:'1', reps:'20-40min',rest:'-',    tip:'RPM 70-90, resistência moderada' },
+  { name:'Flexão de Braço',             type:'Funcional',    sets:'3', reps:'10-15',   rest:'60s',  tip:'Corpo rígido, peito toca o chão' },
+  { name:'Flexão de Braço Declinada',   type:'Funcional',    sets:'3', reps:'10-12',   rest:'60s',  tip:'Pés elevados, ativa porção superior do peito' },
+  { name:'Flexão de Braço Diamante',    type:'Funcional',    sets:'3', reps:'8-12',    rest:'60s',  tip:'Mãos formam diamante, foco no tríceps' },
+  { name:'Flexão de Braço Arqueiro',    type:'Funcional',    sets:'3', reps:'6-8',     rest:'75s',  tip:'Progride para o unilateral — pistol de braço' },
+  { name:'Burpee',                      type:'Funcional',    sets:'3', reps:'8-12',    rest:'90s',  tip:'Movimento completo, ritmo controlado' },
+  { name:'Burpee com Salto',            type:'Funcional',    sets:'3', reps:'6-10',    rest:'90s',  tip:'Salto explosivo no topo, aterrissagem suave' },
+  { name:'Mountain Climber',            type:'Funcional',    sets:'3', reps:'20-30',   rest:'45s',  tip:'Quadril estável, não rodar o tronco' },
+  { name:'Abdominal Bicicleta',         type:'Funcional',    sets:'3', reps:'15-20',   rest:'45s',  tip:'Cotovelo toca o joelho oposto' },
+  { name:'Abdominal V-Sit',             type:'Funcional',    sets:'3', reps:'10-15',   rest:'45s',  tip:'Suba simultâneo de tronco e pernas' },
+  { name:'Agachamento com Salto',       type:'Funcional',    sets:'3', reps:'8-10',    rest:'90s',  tip:'Aterrissagem suave com joelhos levemente flexionados' },
+  { name:'Afundo com Salto (Lunge Jump)',type:'Funcional',   sets:'3', reps:'8-10',    rest:'90s',  tip:'Troca de perna no ar, explosão de quadríceps' },
+  { name:'Step Up (Caixote/Escada)',    type:'Funcional',    sets:'3', reps:'10-12',   rest:'60s',  tip:'Empurrar pelo calcanhar do pé apoiado' },
+  { name:'Corrida Lateral (Shuffle)',   type:'Funcional',    sets:'4', reps:'10-15m',  rest:'60s',  tip:'Futebol: agilidade e mudança de direção' },
+  { name:'Salto Vertical',             type:'Funcional',    sets:'4', reps:'6-8',     rest:'90s',  tip:'LTAD: desenvolve potência e coordenação' },
+  { name:'Box Jump',                   type:'Funcional',    sets:'4', reps:'5-8',     rest:'90s',  tip:'Aterrissagem em flexão, absorção do impacto' },
+  { name:'Bear Crawl',                 type:'Funcional',    sets:'3', reps:'20m',     rest:'60s',  tip:'Joelhos a 2cm do chão, core ativado' },
+  { name:'Crab Walk',                  type:'Funcional',    sets:'3', reps:'15m',     rest:'60s',  tip:'Quadril elevado, ativa ombro e glúteo' },
+  { name:'Polichinelo',                type:'Funcional',    sets:'3', reps:'30-45s',  rest:'30s',  tip:'Ritmo constante, ótimo para aquecimento' },
+  { name:'Corrida no Lugar (High Knee)',type:'Funcional',   sets:'3', reps:'30s',     rest:'30s',  tip:'Joelhos na altura do quadril, braços em ritmo' },
+  { name:'Remada com Elástico',         type:'Elástico',    sets:'3', reps:'12-15',   rest:'60s',  tip:'Elástico preso à frente, cotovelos passam o tronco' },
+  { name:'Puxada com Elástico',         type:'Elástico',    sets:'3', reps:'12-15',   rest:'60s',  tip:'Elástico preso acima, puxar para o peito' },
+  { name:'Rosca Bíceps com Elástico',   type:'Elástico',    sets:'3', reps:'12-15',   rest:'45s',  tip:'Pisar no elástico, supinação completa' },
+  { name:'Extensão Tríceps c/ Elástico',type:'Elástico',   sets:'3', reps:'12-15',   rest:'45s',  tip:'Elástico preso acima, extensão completa' },
+  { name:'Elevação Lateral c/ Elástico',type:'Elástico',   sets:'3', reps:'15-20',   rest:'45s',  tip:'Elástico sob os pés, cotovelos levemente flexionados' },
+  { name:'Agachamento com Elástico',    type:'Elástico',    sets:'3', reps:'15-20',   rest:'60s',  tip:'Elástico sobre os ombros ou sob os pés' },
+  { name:'Hip Thrust com Elástico',     type:'Elástico',    sets:'3', reps:'15-20',   rest:'45s',  tip:'Elástico sobre os quadris, extensão completa' },
+  { name:'Abdução de Quadril (Elástico)',type:'Elástico',   sets:'3', reps:'15-20',   rest:'45s',  tip:'Elástico nos joelhos, abre e fecha controlado' },
+  { name:'Afundo com Elástico',         type:'Elástico',    sets:'3', reps:'12',      rest:'60s',  tip:'Elástico sobre os ombros, postura ereta' },
+  { name:'Pallof Press (Elástico)',     type:'Elástico',    sets:'3', reps:'10-12',   rest:'45s',  tip:'Resistência à rotação, core antirotacional' },
+  { name:'Agachamento com Peso Corporal',type:'Peso Corporal',sets:'3',reps:'15-20',  rest:'45s',  tip:'Sem carga, foco em técnica perfeita' },
+  { name:'Afundo (Peso Corporal)',       type:'Peso Corporal',sets:'3',reps:'12',      rest:'45s',  tip:'Tronco ereto, joelho traseiro quase no chão' },
+  { name:'Elevação Pélvica (Glúteo Bridge)',type:'Peso Corporal',sets:'3',reps:'20-25',rest:'30s', tip:'Extensão completa de quadril, glúteo contraído' },
+  { name:'Glúteo 4 Apoios',             type:'Peso Corporal',sets:'3',reps:'15-20',   rest:'30s',  tip:'Joelho a 90°, empurra o calcanhar para o teto' },
+  { name:'Superman',                    type:'Peso Corporal',sets:'3',reps:'12-15',   rest:'30s',  tip:'Extensão simultânea de braço e perna opostos' },
+  { name:'Equilíbrio Unipodal',         type:'Peso Corporal',sets:'3',reps:'20-30s',  rest:'30s',  tip:'Olhos abertos depois fechados para progredir' },
+  { name:'Prancha com Elevação de Braço',type:'Peso Corporal',sets:'3',reps:'8-10',   rest:'45s',  tip:'Anti-rotação, core profundo' },
+  { name:'Puxada Inverted Row',          type:'Peso Corporal',sets:'3',reps:'10-15',  rest:'60s',  tip:'Barra baixa, corpo inclinado — remada corporal' },
+  { name:'Tríceps Banco (Dip)',          type:'Peso Corporal',sets:'3',reps:'10-15',  rest:'60s',  tip:'Apoio em cadeira ou banco, cotovelos atrás' },
+  { name:'Gato-Vaca',                   type:'Mobilidade',   sets:'2',reps:'10-15',   rest:'30s',  tip:'Mobilidade torácica e lombar, ritmo respiratório' },
+  { name:'Mobilidade de Quadril 90/90', type:'Mobilidade',   sets:'2',reps:'8-10',    rest:'30s',  tip:'Rotação interna e externa de quadril sentado' },
+  { name:'World\'s Greatest Stretch',   type:'Mobilidade',   sets:'2',reps:'6-8',     rest:'30s',  tip:'Combinação de lunge, rotação e extensão torácica' },
+  { name:'Alongamento de Isquiotibial', type:'Mobilidade',   sets:'2',reps:'30-45s',  rest:'20s',  tip:'Perna estendida, flexão do tronco sem arredondar lombar' },
+  { name:'Rotação Torácica em 4 Apoios',type:'Mobilidade',   sets:'2',reps:'8-10',    rest:'30s',  tip:'Mão atrás da cabeça, cotovelo sobe ao teto' },
+  { name:'Mobilidade de Tornozelo',     type:'Mobilidade',   sets:'2',reps:'10-12',   rest:'20s',  tip:'Joelho ultrapassa o pé, mantém calcanhar no chão' },
 ]
 
-function tgmdScore(scores) {
-  if (!scores) return null
-  const all = [...TGMD3_LOCOMOTION, ...TGMD3_OBJECT]
-  const filled = all.filter(p => scores[p.id] !== undefined)
-  if (filled.length === 0) return null
-  const sum = filled.reduce((a, p) => a + (scores[p.id] || 0), 0)
-  const max = filled.length * 2
-  return { pct: Math.round((sum / max) * 100), filled: filled.length, total: all.length }
-}
-
-function getScoreColor(score) {
-  if (score >= 80) return { text: '#4ADE80', bg: 'rgba(74,222,128,0.12)', border: 'rgba(74,222,128,0.3)', label: 'Excelente' }
-  if (score >= 65) return { text: '#A3E635', bg: 'rgba(163,230,53,0.10)', border: 'rgba(163,230,53,0.25)', label: 'Bom' }
-  if (score >= 45) return { text: '#FBBF24', bg: 'rgba(251,191,36,0.12)', border: 'rgba(251,191,36,0.3)', label: 'Regular' }
-  if (score >= 25) return { text: '#FB923C', bg: 'rgba(251,146,60,0.12)', border: 'rgba(251,146,60,0.3)', label: 'Atenção' }
-  return { text: '#F87171', bg: 'rgba(248,113,113,0.12)', border: 'rgba(248,113,113,0.3)', label: 'Crítico' }
-}
-
-// ── Confiança da avaliação ─────────────────────────────────────────────────
-function getConfidence({ allExercises, exerciseLogs, cardioSessions, progress, student, allDays }) {
-  let pts = 0
-  const items = []
-  if (allExercises.length >= 4)                  { pts += 18; items.push('plano com exercícios') }
-  else if (allExercises.length > 0)              { pts += 8;  items.push('plano parcial') }
-  else                                           { items.push('sem plano ativo') }
-  if (allDays.some(d => d.exercises?.some(e => e.type))) { pts += 10; items.push('tipos musculares definidos') }
-  if (exerciseLogs.length >= 30)                 { pts += 22; items.push('histórico de cargas rico') }
-  else if (exerciseLogs.length >= 10)            { pts += 14; items.push('histórico de cargas parcial') }
-  else if (exerciseLogs.length >= 3)             { pts += 6;  items.push('poucos registros de carga') }
-  else                                           { items.push('sem registros de carga') }
-  if (student.birth_date || student.age)         { pts += 12; items.push('dados etários') }
-  if (student.weight && student.height)          { pts += 10; items.push('antropometria completa') }
-  else if (student.weight || student.height)     { pts += 5;  items.push('antropometria parcial') }
-  if (progress.length >= 2)                      { pts += 14; items.push('avaliações físicas') }
-  else if (progress.length === 1)                { pts += 7;  items.push('1 avaliação física') }
-  if (cardioSessions.length >= 5)                { pts += 10; items.push('histórico cárdio') }
-  else if (cardioSessions.length >= 1)           { pts += 5;  items.push('cárdio parcial') }
-  // Span temporal dos logs
-  if (exerciseLogs.length >= 2) {
-    const dates = exerciseLogs.map(l => l.date).sort()
-    const spanWeeks = (new Date(dates[dates.length-1]) - new Date(dates[0])) / (7*864e5)
-    if (spanWeeks >= 8) { pts += 4; items.push('span ≥8 semanas') }
-  }
-  return { pct: Math.min(100, pts), items }
-}
-
-// ── Recomendações automáticas por pilar ───────────────────────────────────
-const RECS = {
-  volume:     s => s >= 80 ? [] : s >= 50 ? ['Aumente gradualmente para 15–20 séries/semana por grupo muscular (ACSM 2022).'] : ['Cadastre o plano ativo com séries e grupos musculares para avaliação completa.', 'Volume atual muito baixo — considere 10+ séries/semana para resultados mínimos.'],
-  freq:       s => s >= 80 ? [] : s >= 55 ? ['Ajuste a frequência semanal de acordo com o objetivo: Massa/Emagrecimento 3–5×, Força 3–4×.'] : ['Nenhum dia de treino configurado. Cadastre os dias da semana no plano ativo.'],
-  balance:    s => s >= 80 ? [] : ['Revise a proporção de exercícios de puxada vs empurrão (alvo 1:1). Adicione puxadas dorsais se houver excesso de peito/ombro.', 'Verifique cadeia posterior (posterior de coxa, glúteo) para equilibrar com quadríceps.'],
-  progress:   s => s >= 80 ? [] : s >= 50 ? ['Registre cargas semanalmente para monitorar progressão. ACSM: aumento de 2–10%/semana.'] : ['Nenhuma progressão detectada. Aplique sobrecarga progressiva — aumente 1 variável (peso, reps ou séries) a cada 1–2 semanas.'],
-  objective:  s => s >= 80 ? [] : ['Ajuste as faixas de repetição ao objetivo: Massa 6–12 reps, Força 1–6, Condicionamento 12–20, Emagrecimento 8–15.'],
-  age:        s => s >= 80 ? [] : ['Revise os alertas etários no pilar Adequação Etária e ajuste o plano conforme as diretrizes LTAD/ACSM para a faixa do aluno.'],
-  monitor:    s => s >= 80 ? [] : ['Realize avaliação física a cada 30 dias. Registre peso, medidas e cargas para aumentar a confiança da avaliação.'],
-  recovery:   s => s >= 80 ? [] : ['Insira pelo menos 1 dia de descanso entre sessões do mesmo grupo muscular (Schoenfeld 2018: 48–72h mínimo).', 'Considere dividir o plano por grupos musculares para garantir recuperação adequada.'],
-  overtraining: s => s >= 80 ? [] : s >= 55 ? ['PSE médio elevado. Considere sessões de baixa intensidade (PSE ≤5) ou 1 semana de deload.'] : ['Razão carga aguda:crônica elevada (ACWR >1.5) — risco de overtraining. Reduza volume ou intensidade por 5–7 dias.'],
-  variation:  s => s >= 80 ? [] : ['Varie os estímulos a cada 4–6 semanas: alterne períodos de hipertrofia (6–12 reps), força (1–6) e resistência (12–20) para evitar estagnação (Fonseca 2014).'],
-  levelFit:   s => s >= 80 ? [] : ['Ajuste o plano ao nível do aluno. Iniciantes: 2–3×/sem, 10–15 séries, foco em movimentos compostos. Avançados: periodização com variação de métodos.'],
-}
-
-function generateRecommendations(pilares) {
-  return pilares
-    .filter(p => p.score < 80)
-    .sort((a, b) => a.score - b.score)
-    .flatMap(p => (RECS[p.id] ? RECS[p.id](p.score).map(txt => ({ pilar: p.name, icon: p.icon, txt, score: p.score })) : []))
-    .slice(0, 6)
-}
-
-// ── Motor de avaliação ─────────────────────────────────────────────────────
-function runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLogs, cardioSessions, progress }) {
-  const age    = calcAge(student)
-  const goal   = student.goal || ''
-  const level  = student.level || 'Iniciante'
-
-  // ── Pillar 1: Volume ─────────────────────────────────────────────────────
-  const totalSets = allExercises.reduce((sum, ex) => sum + (parseInt(ex.sets) || 3), 0)
-  let volumeScore = 0, volumeMsg = ''
-
-  if (goal === 'Saúde e Bem-Estar') {
-    // Saúde e Bem-Estar: avalia combinação força + cardio vs diretrizes OMS/ACSM EIM
-    // OMS 2020: ≥150 min/sem aeróbio moderado + força 2x/sem
-    const now_vol = new Date()
-    const last14c = (cardioSessions||[]).filter(s => (now_vol - new Date(s.date+'T12:00:00')) < 14*864e5)
-    const weeklyCardioMin = last14c.reduce((a,s) => a+(s.duration_minutes||0), 0) / 2
-    const hasStrength = daysPerWeek >= 2 && totalSets >= 4  // pelo menos 2 dias e 4 séries
-    const cardioOk   = weeklyCardioMin >= 150
-    const cardioMod  = weeklyCardioMin >= 90
-
-    if (totalSets === 0 && last14c.length === 0) {
-      volumeScore = 0
-      volumeMsg = 'Nenhum exercício ou sessão de cardio registrado. OMS 2020: ≥150 min/sem aeróbio + força 2×/sem para saúde geral.'
-    } else if (!hasStrength && !cardioOk) {
-      volumeScore = 30
-      volumeMsg = `Volume insuficiente em ambas as modalidades. Força: ${totalSets} séries (alvo: ≥4 séries, 2×/sem). Cardio: ~${Math.round(weeklyCardioMin)} min/sem (alvo: ≥150 min). OMS 2020; ACSM Exercise is Medicine.`
-    } else if (hasStrength && !cardioMod) {
-      volumeScore = 55
-      volumeMsg = `Força adequada (${totalSets} séries, ${daysPerWeek}×/sem). Volume de cardio baixo (~${Math.round(weeklyCardioMin)} min/sem) — OMS recomenda ≥150 min/sem para saúde cardiovascular. Inclua ≥3 sessões aeróbias semanais.`
-    } else if (!hasStrength && cardioOk) {
-      volumeScore = 65
-      volumeMsg = `Cardio adequado (~${Math.round(weeklyCardioMin)} min/sem). Treino de força insuficiente (${daysPerWeek}×/sem) — ACSM EIM recomenda ≥2×/sem de força para prevenção de sarcopenia e osteoporose.`
-    } else if (hasStrength && cardioMod && !cardioOk) {
-      volumeScore = 80
-      volumeMsg = `Boa combinação de força e cardio. Volume aeróbio próximo do alvo (~${Math.round(weeklyCardioMin)}/150 min/sem). Aumentar 1–2 sessões de cardio para atingir diretriz OMS 2020.`
-    } else {
-      volumeScore = 100
-      volumeMsg = `Excelente combinação: força ${daysPerWeek}×/sem (${totalSets} séries) + ~${Math.round(weeklyCardioMin)} min/sem de cardio. Dentro das diretrizes OMS 2020 e ACSM Exercise is Medicine.`
-    }
-  } else {
-    // Demais objetivos — lógica original (hipertrofia/performance)
-    // ACSM 2022: 10–20 séries/grupo muscular/semana (Schoenfeld 2017)
-    if (totalSets === 0) {
-      volumeScore = 0
-      volumeMsg = 'Nenhum exercício cadastrado no plano ativo.'
-    } else if (totalSets < 10) {
-      volumeScore = 30
-      volumeMsg = `${totalSets} séries semanais — volume muito baixo. Mínimo recomendado: 10 séries/semana por grupo muscular (Schoenfeld 2017).`
-    } else if (totalSets < 20) {
-      volumeScore = 60
-      volumeMsg = `${totalSets} séries semanais — volume moderado. Alvo ideal: 15–25 séries para hipertrofia e performance (ACSM 2022).`
-    } else if (totalSets < 40) {
-      volumeScore = 90
-      volumeMsg = `${totalSets} séries semanais — volume adequado para o nível ${level}. Dentro da janela recomendada pelo ACSM.`
-    } else if (totalSets < 60) {
-      volumeScore = 100
-      volumeMsg = `${totalSets} séries semanais — excelente volume para atleta ${level}. Monitore sinais de overtraining.`
-    } else {
-      volumeScore = 55
-      volumeMsg = `${totalSets} séries semanais — volume elevado. Risco de overtraining. Considere deload semanal a cada 4–6 semanas.`
-    }
-  }
-
-  // ── Pillar 2: Frequência Semanal ─────────────────────────────────────────
-  // ACSM Position Stand 2022 por objetivo
-  const FREQ = {
-    'Ganho de Massa':           { min: 3, max: 5, ideal: '3–5×/sem' },
-    'Emagrecimento':            { min: 3, max: 5, ideal: '3–5×/sem' },
-    'Condicionamento':          { min: 4, max: 5, ideal: '4–5×/sem' },
-    'Força e Performance':      { min: 3, max: 4, ideal: '3–4×/sem' },
-    'Saúde e Bem-Estar':        { min: 2, max: 4, ideal: '2–4×/sem' },
-    'Iniciação Esportiva':      { min: 2, max: 3, ideal: '2–3×/sem' },
-    'Desenvolvimento Atlético': { min: 3, max: 4, ideal: '3–4×/sem' },
-    'Treinamento Competitivo':  { min: 3, max: 5, ideal: '3–5×/sem' },
-  }
-  const freqTarget = FREQ[goal] || { min: 3, max: 5, ideal: '3–5×/sem' }
-  const daysPerWeek = plannedDays.length
-  let freqScore = 0, freqMsg = ''
-  if (daysPerWeek === 0) {
-    freqScore = 0; freqMsg = 'Nenhum dia de treino configurado no plano.'
-  } else if (daysPerWeek < freqTarget.min) {
-    freqScore = 55; freqMsg = `${daysPerWeek} dia${daysPerWeek > 1 ? 's' : ''}/semana — abaixo do ideal para "${goal}" (ACSM: ${freqTarget.ideal}).`
-  } else if (daysPerWeek <= freqTarget.max) {
-    freqScore = 100; freqMsg = `${daysPerWeek} dias/semana — frequência ideal para "${goal}" segundo ACSM 2022.`
-  } else {
-    freqScore = 65; freqMsg = `${daysPerWeek} dias/semana — frequência elevada. Verifique dias de descanso para recuperação (ACSM: ${freqTarget.ideal}).`
-  }
-
-  // ── Pillar 3: Equilíbrio Muscular ────────────────────────────────────────
-  // Boyle 2016 (Functional Training Bible): razão puxada:empurrão 1:1–1.2
-  const PUSH = ['Peito', 'Tríceps', 'Ombro']
-  const PULL = ['Costas', 'Bíceps']
-  const ANTERIOR  = ['Quadríceps']
-  const POSTERIOR = ['Posterior', 'Glúteo', 'Panturrilha']
-
-  const pushN = allExercises.filter(ex => PUSH.includes(ex.type)).length
-  const pullN = allExercises.filter(ex => PULL.includes(ex.type)).length
-  const antN  = allExercises.filter(ex => ANTERIOR.includes(ex.type)).length
-  const postN = allExercises.filter(ex => POSTERIOR.includes(ex.type)).length
-
-  let balanceScore = 80
-  const balanceIssues = []
-
-  if (pushN + pullN >= 2) {
-    const ppRatio = pushN / Math.max(pullN, 1)
-    if (ppRatio > 1.8) { balanceScore -= 25; balanceIssues.push(`excesso de empurrão vs puxada (${pushN}:${pullN}) — risco de desequilíbrio postural`) }
-    else if (ppRatio < 0.4) { balanceScore -= 10; balanceIssues.push(`excesso de puxada vs empurrão (${pullN}:${pushN})`) }
-    else if (ppRatio >= 0.7 && ppRatio <= 1.3) balanceScore = 100
-  } else if (allExercises.length > 0) {
-    balanceScore = 55; balanceIssues.push('grupos push/pull insuficientes para avaliar equilíbrio horizontal')
-  }
-
-  if (antN > 2 && postN === 0) {
-    balanceScore -= 25; balanceIssues.push('cadeia posterior (posterior/glúteo) ausente — risco de síndrome patelofemoral')
-  } else if (antN > 0 && postN > 0 && antN / postN > 2) {
-    balanceScore -= 15; balanceIssues.push(`dominância anterior excessiva vs posterior (${antN}:${postN})`)
-  }
-  balanceScore = Math.max(0, Math.min(100, balanceScore))
-  const balanceMsg = balanceIssues.length
-    ? balanceIssues.map(i => `⚠️ ${i}`).join(' · ')
-    : pushN + pullN + antN + postN > 0
-      ? `Boa distribuição push/pull detectada (${pushN} empurrão : ${pullN} puxada). Equilíbrio muscular adequado.`
-      : 'Não foi possível avaliar — adicione o tipo muscular nos exercícios do plano.'
-
-  // ── Pillar 4: Progressão de Carga ────────────────────────────────────────
-  // ACSM FITT-VP: sobrecarga progressiva 2–10% por semana (Kraemer 2004)
-  let progressScore = 50, progressMsg = 'Dados insuficientes para avaliar progressão (mínimo 2 registros por exercício).'
-
-  if (exerciseLogs && exerciseLogs.length >= 3) {
-    const byEx = {}
-    exerciseLogs.forEach(log => {
-      const name = log.exercises?.name || log.exercise_id
-      if (!byEx[name]) byEx[name] = []
-      const maxW = Math.max(...(log.sets || []).map(s => +s.weight || 0))
-      if (maxW > 0) byEx[name].push({ date: log.date, maxW })
-    })
-    const exsTracked = Object.values(byEx).filter(arr => arr.length >= 2)
-    if (exsTracked.length > 0) {
-      let up = 0, flat = 0, down = 0
-      exsTracked.forEach(arr => {
-        const sorted = [...arr].sort((a, b) => a.date > b.date ? 1 : -1)
-        const delta = (sorted[sorted.length - 1].maxW - sorted[0].maxW) / sorted[0].maxW
-        if (delta >  0.03) up++
-        else if (delta < -0.03) down++
-        else flat++
-      })
-      const total = up + flat + down
-      progressScore = Math.round((up * 100 + flat * 62 + down * 20) / total)
-      progressMsg = `${total} exercício${total > 1 ? 's' : ''} acompanhado${total > 1 ? 's' : ''}: ${up} com carga crescente↑, ${flat} estável→, ${down} decrescente↓. ${down > 0 ? '⚠️ Investigue redução de carga.' : up > 0 ? '✅ Progressão detectada.' : 'Considere aumentar cargas progressivamente (ACSM: 2–10%/semana).'}`
-    }
-  }
-
-  // ── Pillar 5: Adequação ao Objetivo ──────────────────────────────────────
-  // Rep ranges: Schoenfeld 2010 — força 1-6, hipertrofia 6-12, endurance >12
-  const REP_RANGES = {
-    'Ganho de Massa':           { min: 6,  max: 12, label: '6–12 reps (zona de hipertrofia)' },
-    'Força e Performance':      { min: 1,  max: 6,  label: '1–6 reps (zona de força máxima)' },
-    'Condicionamento':          { min: 12, max: 20, label: '12–20 reps (zona de resistência muscular)' },
-    'Emagrecimento':            { min: 8,  max: 15, label: '8–15 reps (metabólico + hipertrofia moderada)' },
-    'Saúde e Bem-Estar':        { min: 12, max: 20, label: '12–20 reps (resistência muscular, mobilidade e funcional)' },
-    'Iniciação Esportiva':      { min: 10, max: 20, label: '10–20 reps (multilateral, peso corporal e baixa carga)' },
-    'Desenvolvimento Atlético': { min: 6,  max: 15, label: '6–15 reps (misto: base de força + resistência)' },
-    'Treinamento Competitivo':  { min: 4,  max: 12, label: '4–12 reps (potência + força funcional)' },
-  }
-  const repRange = REP_RANGES[goal]
-  let objScore = 70, objIssues = []
-
-  if (repRange && allExercises.length > 0) {
-    let aligned = 0
-    allExercises.forEach(ex => {
-      const m = (ex.reps || '').match(/\d+/)
-      if (m) { const r = parseInt(m[0]); if (r >= repRange.min && r <= repRange.max) aligned++ }
-    })
-    const pct = aligned / allExercises.length
-    objScore = Math.round(40 + pct * 60)
-    if (pct < 0.5) objIssues.push(`${Math.round(pct * 100)}% dos exercícios com reps alinhadas ao objetivo (alvo: ${repRange.label})`)
-    else objIssues = []
-  }
-
-  if (goal === 'Saúde e Bem-Estar') {
-    // ── Saúde e Bem-Estar — avaliação completamente diferente ──
-    // Foco: exercícios multiarticulares funcionais + mobilidade + cardio OMS 2020
-    objScore = 70; objIssues = []
-
-    // 1. Exercícios multiarticulares funcionais (Cook 2010; ACSM EIM)
-    const FUNCTIONAL_KEYWORDS = ['agachamento','squat','leg press','terra','deadlift','afundo','lunge','step','remada','puxada','pull','supino','desenvolvimento','flexão','push']
-    const hasFunctional = allExercises.filter(ex =>
-      FUNCTIONAL_KEYWORDS.some(kw => (ex.name||'').toLowerCase().includes(kw))
-    ).length
-    const functionalPct = allExercises.length > 0 ? hasFunctional / allExercises.length : 0
-
-    if (functionalPct >= 0.6) {
-      objScore += 15
-    } else if (functionalPct >= 0.3) {
-      objScore += 5
-      objIssues.push('menos de 60% dos exercícios são multiarticulares funcionais — para saúde geral priorize padrões: agachar, empurrar, puxar, carregar (Cook 2010)')
-    } else if (allExercises.length > 0) {
-      objScore -= 10
-      objIssues.push('poucos exercícios funcionais detectados — ACSM EIM recomenda movimentos multiarticulares como base da prescrição para saúde')
-    }
-
-    // 2. Mobilidade — grupos Core e Full Body como proxy (Nelson 2007)
-    const hasMobility = allExercises.some(ex => ['Core','Full Body'].includes(ex.type))
-    if (hasMobility) {
-      objScore += 10
-    } else if (allExercises.length > 3) {
-      objIssues.push('ausência de trabalho de Core/mobilidade — para capacidade funcional inclua mobilidade de quadril, torácica e ombro (Nelson et al. 2007)')
-    }
-
-    // 3. Intensidade adequada — PSE e rep range (ACSM EIM: 40–60% 1RM, PSE 3–5)
-    const heavyCount = allExercises.filter(ex => { const m=(ex.reps||'').match(/\d+/); return m && parseInt(m[0]) < 6 }).length
-    const heavyPct   = allExercises.length > 0 ? heavyCount/allExercises.length : 0
-    if (heavyPct > 0.3) {
-      objScore -= 12
-      objIssues.push(`${Math.round(heavyPct*100)}% dos exercícios com carga pesada (<6 reps) — para saúde e bem-estar a intensidade ideal é 40–60% de 1RM (PSE 3–5), não força máxima (ACSM EIM)`)
-    }
-
-    // 4. Volume aeróbio — central para saúde cardiovascular (OMS 2020; Kodama 2009)
-    const now_obj = new Date()
-    const last14c_obj = (cardioSessions||[]).filter(s => (now_obj - new Date(s.date+'T12:00:00')) < 14*864e5)
-    const weeklyCardioMin_obj = last14c_obj.reduce((a,s) => a+(s.duration_minutes||0), 0) / 2
-    if (weeklyCardioMin_obj >= 150) {
-      objScore += 15
-    } else if (weeklyCardioMin_obj >= 90) {
-      objScore += 5
-      objIssues.push(`cardio: ~${Math.round(weeklyCardioMin_obj)} min/sem — aumentar para ≥150 min/sem para atingir diretriz OMS 2020 de saúde cardiovascular`)
-    } else {
-      objScore -= 10
-      objIssues.push(`cardio insuficiente (~${Math.round(weeklyCardioMin_obj)} min/sem) — OMS 2020 recomenda 150–300 min/sem de intensidade moderada para prevenção de doenças crônicas`)
-    }
-
-    objScore = Math.max(0, Math.min(100, objScore))
-
-  } else {
-    // Cárdio complementar para objetivos de condicionamento/emagrecimento
-    if (goal === 'Emagrecimento' || goal === 'Condicionamento') {
-      const now = new Date()
-      const last14sessions = (cardioSessions || []).filter(s => (now - new Date(s.date)) < 14 * 864e5)
-      const weeklyCardioMin = last14sessions.reduce((sum, s) => sum + (s.duration_minutes || 0), 0) / 2
-      if (weeklyCardioMin < 90 && last14sessions.length < 2) {
-        objScore = Math.max(objScore - 15, 10)
-        objIssues.push(`volume cárdio insuficiente nas últimas 2 semanas — WHO 2020 recomenda ≥150 min/sem para ${goal}`)
-      } else if (weeklyCardioMin >= 150) {
-        objScore = Math.min(objScore + 8, 100)
-      }
-    }
-  }
-
-  const objMsg = goal === 'Saúde e Bem-Estar'
-    ? objIssues.length
-      ? objIssues.map(i => `⚠️ ${i}`).join('. ') + '.'
-      : `Prescrição alinhada às diretrizes de saúde: exercícios funcionais, mobilidade e volume aeróbio adequados. OMS 2020; ACSM Exercise is Medicine; Cook 2010.`
-    : objIssues.length
-      ? objIssues.map(i => `⚠️ ${i}`).join('. ')
-      : repRange
-        ? `Faixas de repetição e volume compatíveis com objetivo "${goal}" (${repRange.label}).`
-        : 'Configure o objetivo do aluno para avaliação detalhada.'
-
-  // ── Pillar 6: Adequação Etária + Fase LTAD ──────────────────────────────
-  // LTAD (Balyi 2013), Tanaka 2001, ACSM 2022, NSCA Youth Resistance Training 2009
-  let ageScore = 100, ageIssues = [], ageOk = []
-  const ltadPhase = calcLTAD(age, student.experience_years, student.sport)
-
-  if (age !== null) {
-    const lowRepCount    = allExercises.filter(ex => parseInt(ex.reps) <= 3).length
-    const heavyRepCount  = allExercises.filter(ex => { const m=(ex.reps||'').match(/\d+/); return m && parseInt(m[0]) < 6 }).length
-    const heavyLoadPct   = heavyRepCount / Math.max(allExercises.length, 1)
-    const hasCoreWork    = allExercises.some(ex => ['Core','Full Body'].includes(ex.type))
-    const hasLegsWork    = allExercises.some(ex => ['Quadríceps','Posterior','Glúteo','Panturrilha'].includes(ex.type))
-    const hasUpperWork   = allExercises.some(ex => ['Peito','Costas','Ombro','Bíceps','Tríceps'].includes(ex.type))
-
-    if (age >= 60) {
-      // ── Idoso 60+ ── Tanaka 2001, ACSM 2022, Sherrington 2019
-      if (daysPerWeek > 4)  { ageScore -= 12; ageIssues.push('frequência >4×/sem — risco de overuse em 60+ (recomendado 3–4×/sem)') }
-      if (lowRepCount > 0)  { ageScore -= 15; ageIssues.push('exercícios de força máxima (<4 reps) sem avaliação cardiovascular prévia') }
-      if (!hasCoreWork)     { ageScore -= 12; ageIssues.push('ausência de Core/equilíbrio — pilar obrigatório para prevenir quedas (Sherrington 2019)') }
-      else ageOk.push('✅ Core presente — prevenção de quedas contemplada')
-      if (daysPerWeek >= 2 && daysPerWeek <= 4 && lowRepCount === 0) ageOk.push('✅ Frequência e intensidade adequadas para 60+')
-
-    } else if (ltadPhase?.fase === 'FUNdamentals') {
-      // ── FUNdamentals (6–11 anos) ── LTAD, NSCA 2009
-      if (lowRepCount > 0)       { ageScore -= 40; ageIssues.push('carga máxima contraindicada na fase FUNdamentals — risco de lesão epifisária (LTAD)') }
-      if (heavyLoadPct > 0.2)    { ageScore -= 20; ageIssues.push('>20% exercícios com carga elevada (<6 reps) — fase FUNdamentals prioriza peso corporal e coordenação') }
-      if (daysPerWeek > 3)       { ageScore -= 10; ageIssues.push('frequência >3×/sem excessiva para fase FUNdamentals — priorize diversificação motora') }
-      if (!hasCoreWork && !hasLegsWork) { ageScore -= 10; ageIssues.push('treino deve incluir padrões motores multilaterais: saltar, correr, girar (LTAD FUNdamentals)') }
-      else ageOk.push('✅ Padrões multilaterais presentes')
-      if (daysPerWeek <= 3 && lowRepCount === 0) ageOk.push('✅ Frequência e intensidade corretas para FUNdamentals')
-
-    } else if (ltadPhase?.fase === 'Learn to Train') {
-      // ── Learn to Train (9–15 anos) ── Faigenbaum 2009, LTAD
-      if (age < 14 && lowRepCount > 0) { ageScore -= 25; ageIssues.push('1RM contraindicado antes dos 14 anos — protocolo de Epley não validado (Balyi 2013)') }
-      if (heavyLoadPct > 0.3)    { ageScore -= 15; ageIssues.push('>30% exercícios com carga pesada — Learn to Train: técnica primeiro, carga depois (Faigenbaum 2009)') }
-      if (!hasCoreWork)          { ageScore -= 10; ageIssues.push('Core ausente — estabilidade central é base do desenvolvimento atlético nesta fase') }
-      else ageOk.push('✅ Core presente — estabilidade central contemplada')
-      if (daysPerWeek >= 2 && daysPerWeek <= 4) ageOk.push('✅ Frequência adequada para Learn to Train')
-      if (heavyLoadPct <= 0.3)   ageOk.push('✅ Carga compatível com fase Learn to Train')
-
-    } else if (ltadPhase?.fase === 'Train to Train') {
-      // ── Train to Train (12–17 anos) ── LTAD, NSCA 2009
-      if (heavyLoadPct > 0.4)    { ageScore -= 15; ageIssues.push('>40% exercícios com carga pesada — Train to Train: limite 70–75% de 1RM (NSCA 2009)') }
-      if (daysPerWeek > 5)       { ageScore -= 10; ageIssues.push('frequência >5×/sem — fase Train to Train requer deload semanal para recuperação óssea') }
-      if (!hasCoreWork)          { ageScore -= 8;  ageIssues.push('Core ausente — estabilização obrigatória para construção de base atlética (Train to Train)') }
-      if (!hasLegsWork)          { ageScore -= 8;  ageIssues.push('Ausência de trabalho de membros inferiores — base de potência essencial nesta fase') }
-      if (daysPerWeek >= 3 && daysPerWeek <= 5) ageOk.push('✅ Frequência adequada para Train to Train')
-      if (heavyLoadPct <= 0.4 && hasCoreWork)  ageOk.push('✅ Intensidade e equilíbrio corretos para Train to Train')
-
-    } else if (ltadPhase?.fase === 'Train to Compete') {
-      // ── Train to Compete (17–18 anos) ── LTAD, NSCA 2021
-      if (daysPerWeek > 5)       { ageScore -= 10; ageIssues.push('frequência >5×/sem pode comprometer recuperação em atleta jovem em competição') }
-      if (!hasCoreWork)          { ageScore -= 8;  ageIssues.push('Core ausente — integração neuromuscular crítica para performance competitiva') }
-      if (daysPerWeek >= 3)      ageOk.push('✅ Frequência de treino adequada para nível competitivo')
-      if (heavyLoadPct <= 0.5)   ageOk.push('✅ Distribuição de carga compatível com Train to Compete')
-
-    } else if (age >= 18 && age < 30) {
-      // ── Adulto Jovem 18–29 ── sem restrições específicas de fase
-      if (daysPerWeek >= 3) ageOk.push('✅ Frequência adequada para adulto jovem')
-
-    } else if (age >= 30 && age < 45) {
-      // ── Adulto 30–44 ── sarcopenia subclínica
-      if (!hasLegsWork && !hasUpperWork) { ageScore -= 10; ageIssues.push('treino de força incompleto — a partir dos 30 anos, 2–3×/sem de força previne sarcopenia subclínica') }
-      else ageOk.push('✅ Treino de força presente — prevenção de sarcopenia contemplada')
-
-    } else if (age >= 45 && age < 60) {
-      // ── Adulto Maduro 45–59 ── hormônios, ossos, CV
-      if (lowRepCount > 2)       { ageScore -= 10; ageIssues.push('múltiplos exercícios de força máxima — 45+ anos: recomendável avaliação cardiovascular prévia') }
-      if (!hasCoreWork)          { ageScore -= 8;  ageIssues.push('Core/equilíbrio ausente — funcional e preventivo para 45+ anos') }
-      if (daysPerWeek >= 2 && daysPerWeek <= 4) ageOk.push('✅ Frequência adequada para adulto maduro')
-      if (!hasLegsWork)          { ageScore -= 8;  ageIssues.push('Membros inferiores ausentes — manutenção óssea e funcional crítica para 45–59 anos (Kohrt 2004)') }
-    }
-
-    ageScore = Math.max(0, ageScore)
-  }
-
-  // TGMD-3 integration — add motor alerts to age pillar
-  const tgmd = student.tgmd_scores
-  if (tgmd && age && age < 18) {
-    const kickScore = tgmd.chutar
-    const jumpScore = tgmd.salto_h ?? tgmd.salto_v
-    const runScore  = tgmd.corrida
-    if (kickScore === 0) {
-      ageScore -= 10
-      ageIssues.push('padrão de chute Inicial (TGMD-3) — priorizar treino motor antes de exercícios de potência de MMII')
-    }
-    if (jumpScore === 0) {
-      ageScore -= 8
-      ageIssues.push('padrão de salto Inicial (TGMD-3) — incluir trabalho de recepção e aterrissagem antes de pliometria')
-    }
-    if (runScore === 0) {
-      ageScore -= 8
-      ageIssues.push('padrão de corrida Inicial (TGMD-3) — trabalhar mecânica de corrida antes de exercícios de velocidade')
-    }
-    ageScore = Math.max(0, ageScore)
-    const tgmdSc = tgmdScore(tgmd)
-    if (tgmdSc && tgmdSc.pct >= 75) ageOk.push('Padrões motores adequados (TGMD-3)')
-  }
-
-  // Use maturity offset if available for more precise phase
-  const matOffset = calcMaturityOffset(student.height, student.weight, student.height_sitting, (age||0)+(new Date().getMonth()/12), 'M')
-  const matLabel  = offsetLabel(matOffset)
-  const phvNote   = matLabel ? ` | ${matLabel.label}` : ''
-
-  const agePhaseLine = ltadPhase ? ` | Fase LTAD: ${ltadPhase.fase}${phvNote}` : phvNote
-  const ageMsg = age === null
-    ? '⚠️ Idade não cadastrada — cadastre a idade do aluno para habilitar avaliação etária completa.'
-    : ageIssues.length
-      ? ageIssues.map(i => `⚠️ ${i}`).join(' · ') + '.'
-      : `Prescrição adequada à faixa etária (${age} anos${agePhaseLine}). ${ageOk.join(' · ')}`
-
-  // ── Pillar 7: Dados & Monitoramento ──────────────────────────────────────
-  const now2 = new Date()
-  let monitorScore = 0, monitorItems = []
-  if (student.weight) { monitorScore += 20; monitorItems.push('✅ Peso cadastrado') }
-  else monitorItems.push('❌ Peso não cadastrado')
-  if (student.height) { monitorScore += 15; monitorItems.push('✅ Altura cadastrada') }
-  else monitorItems.push('❌ Altura não cadastrada')
-  if (progress.some(p => (now2 - new Date(p.date + 'T12:00:00')) < 30 * 864e5)) { monitorScore += 30; monitorItems.push('✅ Avaliação física registrada nos últimos 30 dias') }
-  else monitorItems.push('⚠️ Sem avaliação física recente (>30 dias)')
-  if (exerciseLogs && exerciseLogs.some(l => (now2 - new Date(l.date + 'T12:00:00')) < 14 * 864e5)) { monitorScore += 35; monitorItems.push('✅ Registros de carga nos últimos 14 dias') }
-  else monitorItems.push('⚠️ Sem registros de carga recentes (>14 dias)')
-  const monitorMsg = monitorItems.join(' · ')
-
-  // ── Pilar 8: Recuperação ─────────────────────────────────────────────────
-  // Schoenfeld & Ogborn 2018: 48–72h entre sessões do mesmo grupo muscular
-  const DIA_ORDER = { Seg:0, Ter:1, Qua:2, Qui:3, Sex:4, Sáb:5, Dom:6 }
-  let recoveryScore = 100, recoveryIssues = []
-  if (allDays && allDays.length >= 2) {
-    const sortedDays = [...allDays].sort((a, b) => (DIA_ORDER[a.day_of_week]??9) - (DIA_ORDER[b.day_of_week]??9))
-    for (let i = 0; i < sortedDays.length - 1; i++) {
-      const dayA = sortedDays[i], dayB = sortedDays[i+1]
-      const gapDays = (DIA_ORDER[dayB.day_of_week]??0) - (DIA_ORDER[dayA.day_of_week]??0)
-      if (gapDays <= 1) {
-        const typesA = new Set((dayA.exercises||[]).map(e => e.type).filter(Boolean))
-        const typesB = new Set((dayB.exercises||[]).map(e => e.type).filter(Boolean))
-        const shared = [...typesA].filter(t => typesB.has(t))
-        if (shared.length > 0) {
-          recoveryScore -= 20
-          recoveryIssues.push(`${dayA.day_of_week}→${dayB.day_of_week}: mesmo grupo muscular em dias consecutivos (${shared.slice(0,2).join(', ')})`)
-        }
-      }
-    }
-    recoveryScore = Math.max(0, recoveryScore)
-  } else if (allExercises.length > 0) {
-    recoveryScore = 70
-  }
-  // Para Saúde e Bem-Estar: recuperação entre sessões de baixa intensidade não é problema crítico
-  // O risco de overuse é muito menor — mas ausência total de dias ativos pode ser sinalizada
-  const recoveryMsg = goal === 'Saúde e Bem-Estar'
-    ? recoveryIssues.length
-      ? recoveryIssues.map(i => `⚠️ ${i}`).join('. ') + '. Para saúde geral, a intensidade moderada permite recuperação mais rápida — porém respeite ≥24h entre sessões do mesmo grupo.'
-      : allDays && allDays.length >= 2
-        ? 'Distribuição de dias adequada para saúde e bem-estar. Intensidade moderada permite recuperação em 24–48h (ACSM EIM).'
-        : 'Configure os dias do plano para avaliação de recuperação.'
-    : recoveryIssues.length
-      ? recoveryIssues.map(i => `⚠️ ${i}`).join('. ') + '. Insira descanso de ≥48h entre sessões do mesmo grupo (Schoenfeld 2018).'
-      : allDays && allDays.length >= 2
-        ? 'Distribuição de dias adequada — sem sobreposição de grupos musculares em dias consecutivos detectada.'
-        : 'Configure os dias do plano com tipos musculares para avaliação de recuperação.'
-
-  // ── Pilar 9: PSE & Overtraining (ACWR) ──────────────────────────────────
-  // Foster 1998: carga interna = PSE × duração. ACWR seguro: 0.8–1.3
-  let overtScore = 80, overtMsg = 'Dados de PSE insuficientes para calcular índice de carga interna (mínimo 4 sessões de cárdio).'
-  if (cardioSessions && cardioSessions.length >= 4) {
-    const now3 = new Date()
-    const withLoad = cardioSessions
-      .filter(s => s.pse && s.duration_minutes)
-      .map(s => ({ load: s.pse * s.duration_minutes, date: new Date(s.date + 'T12:00:00') }))
-      .filter(s => (now3 - s.date) < 28 * 864e5)
-      .sort((a,b) => b.date - a.date)
-
-    if (withLoad.length >= 4) {
-      const acuteLoad    = withLoad.filter(s => (now3 - s.date) < 7  * 864e5).reduce((s,r) => s + r.load, 0)
-      const chronicBase  = withLoad.filter(s => (now3 - s.date) < 28 * 864e5).reduce((s,r) => s + r.load, 0) / 4
-      const acwr         = chronicBase > 0 ? acuteLoad / chronicBase : 1.0
-      const allLoads     = withLoad.map(s => s.load)
-      const meanL        = allLoads.reduce((s,v) => s+v, 0) / allLoads.length
-      const stdL         = Math.sqrt(allLoads.map(v => (v-meanL)**2).reduce((s,v)=>s+v,0) / allLoads.length)
-      const monotony     = stdL > 0 ? meanL / stdL : 1.0
-
-      if (acwr > 1.5) {
-        overtScore = 25
-        overtMsg = `⚠️ ACWR = ${acwr.toFixed(2)} — zona de risco elevado (>1.5). Carga aguda muito superior à crônica. Reduza volume/intensidade imediatamente (Foster 1998).`
-      } else if (acwr > 1.3) {
-        overtScore = 55
-        overtMsg = `⚠️ ACWR = ${acwr.toFixed(2)} — zona de atenção (1.3–1.5). Monitore sinais de fadiga e considere reduzir PSE das próximas sessões.`
-      } else if (acwr < 0.8) {
-        overtScore = 65
-        overtMsg = `ACWR = ${acwr.toFixed(2)} — carga aguda abaixo da crônica. Pode indicar destreinamento ou baixa intensidade recente. Considere aumentar progressivamente.`
-      } else {
-        overtScore = 100
-        overtMsg = `ACWR = ${acwr.toFixed(2)} — zona segura (0.8–1.3). Carga aguda e crônica equilibradas.${monotony > 2 ? ' ⚠️ Monotonia elevada (' + monotony.toFixed(1) + ') — varie tipos de sessão.' : ''}`
-      }
-    }
-  }
-
-  // ── Pilar 10: Variação de Estímulo ───────────────────────────────────────
-  // Fonseca 2014; ACSM FITT-VP: variação de rep range a cada 4–6 semanas
-  let varScore = 70, varMsg = 'Dados insuficientes para avaliar variação de estímulo (mínimo 3 semanas de registros).'
-  if (exerciseLogs && exerciseLogs.length >= 6) {
-    const now4 = new Date()
-    const weekBuckets = {}
-    exerciseLogs.forEach(log => {
-      const wk = Math.floor((now4 - new Date(log.date + 'T12:00:00')) / (7 * 864e5))
-      if (wk < 8) {
-        if (!weekBuckets[wk]) weekBuckets[wk] = []
-        const m = (log.sets?.[0]?.reps || '').toString().match(/\d+/)
-        if (m) weekBuckets[wk].push(parseInt(m[0]))
-      }
-    })
-    const weeks = Object.values(weekBuckets)
-    if (weeks.length >= 3) {
-      const zoneOf = reps => reps <= 6 ? 'força' : reps <= 12 ? 'hipertrofia' : 'resistência'
-      const weeklyZones = weeks.map(repsArr => {
-        const counts = {}
-        repsArr.forEach(r => { const z = zoneOf(r); counts[z] = (counts[z]||0)+1 })
-        return Object.entries(counts).sort((a,b)=>b[1]-a[1])[0]?.[0] || 'hipertrofia'
-      })
-      const uniqueZones = new Set(weeklyZones)
-      const sameZoneStreak = weeklyZones.slice(0,6).every(z => z === weeklyZones[0])
-      if (uniqueZones.size >= 3)       { varScore = 100; varMsg = `Excelente variação de estímulo detectada: treino alterna zonas de força, hipertrofia e resistência (Fonseca 2014).` }
-      else if (uniqueZones.size === 2) { varScore = 75;  varMsg = `Variação moderada — ${[...uniqueZones].join(' e ')} alternados. Para estagnação máxima considere incluir zona de ${uniqueZones.has('força') ? 'resistência' : 'força'}.` }
-      else if (sameZoneStreak)         { varScore = 40;  varMsg = `⚠️ Mesma zona de estímulo (${weeklyZones[0]}) por >4 semanas consecutivas — risco de adaptação. Varie o rep range nas próximas semanas.` }
-      else                             { varScore = 60;  varMsg = `Pouca variação de estímulo. Alterne periodicamente entre força (1–6), hipertrofia (6–12) e resistência (12–20) reps.` }
-    }
-  }
-
-  // ── Pilar 11: Adequação ao Nível ─────────────────────────────────────────
-  // NSCA 2021; ACSM: parâmetros diferenciados por nível de treinamento
-  const levelMap = { 'Iniciante': 0, 'Intermediário': 1, 'Avançado': 2 }
-  const lvl = levelMap[level] ?? 0
-  let levelScore = 100, levelIssues = []
-
-  const LEVEL_PARAMS = [
-    { minSets: 8,  maxSets: 18, minFreq: 2, maxFreq: 3, minReps: 12, maxReps: 15, label: 'Iniciante' },
-    { minSets: 12, maxSets: 25, minFreq: 3, maxFreq: 4, minReps: 8,  maxReps: 12, label: 'Intermediário' },
-    { minSets: 18, maxSets: 40, minFreq: 4, maxFreq: 6, minReps: 5,  maxReps: 12, label: 'Avançado' },
-  ]
-  const lp = LEVEL_PARAMS[lvl]
-
-  if (allExercises.length > 0) {
-    // Volume vs nível
-    if (totalSets > 0 && totalSets > lp.maxSets) {
-      levelScore -= 15; levelIssues.push(`volume de ${totalSets} séries excede o recomendado para ${lp.label} (máx ~${lp.maxSets}/semana) — risco de overtraining`)
-    } else if (totalSets > 0 && totalSets < lp.minSets) {
-      levelScore -= 10; levelIssues.push(`volume de ${totalSets} séries abaixo do esperado para ${lp.label} (mín ~${lp.minSets}/semana)`)
-    }
-    // Frequência vs nível
-    if (daysPerWeek > lp.maxFreq) {
-      levelScore -= 15; levelIssues.push(`frequência de ${daysPerWeek}×/sem elevada para ${lp.label} (recomendado ${lp.minFreq}–${lp.maxFreq}×/sem)`)
-    } else if (daysPerWeek > 0 && daysPerWeek < lp.minFreq) {
-      levelScore -= 8; levelIssues.push(`frequência de ${daysPerWeek}×/sem baixa para ${lp.label}`)
-    }
-    // Complexidade para avançados: espera variação de rep range e periodização
-    if (lvl === 2 && varScore < 60) {
-      levelScore -= 15; levelIssues.push('aluno avançado sem periodização detectada — esperado variação de métodos e rep ranges (NSCA 2021)')
-    }
-    // Iniciantes: alertar sobre exercícios de força máxima
-    if (lvl === 0 && allExercises.filter(ex => parseInt(ex.reps) <= 4).length > 0) {
-      levelScore -= 20; levelIssues.push('exercícios de força máxima (<5 reps) para iniciante — risco técnico elevado sem base de movimento (NSCA 2021)')
-    }
-    levelScore = Math.max(0, levelScore)
-  } else {
-    levelScore = 50
-  }
-  const levelMsg = levelIssues.length
-    ? levelIssues.map(i => `⚠️ ${i}`).join('. ') + '.'
-    : `Parâmetros de volume, frequência e complexidade compatíveis com nível ${lp.label}.`
-
-  // ── Pilar 12: Adequação Esportiva ───────────────────────────────────────
-  // Verifica se os exercícios prescritos atendem às demandas da modalidade esportiva
-  // Ref: Boyle 2016 (Movement), NSCA Sport-Specific Conditioning 2021
-  let sportScore = 100, sportIssues = [], sportOk = []
-  const sport = student.sport
-
-  // Perfis por modalidade — grupos musculares e padrões de movimento essenciais
-  const SPORT_PROFILES = {
-    futebol:   { name: 'Futebol',   needs: ['Posterior','Glúteo','Quadríceps'], core: true,  unilateral: true,  explosao: true,  pull: false, desc: 'potência de membros inferiores, core estabilizador e agilidade' },
-    futsal:    { name: 'Futsal',    needs: ['Posterior','Glúteo','Quadríceps'], core: true,  unilateral: true,  explosao: true,  pull: false, desc: 'explosão em curta distância, mudança de direção e core' },
-    natacao:   { name: 'Natação',   needs: ['Costas','Ombro'],                  core: true,  unilateral: false, explosao: false, pull: true,  desc: 'estabilidade de ombro, puxada e core rotacional' },
-    tenis:     { name: 'Tênis',     needs: ['Ombro','Costas'],                  core: true,  unilateral: true,  explosao: true,  pull: true,  desc: 'rotação de core, unilateral, ombro e cadeia posterior' },
-    basquete:  { name: 'Basquete',  needs: ['Posterior','Glúteo','Quadríceps'], core: true,  unilateral: false, explosao: true,  pull: false, desc: 'salto vertical, posterior e core' },
-    volei:     { name: 'Vôlei',     needs: ['Ombro','Posterior','Glúteo'],      core: true,  unilateral: false, explosao: true,  pull: true,  desc: 'ombro, salto vertical, core e estabilidade escapular' },
-    atletismo: { name: 'Atletismo', needs: ['Posterior','Glúteo','Panturrilha'],core: true,  unilateral: true,  explosao: true,  pull: false, desc: 'cadeia posterior, potência e core' },
-    ginastica: { name: 'Ginástica', needs: ['Core','Costas'],                   core: true,  unilateral: false, explosao: false, pull: true,  desc: 'força relativa, core e mobilidade' },
-    judo:      { name: 'Judô',      needs: ['Costas','Bíceps'],                 core: true,  unilateral: false, explosao: false, pull: true,  desc: 'puxada, força de preensão e core' },
-    ciclismo:  { name: 'Ciclismo',  needs: ['Quadríceps','Posterior','Glúteo'], core: true,  unilateral: true,  explosao: false, pull: false, desc: 'extensão de joelho, cadeia posterior e core' },
-    handebol:  { name: 'Handebol',  needs: ['Ombro','Costas'],                  core: true,  unilateral: true,  explosao: true,  pull: true,  desc: 'arremesso, core rotacional e explosão' },
-    saude:     { name: 'Saúde e Bem-Estar', needs: ['Core'],               core: true,  unilateral: false, explosao: false, pull: false, desc: 'mobilidade, equilíbrio e condicionamento geral' },
-    custom:    { name: 'Outro',     needs: [],                                  core: false, unilateral: false, explosao: false, pull: false, desc: 'modalidade personalizada' },
-    outro:     { name: 'Outro',     needs: [],                                  core: false, unilateral: false, explosao: false, pull: false, desc: 'modalidade personalizada' },
-  }
-
-  const profile = sport ? SPORT_PROFILES[sport] : null
-
-  if (!profile || sport === 'outro') {
-    // Sem esporte cadastrado: pilar neutro
-    sportScore = 75
-    sportIssues.push('esporte não cadastrado — adicione a modalidade no perfil para avaliação esportiva específica')
-  } else {
-    const exTypes = allExercises.map(ex => ex.type).filter(Boolean)
-    const typeSet = new Set(exTypes)
-
-    // 1. Grupos musculares prioritários presentes?
-    const missingNeeds = profile.needs.filter(n => !typeSet.has(n))
-    if (missingNeeds.length > 0) {
-      const penalty = missingNeeds.length * 15
-      sportScore -= Math.min(penalty, 40)
-      sportIssues.push(`grupos ausentes para ${profile.name}: ${missingNeeds.join(', ')} — essenciais para ${profile.desc}`)
-    } else if (profile.needs.length > 0) {
-      sportOk.push(`✅ Grupos prioritários do ${profile.name} presentes: ${profile.needs.join(', ')}`)
-    }
-
-    // 2. Core — quase universal no esporte
-    if (profile.core && !typeSet.has('Core') && !typeSet.has('Full Body')) {
-      sportScore -= 20
-      sportIssues.push(`Core ausente — ${profile.desc} exige estabilidade de tronco (Boyle 2016)`)
-    } else if (profile.core && (typeSet.has('Core') || typeSet.has('Full Body'))) {
-      sportOk.push('✅ Core presente')
-    }
-
-    // 3. Puxada — essencial para esportes de arremesso/natação/judô
-    if (profile.pull) {
-      const hasPull = ['Costas','Bíceps'].some(t => typeSet.has(t))
-      if (!hasPull) {
-        sportScore -= 15
-        sportIssues.push(`puxada ausente — ${profile.name} demanda força de puxada para equilíbrio e performance`)
-      } else {
-        sportOk.push('✅ Puxada presente')
-      }
-    }
-
-    // 4. Exercícios unilaterais — equilíbrio e transferência motora
-    if (profile.unilateral && allExercises.length > 3) {
-      const unilateralKeywords = ['unilateral','avanço','lunge','pistol','step','afundo','single']
-      const hasUnilateral = allExercises.some(ex =>
-        unilateralKeywords.some(kw => (ex.name||'').toLowerCase().includes(kw))
-      )
-      if (!hasUnilateral) {
-        sportScore -= 10
-        sportIssues.push(`exercícios unilaterais recomendados para ${profile.name} — melhora assimetrias e transferência motora`)
-      } else {
-        sportOk.push('✅ Padrão unilateral detectado')
-      }
-    }
-
-    // 5. Explosão/potência — esportes intermitentes de alta intensidade
-    if (profile.explosao && allExercises.length > 3) {
-      const powerKeywords = ['salto','jump','agachamento','squat','power','clean','snatch','sprint','pliométrico','box']
-      const hasExplosion = allExercises.some(ex =>
-        powerKeywords.some(kw => (ex.name||'').toLowerCase().includes(kw))
-      )
-      if (!hasExplosion) {
-        sportScore -= 8
-        sportIssues.push(`potência/explosão ausente — ${profile.name} é esporte de alta intermitência: inclua agachamentos, saltos ou exercícios pliométricos`)
-      } else {
-        sportOk.push('✅ Trabalho de potência detectado')
-      }
-    }
-
-    sportScore = Math.max(0, Math.min(100, sportScore))
-  }
-
-  const sportMsg = !profile || sport === 'outro'
-    ? '⚠️ ' + sportIssues[0]
-    : sportIssues.length
-      ? sportIssues.map(i => `⚠️ ${i}`).join(' · ') + '.'
-      : `Prescrição alinhada às demandas de ${profile.name}. ${sportOk.join(' · ')}`
-
-  // ── Score final ponderado (12 pilares) ───────────────────────────────────
-  // Pesos ajustados: esporte +8%, etária +2%; volume e equilíbrio -1% cada; nível -2%
-  // ── Pesos diferenciados por objetivo ─────────────────────────────────────
-  // Saúde e Bem-Estar: cardio e funcionalidade pesam mais; força máx e esporte pesam menos
-  const isSaude = goal === 'Saúde e Bem-Estar'
-  const W = isSaude
-    ? { volume:0.16, freq:0.10, balance:0.10, progress:0.06, objective:0.16, age:0.08, monitor:0.05, recovery:0.07, overtraining:0.10, variation:0.05, levelFit:0.04, sport:0.03 }
-    : { volume:0.11, freq:0.09, balance:0.12, progress:0.11, objective:0.09, age:0.10, monitor:0.04, recovery:0.09, overtraining:0.07, variation:0.06, levelFit:0.04, sport:0.08 }
-
-  const finalScore = Math.round(
-    volumeScore   * W.volume      +
-    freqScore     * W.freq        +
-    balanceScore  * W.balance     +
-    progressScore * W.progress    +
-    objScore      * W.objective   +
-    ageScore      * W.age         +
-    monitorScore  * W.monitor     +
-    recoveryScore * W.recovery    +
-    overtScore    * W.overtraining +
-    varScore      * W.variation   +
-    levelScore    * W.levelFit    +
-    sportScore    * W.sport
-  )
-
-  return {
-    finalScore,
-    pilares: isSaude ? [
-      // Saúde e Bem-Estar — pilares renomeados e reordenados por relevância clínica
-      { id: 'volume',       name: 'Volume: Força + Cardio',         score: volumeScore,   peso: '16%', msg: volumeMsg,   ref: 'OMS 2020; ACSM Exercise is Medicine; Kodama 2009' },
-      { id: 'objective',    name: 'Prescrição Funcional',           score: objScore,      peso: '16%', msg: objMsg,      ref: 'Cook 2010; Nelson 2007; ACSM EIM; OMS 2020' },
-      { id: 'overtraining', name: 'Carga Interna (PSE/ACWR)',       score: overtScore,    peso: '10%', msg: overtMsg,    ref: 'Foster 1998 — intensidade moderada é central' },
-      { id: 'freq',         name: 'Consistência Semanal',           score: freqScore,     peso: '10%', msg: freqMsg,     ref: 'ACSM EIM: 3–5×/sem para saúde geral' },
-      { id: 'balance',      name: 'Equilíbrio Funcional',           score: balanceScore,  peso: '10%', msg: balanceMsg,  ref: 'Boyle 2016; Cook 2010 — prevenção de lesão' },
-      { id: 'age',          name: 'Adequação Etária',               score: ageScore,      peso: '8%',  msg: ageMsg,      ref: 'Kohrt 2004; Sherrington 2019; Tanaka 2001' },
-      { id: 'recovery',     name: 'Recuperação',                    score: recoveryScore, peso: '7%',  msg: recoveryMsg, ref: 'ACSM EIM — intensidade moderada, 24–48h' },
-      { id: 'monitor',      name: 'Monitoramento',                  score: monitorScore,  peso: '5%',  msg: monitorMsg,  ref: 'ACSM 2022' },
-      { id: 'progress',     name: 'Progressão',                     score: progressScore, peso: '6%',  msg: progressMsg, ref: 'ACSM FITT-VP — progressão conservadora' },
-      { id: 'variation',    name: 'Variação de Estímulo',           score: varScore,      peso: '5%',  msg: varMsg,      ref: 'Fonseca 2014 — variedade mantém adesão' },
-      { id: 'levelFit',     name: 'Adequação ao Nível',             score: levelScore,    peso: '4%',  msg: levelMsg,    ref: 'NSCA 2021' },
-      { id: 'sport',        name: 'Especificidade',                 score: sportScore,    peso: '3%',  msg: sportMsg,    ref: 'Menor peso — saúde geral não requer especificidade esportiva' },
-    ] : [
-      { id: 'volume',      name: 'Volume de Força',         score: volumeScore,   peso: '11%', msg: volumeMsg,   ref: 'Schoenfeld 2017; ACSM 2022' },
-      { id: 'balance',     name: 'Equilíbrio Muscular',     score: balanceScore,  peso: '12%', msg: balanceMsg,  ref: 'Boyle 2016; NSCA Guidelines' },
-      { id: 'recovery',    name: 'Recuperação',             score: recoveryScore, peso: '9%',  msg: recoveryMsg, ref: 'Schoenfeld & Ogborn 2018' },
-      { id: 'progress',    name: 'Progressão de Carga',     score: progressScore, peso: '11%', msg: progressMsg, ref: 'ACSM FITT-VP; Kraemer 2004' },
-      { id: 'freq',        name: 'Frequência Semanal',      score: freqScore,     peso: '9%',  msg: freqMsg,     ref: 'ACSM Position Stand 2022' },
-      { id: 'objective',   name: 'Adequação ao Objetivo',   score: objScore,      peso: '9%',  msg: objMsg,      ref: 'Schoenfeld 2010; WHO 2020' },
-      { id: 'overtraining',name: 'PSE & Fadiga (ACWR)',     score: overtScore,    peso: '7%',  msg: overtMsg,    ref: 'Foster 1998; NSCA 2021' },
-      { id: 'age',         name: 'Adequação Etária (LTAD)', score: ageScore,      peso: '10%', msg: ageMsg,      ref: 'Tanaka 2001; Balyi LTAD 2013; NSCA 2009' },
-      { id: 'sport',       name: 'Adequação Esportiva',     score: sportScore,    peso: '8%',  msg: sportMsg,    ref: 'Boyle 2016; NSCA Sport-Specific 2021' },
-      { id: 'variation',   name: 'Variação de Estímulo',    score: varScore,      peso: '6%',  msg: varMsg,      ref: 'Fonseca 2014; ACSM FITT-VP' },
-      { id: 'levelFit',    name: 'Adequação ao Nível',      score: levelScore,    peso: '4%',  msg: levelMsg,    ref: 'NSCA 2021; ACSM 2022' },
-      { id: 'monitor',     name: 'Monitoramento',           score: monitorScore,  peso: '4%',  msg: monitorMsg,  ref: 'ACSM 2022' },
+// ── Templates ──────────────────────────────────────────────────────────────────
+const T = {
+  futebol_crianca: {
+    label:'Futebol - FUNdamentals (6-12 anos)', color:'#34D399', semAcademia:false,
+    days:[
+      { name:'Treino A - Multilateral', focus:'Full Body + Coordenação', day_of_week:'Ter', exercises:[
+        { name:'Agachamento com Peso Corporal', type:'Peso Corporal', sets:'3', reps:'15',   rest:'45s', tip:'Foco em técnica' },
+        { name:'Flexão de Braço',               type:'Funcional',     sets:'3', reps:'10',   rest:'45s', tip:'Apoio nos joelhos se necessário' },
+        { name:'Salto Vertical',                type:'Funcional',     sets:'3', reps:'6',    rest:'60s', tip:'Aterrissagem suave' },
+        { name:'Corrida Lateral (Shuffle)',     type:'Funcional',     sets:'4', reps:'10m',  rest:'45s', tip:'Agilidade' },
+        { name:'Prancha Frontal',               type:'Core',          sets:'3', reps:'20s',  rest:'30s', tip:'Core estável' },
+        { name:'Equilíbrio Unipodal',           type:'Peso Corporal', sets:'3', reps:'20s',  rest:'30s', tip:'Olhos abertos' },
+      ]},
+      { name:'Treino B - Coordenação', focus:'Habilidades Motoras + Core', day_of_week:'Qui', exercises:[
+        { name:'Corrida Lateral (Shuffle)', type:'Funcional',    sets:'4', reps:'15m',  rest:'45s', tip:'Mudança de direção' },
+        { name:'Afundo (Peso Corporal)',    type:'Peso Corporal',sets:'3', reps:'10',   rest:'45s', tip:'Sem carga extra' },
+        { name:'Abdominal Bicicleta',       type:'Funcional',    sets:'3', reps:'15',   rest:'30s', tip:'Coordenação contralateral' },
+        { name:'Step Up (Caixote/Escada)',  type:'Funcional',    sets:'3', reps:'10',   rest:'45s', tip:'Empurrar pelo calcanhar' },
+        { name:'Superman',                  type:'Peso Corporal',sets:'3', reps:'12',   rest:'30s', tip:'Extensão controlada' },
+        { name:'Pular Corda',               type:'Cardio',       sets:'3', reps:'2min', rest:'60s', tip:'Coordenação ritmo' },
+      ]},
     ],
-  }
+  },
+  futebol_adolescente: {
+    label:'Futebol - Train to Train (12-17 anos)', color:'#60A5FA', semAcademia:false,
+    days:[
+      { name:'Treino A - Membros Inferiores', focus:'Posterior + Glúteo + Core', day_of_week:'Seg', exercises:[
+        { name:'Agachamento Livre',             type:'Quadríceps', sets:'4', reps:'10-12', rest:'75s', tip:'Foco em técnica, até 70% 1RM' },
+        { name:'Stiff (Terra Romeno)',           type:'Posterior',  sets:'3', reps:'10-12', rest:'75s', tip:'Cadeia posterior do futebol' },
+        { name:'Afundo com Salto (Lunge Jump)', type:'Funcional',  sets:'3', reps:'10',   rest:'60s', tip:'Transferência esportiva' },
+        { name:'Hip Thrust (Barra)',             type:'Glúteo',     sets:'3', reps:'12',   rest:'60s', tip:'Potência de chute' },
+        { name:'Prancha Frontal',                type:'Core',       sets:'3', reps:'40s',  rest:'30s', tip:'Estabilizador central' },
+        { name:'Pallof Press',                  type:'Core',       sets:'3', reps:'10',   rest:'45s', tip:'Resistência à rotação' },
+      ]},
+      { name:'Treino B - Membros Superiores', focus:'Empurrão + Puxada', day_of_week:'Qua', exercises:[
+        { name:'Supino Reto (Barra)',       type:'Peito',  sets:'4', reps:'10-12', rest:'75s', tip:'70% 1RM máx adolescente' },
+        { name:'Puxada Frontal (Polia)',    type:'Costas', sets:'4', reps:'10-12', rest:'75s', tip:'Equilíbrio pull/push' },
+        { name:'Desenvolvimento (Halter)', type:'Ombro',  sets:'3', reps:'10-12', rest:'60s', tip:'Estabilidade escapular' },
+        { name:'Remada Curvada (Barra)',    type:'Costas', sets:'3', reps:'10-12', rest:'75s', tip:'Postura futebol' },
+        { name:'Dead Bug',                 type:'Core',   sets:'3', reps:'8',     rest:'45s', tip:'Coordenação contralateral' },
+      ]},
+      { name:'Treino C - Potência + Agilidade', focus:'Explosão + Velocidade', day_of_week:'Sex', exercises:[
+        { name:'Agachamento com Salto',     type:'Funcional', sets:'4', reps:'6-8',  rest:'90s', tip:'Pliometria - base do futebol' },
+        { name:'Corrida Lateral (Shuffle)', type:'Funcional', sets:'4', reps:'15m',  rest:'60s', tip:'Agilidade e mudança de direção' },
+        { name:'Box Jump',                  type:'Funcional', sets:'3', reps:'5-8',  rest:'90s', tip:'Potência de membros inferiores' },
+        { name:'Kettlebell Swing',          type:'Full Body', sets:'3', reps:'12',   rest:'75s', tip:'Potência de quadril' },
+        { name:'Corrida (Esteira)',         type:'Cardio',   sets:'1', reps:'20min', rest:'-',   tip:'PSE 5-6, resistência aeróbia' },
+      ]},
+    ],
+  },
+  saude: {
+    label:'Saúde e Bem-Estar - Funcional', color:'#34D399', semAcademia:false,
+    days:[
+      { name:'Treino A - Funcional Inferior', focus:'Quadril + Core + Equilíbrio', day_of_week:'Seg', exercises:[
+        { name:'Agachamento Goblet',              type:'Quadríceps',   sets:'3', reps:'12-15', rest:'60s', tip:'Multiarticular, padrão funcional' },
+        { name:'Stiff (Terra Romeno)',             type:'Posterior',    sets:'3', reps:'12-15', rest:'60s', tip:'Mobilidade de quadril' },
+        { name:'Elevação Pélvica (Glúteo Bridge)', type:'Peso Corporal',sets:'3', reps:'15-20', rest:'45s', tip:'Sem carga, foco em ativação' },
+        { name:'Afundo (Peso Corporal)',           type:'Peso Corporal',sets:'3', reps:'12',    rest:'60s', tip:'Equilíbrio e funcionalidade' },
+        { name:'Panturrilha em Pé',               type:'Panturrilha',  sets:'3', reps:'15-20', rest:'45s', tip:'Amplitude total' },
+        { name:'Prancha Frontal',                 type:'Core',         sets:'3', reps:'30s',   rest:'30s', tip:'Core estabilizador' },
+      ]},
+      { name:'Treino B - Funcional Superior', focus:'Puxada + Empurrão + Mobilidade', day_of_week:'Qua', exercises:[
+        { name:'Flexão de Braço',             type:'Funcional',  sets:'3', reps:'10-15', rest:'60s', tip:'Peso corporal, funcional' },
+        { name:'Remada Unilateral (Halter)',   type:'Costas',     sets:'3', reps:'12-15', rest:'60s', tip:'Equilíbrio pull/push' },
+        { name:'Desenvolvimento (Halter)',     type:'Ombro',      sets:'3', reps:'12-15', rest:'60s', tip:'Carga leve, padrão funcional' },
+        { name:'Gato-Vaca',                   type:'Mobilidade', sets:'2', reps:'12',    rest:'30s', tip:'Mobilidade torácica' },
+        { name:'Mobilidade de Quadril 90/90', type:'Mobilidade', sets:'2', reps:'8',     rest:'30s', tip:'Prevenção de lesão' },
+        { name:'Dead Bug',                    type:'Core',       sets:'3', reps:'8',     rest:'45s', tip:'Core funcional profundo' },
+      ]},
+    ],
+  },
+  massa: {
+    label:'Ganho de Massa - Hipertrofia', color:'#A78BFA', semAcademia:false,
+    days:[
+      { name:'Treino A - Peito + Tríceps', focus:'Push', day_of_week:'Seg', exercises:[
+        { name:'Supino Reto (Barra)',       type:'Peito',   sets:'4', reps:'6-10',  rest:'90s', tip:'Tensão mecânica - hipertrofia' },
+        { name:'Supino Inclinado (Halter)', type:'Peito',   sets:'3', reps:'10-12', rest:'75s', tip:'Porção clavicular' },
+        { name:'Crucifixo (Halter)',        type:'Peito',   sets:'3', reps:'12-15', rest:'60s', tip:'Estresse metabólico' },
+        { name:'Tríceps Pulley (Polia)',    type:'Tríceps', sets:'3', reps:'12-15', rest:'60s', tip:'Isolamento final' },
+        { name:'Tríceps Testa (Barra EZ)', type:'Tríceps', sets:'3', reps:'10-12', rest:'60s', tip:'Cabeça longa do tríceps' },
+      ]},
+      { name:'Treino B - Costas + Bíceps', focus:'Pull', day_of_week:'Ter', exercises:[
+        { name:'Barra Fixa',             type:'Costas', sets:'4', reps:'6-10',  rest:'90s', tip:'Amplitude completa' },
+        { name:'Remada Curvada (Barra)', type:'Costas', sets:'4', reps:'8-10',  rest:'90s', tip:'Volume de costas' },
+        { name:'Puxada Frontal (Polia)', type:'Costas', sets:'3', reps:'10-12', rest:'75s', tip:'Pre-exaustão' },
+        { name:'Rosca Direta (Barra)',   type:'Bíceps', sets:'3', reps:'10-12', rest:'60s', tip:'Curl clássico' },
+        { name:'Rosca Martelo',          type:'Bíceps', sets:'3', reps:'12-15', rest:'60s', tip:'Braquial + braquiorradial' },
+      ]},
+      { name:'Treino C - Membros Inferiores', focus:'Quadríceps + Posterior + Glúteo', day_of_week:'Qui', exercises:[
+        { name:'Agachamento Livre',    type:'Quadríceps',  sets:'5', reps:'6-10',  rest:'120s', tip:'Rainha dos exercícios' },
+        { name:'Leg Press',            type:'Quadríceps',  sets:'4', reps:'10-12', rest:'90s',  tip:'Volume adicional' },
+        { name:'Stiff (Terra Romeno)', type:'Posterior',   sets:'4', reps:'8-12',  rest:'90s',  tip:'Cadeia posterior' },
+        { name:'Mesa Flexora',         type:'Posterior',   sets:'3', reps:'10-12', rest:'75s',  tip:'Isolamento isquiotibial' },
+        { name:'Panturrilha em Pé',   type:'Panturrilha', sets:'4', reps:'15-20', rest:'45s',  tip:'Amplitude total' },
+      ]},
+      { name:'Treino D - Ombros + Core', focus:'Deltoide + Estabilidade', day_of_week:'Sex', exercises:[
+        { name:'Desenvolvimento (Halter)', type:'Ombro', sets:'4', reps:'10-12', rest:'75s', tip:'Volume de ombro' },
+        { name:'Elevação Lateral',        type:'Ombro', sets:'4', reps:'12-15', rest:'60s', tip:'Porção medial' },
+        { name:'Elevação Frontal',        type:'Ombro', sets:'3', reps:'12-15', rest:'60s', tip:'Porção anterior' },
+        { name:'Prancha Frontal',         type:'Core',  sets:'3', reps:'45s',   rest:'30s', tip:'Core forte = mais força' },
+        { name:'Rotação de Tronco',       type:'Core',  sets:'3', reps:'15',    rest:'30s', tip:'Oblíquos' },
+      ]},
+    ],
+  },
+  forca: {
+    label:'Força e Performance', color:'#EF4444', semAcademia:false,
+    days:[
+      { name:'Treino A - Empurrão', focus:'Força Máxima Peito', day_of_week:'Seg', exercises:[
+        { name:'Supino Reto (Barra)',       type:'Peito',        sets:'5', reps:'3-5', rest:'3min', tip:'85-90% 1RM, força máxima' },
+        { name:'Supino Inclinado (Halter)', type:'Peito',        sets:'3', reps:'6-8', rest:'2min', tip:'Volume acessório' },
+        { name:'Tríceps Testa (Barra EZ)', type:'Tríceps',      sets:'3', reps:'6-8', rest:'90s',  tip:'Acessório de força' },
+        { name:'Prancha Frontal',           type:'Peso Corporal',sets:'3', reps:'45s', rest:'30s',  tip:'Transferência de força' },
+      ]},
+      { name:'Treino B - Puxão + Posterior', focus:'Costas + Deadlift', day_of_week:'Qua', exercises:[
+        { name:'Levantamento Terra',     type:'Posterior', sets:'5', reps:'3-5', rest:'3min', tip:'Rei dos exercícios compostos' },
+        { name:'Barra Fixa',             type:'Costas',    sets:'4', reps:'5-6', rest:'2min', tip:'Adição de carga externa' },
+        { name:'Remada Curvada (Barra)', type:'Costas',    sets:'4', reps:'6-8', rest:'2min', tip:'Volume posterior' },
+        { name:'Rosca Direta (Barra)',   type:'Bíceps',    sets:'3', reps:'6-8', rest:'90s',  tip:'Bíceps forte = pull mais forte' },
+      ]},
+      { name:'Treino C - Agachamento', focus:'Força Membros Inferiores', day_of_week:'Sex', exercises:[
+        { name:'Agachamento Livre',    type:'Quadríceps',  sets:'5', reps:'3-5',  rest:'3min', tip:'85-90% 1RM, força máxima' },
+        { name:'Leg Press',            type:'Quadríceps',  sets:'3', reps:'6-8',  rest:'2min', tip:'Acessório' },
+        { name:'Stiff (Terra Romeno)', type:'Posterior',   sets:'4', reps:'6-8',  rest:'90s',  tip:'Força de cadeia posterior' },
+        { name:'Panturrilha em Pé',   type:'Panturrilha', sets:'4', reps:'12-15', rest:'60s',  tip:'Força de panturrilha' },
+      ]},
+    ],
+  },
+  condicionamento: {
+    label:'Condicionamento Físico', color:'#FBBF24', semAcademia:false,
+    days:[
+      { name:'Treino A - Circuito Full Body', focus:'Resistência Muscular + Cardio', day_of_week:'Seg', exercises:[
+        { name:'Agachamento Goblet', type:'Quadríceps',   sets:'3', reps:'15-20', rest:'30s', tip:'Alta repetição, pouco descanso' },
+        { name:'Flexão de Braço',    type:'Funcional',    sets:'3', reps:'15-20', rest:'30s', tip:'Circuito' },
+        { name:'Hip Thrust (Barra)', type:'Glúteo',       sets:'3', reps:'15-20', rest:'30s', tip:'Cadeia posterior' },
+        { name:'Remada TRX',         type:'Costas',       sets:'3', reps:'15-20', rest:'30s', tip:'Pull funcional' },
+        { name:'Burpee',             type:'Funcional',    sets:'3', reps:'10',    rest:'60s', tip:'Condicionamento total' },
+        { name:'Prancha Frontal',    type:'Peso Corporal',sets:'3', reps:'30s',   rest:'30s', tip:'Estabilidade' },
+      ]},
+      { name:'Treino B - Intervalado', focus:'HIIT + Resistência', day_of_week:'Qua', exercises:[
+        { name:'Kettlebell Swing',      type:'Full Body', sets:'4', reps:'15',   rest:'45s', tip:'Potência e cardio' },
+        { name:'Agachamento com Salto', type:'Funcional', sets:'4', reps:'10',   rest:'45s', tip:'Pliometria' },
+        { name:'Mountain Climber',      type:'Funcional', sets:'3', reps:'25',   rest:'45s', tip:'Core + cardio' },
+        { name:'Corrida (Esteira)',     type:'Cardio',   sets:'1', reps:'20min', rest:'-',   tip:'PSE 6-7, zona de condicionamento' },
+      ]},
+    ],
+  },
+  funcional_casa: {
+    label:'Funcional em Casa - Sem Equipamento', color:'#34D399', semAcademia:true,
+    days:[
+      { name:'Treino A - Superior', focus:'Peito + Costas + Ombro', day_of_week:'Seg', exercises:[
+        { name:'Flexão de Braço',           type:'Funcional',    sets:'4', reps:'10-15', rest:'60s', tip:'Base de empurrão' },
+        { name:'Flexão de Braço Diamante',  type:'Funcional',    sets:'3', reps:'8-12',  rest:'60s', tip:'Ativa tríceps e porção interna do peito' },
+        { name:'Flexão de Braço Declinada', type:'Funcional',    sets:'3', reps:'8-12',  rest:'60s', tip:'Pés elevados ativam porção clavicular' },
+        { name:'Puxada Inverted Row',        type:'Peso Corporal',sets:'3', reps:'10-15', rest:'60s', tip:'Barra ou mesa — puxada em casa' },
+        { name:'Tríceps Banco (Dip)',        type:'Peso Corporal',sets:'3', reps:'10-15', rest:'60s', tip:'Apoio em cadeira ou banco' },
+      ]},
+      { name:'Treino B - Inferior + Core', focus:'Membros Inferiores + Abdômen', day_of_week:'Qua', exercises:[
+        { name:'Agachamento com Peso Corporal',    type:'Peso Corporal',sets:'4',reps:'20-25', rest:'45s', tip:'Volume alto para hipertrofia' },
+        { name:'Afundo (Peso Corporal)',            type:'Peso Corporal',sets:'3',reps:'12-15', rest:'45s', tip:'Tronco ereto, joelho traseiro quase no chão' },
+        { name:'Elevação Pélvica (Glúteo Bridge)', type:'Peso Corporal',sets:'4',reps:'20-25', rest:'30s', tip:'Extensão completa de quadril' },
+        { name:'Abdominal V-Sit',                  type:'Funcional',    sets:'3',reps:'12-15', rest:'45s', tip:'Tronco e pernas sobem simultâneos' },
+        { name:'Mountain Climber',                 type:'Funcional',    sets:'3',reps:'25-30', rest:'45s', tip:'Core e cardio combinados' },
+      ]},
+    ],
+  },
+  elastico_casa: {
+    label:'Elástico em Casa - Treino Completo', color:'#FBBF24', semAcademia:true,
+    days:[
+      { name:'Treino A - Superior (Elástico)', focus:'Peito + Costas + Ombro', day_of_week:'Seg', exercises:[
+        { name:'Remada com Elástico',          type:'Elástico', sets:'4', reps:'12-15', rest:'60s', tip:'Elástico preso à frente, cotovelos passam o tronco' },
+        { name:'Puxada com Elástico',          type:'Elástico', sets:'3', reps:'12-15', rest:'60s', tip:'Elástico preso acima, puxar para o peito' },
+        { name:'Elevação Lateral c/ Elástico', type:'Elástico', sets:'3', reps:'15-20', rest:'45s', tip:'Elástico sob os pés' },
+      ]},
+      { name:'Treino B - Inferior (Elástico)', focus:'Pernas + Glúteo', day_of_week:'Qui', exercises:[
+        { name:'Agachamento com Elástico',       type:'Elástico', sets:'4', reps:'15-20', rest:'60s', tip:'Elástico sobre os ombros ou sob os pés' },
+        { name:'Hip Thrust com Elástico',        type:'Elástico', sets:'4', reps:'15-20', rest:'45s', tip:'Elástico sobre os quadris' },
+        { name:'Abdução de Quadril (Elástico)',  type:'Elástico', sets:'3', reps:'15-20', rest:'45s', tip:'Elástico nos joelhos, abre e fecha' },
+        { name:'Afundo com Elástico',            type:'Elástico', sets:'3', reps:'12',    rest:'60s', tip:'Elástico sobre os ombros, postura ereta' },
+      ]},
+    ],
+  },
 }
 
-// ── Histórico de score (retroativo por semana) ────────────────────────────
-function computeHistoricalScores({ student, allDays, allExercises, plannedDays, exerciseLogs, cardioSessions, progress }) {
-  const weeks = []
-  const now = new Date()
-  for (let w = 5; w >= 0; w--) {
-    const cutoff = new Date(now.getTime() - w * 7 * 864e5)
-    const filteredLogs    = exerciseLogs.filter(l => new Date(l.date + 'T12:00:00') <= cutoff)
-    const filteredCardio  = cardioSessions.filter(s => new Date(s.date + 'T12:00:00') <= cutoff)
-    const filteredProg    = progress.filter(p => new Date(p.date + 'T12:00:00') <= cutoff)
-    if (filteredLogs.length < 2 && filteredCardio.length < 2 && filteredProg.length < 1) continue
-    const r = runEvaluation({ student, allExercises, allDays, plannedDays, exerciseLogs: filteredLogs, cardioSessions: filteredCardio, progress: filteredProg })
-    const label = w === 0 ? 'Hoje' : w === 1 ? '1s' : `${w}s`
-    weeks.push({ label, score: r.finalScore })
+const getTemplate = (goal, ageGroup, sport, semAcademia) => {
+  if (semAcademia) return T.funcional_casa
+  const s = sport || ''
+  if (s === 'futebol' || s === 'futsal') {
+    if (ageGroup === 'crianca')     return T.futebol_crianca
+    if (ageGroup === 'adolescente') return T.futebol_adolescente
   }
-  return weeks
+  if (goal === 'Saúde e Bem-Estar')  return T.saude
+  if (goal === 'Ganho de Massa')      return T.massa
+  if (goal === 'Força e Performance') return T.forca
+  if (goal === 'Condicionamento')     return T.condicionamento
+  if (goal === 'Iniciação Esportiva' || goal === 'Desenvolvimento Atlético')
+    return ageGroup === 'crianca' ? T.futebol_crianca : T.futebol_adolescente
+  return T.massa
 }
 
+const getSuggestedTypes = (goal, sport) => {
+  const s = sport || ''
+  if (s === 'futebol' || s === 'futsal') return ['Posterior','Glúteo','Quadríceps','Core','Funcional']
+  if (s === 'natacao')   return ['Costas','Ombro','Core','Funcional']
+  if (s === 'basquete')  return ['Quadríceps','Glúteo','Core','Funcional']
+  if (goal === 'Saúde e Bem-Estar')  return ['Funcional','Peso Corporal','Mobilidade','Core','Cardio']
+  if (goal === 'Ganho de Massa')      return ['Peito','Costas','Quadríceps','Ombro','Bíceps']
+  if (goal === 'Força e Performance') return ['Quadríceps','Posterior','Peito','Costas','Core']
+  if (goal === 'Condicionamento')     return ['Funcional','Cardio','Core','Elástico','Peso Corporal']
+  return EXERCISE_TYPES.slice(0, 5)
+}
 
-// ── TabDesenvolvimentoMotor ───────────────────────────────────────────────────
-function TabDesenvolvimentoMotor({ student, studentId, onUpdate }) {
-  const [scores, setScores] = useState(student.tgmd_scores || {})
-  const [saving, setSaving] = useState(false)
-  const [saved,  setSaved]  = useState(false)
+const calc1RM = (carga, reps) => {
+  if (!carga || !reps || reps < 1 || carga <= 0) return null
+  const r = Number(reps), c = Number(carga)
+  if (r === 1) return c
+  if (r > 15)  return null
+  const epley    = c * (1 + r / 30)
+  const brzycki  = r > 10 ? null : c / (1.0278 - 0.0278 * r)
+  const lombardi = c * Math.pow(r, 0.10)
+  const valid    = [epley, brzycki, lombardi].filter(v => v !== null && v > 0)
+  return Math.round(valid.reduce((a, b) => a + b, 0) / valid.length)
+}
 
-  const age = calcAge(student)
-  const isYouth = age && age < 18
+// ── TYPE COLORS ────────────────────────────────────────────────────────────────
+const TYPE_COLOR = {
+  'Funcional':     '#34D399',
+  'Elástico':      '#FBBF24',
+  'Peso Corporal': '#60A5FA',
+  'Mobilidade':    '#F472B6',
+  'Core':          '#34D399',
+  'Full Body':     '#6EE7B7',
+  'Cardio':        '#F87171',
+}
+const getTypeColor = (type) => TYPE_COLOR[type] || V.accentBr
 
-  const save = async () => {
-    setSaving(true)
-    await supabase.from('students').update({
-      tgmd_scores: scores,
-      tgmd_date:   new Date().toISOString().slice(0,10),
-    }).eq('id', studentId)
-    setSaving(false); setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-    if(onUpdate) onUpdate()
-  }
+// ── Styles base (Vestiário Pré-Jogo) ──────────────────────────────────────────
+const ss = {
+  input: {
+    background:  V.bgInput,
+    border:      `1px solid ${V.border}`,
+    borderRadius: 8,
+    padding:     '9px 12px',
+    color:        V.text,
+    fontSize:    14,
+    outline:     'none',
+    fontFamily:  'inherit',
+  },
+  smallInput: {
+    background:  V.bgInput,
+    border:      `1px solid ${V.borderLight}`,
+    borderRadius: 6,
+    padding:     '7px 10px',
+    color:        V.text,
+    fontSize:    12,
+    outline:     'none',
+    width:       '100%',
+    fontFamily:  'inherit',
+  },
+  btn: (c) => ({
+    background:   c || V.accent,
+    border:       'none',
+    borderRadius:  8,
+    padding:      '9px 16px',
+    color:         '#431C00',
+    fontWeight:    700,
+    fontSize:     13,
+    cursor:       'pointer',
+    fontFamily:   'inherit',
+  }),
+  outlineBtn: {
+    background:   V.accentFaint,
+    border:       `1px solid ${V.border}`,
+    borderRadius:  8,
+    padding:      '9px 14px',
+    color:         V.accentDim,
+    fontWeight:    600,
+    fontSize:     13,
+    cursor:       'pointer',
+    fontFamily:   'inherit',
+  },
+  delBtn: {
+    background: 'none',
+    border:     'none',
+    color:      V.textDim,
+    cursor:     'pointer',
+    fontSize:   14,
+    padding:    '2px 6px',
+    flexShrink:  0,
+  },
+}
 
-  const sc = tgmdScore(scores)
-  const phvOffset = calcMaturityOffset(+student.height||null,+student.weight||null,+student.height_sitting||null,(age||0)+(new Date().getMonth()/12),'M')
-  const phvLabel  = offsetLabel(phvOffset)
-  const tgt       = calcTargetHeight(+student.parent_height_father||null,+student.parent_height_mother||null,'M')
-
-  const Section = ({ title, subtitle, items }) => (
-    <div style={{ marginBottom: 24 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: '#6366F1', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 2 }}>{title}</div>
-      <div style={{ fontSize: 11, color: '#475569', marginBottom: 14 }}>{subtitle}</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {items.map(pattern => {
-          const val = scores[pattern.id]
-          const lv  = TGMD3_LEVELS.find(l => l.val === val)
-          return (
-            <div key={pattern.id} style={{ background: '#0A0F1A', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '12px 16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#E2E8F0', marginBottom: 3 }}>{pattern.label}</div>
-                  <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.5 }}>{pattern.desc}</div>
-                </div>
-                {lv && <div style={{ flexShrink: 0, marginLeft: 12, padding: '3px 10px', borderRadius: 6, background: lv.color + '18', border: `1px solid ${lv.color}35`, fontSize: 11, fontWeight: 700, color: lv.color }}>{lv.label}</div>}
-              </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                {TGMD3_LEVELS.map(level => (
-                  <button key={level.val} onClick={() => setScores(prev => ({ ...prev, [pattern.id]: level.val }))}
-                    style={{
-                      flex: 1, padding: '7px 4px', borderRadius: 8, border: `1px solid ${val === level.val ? level.color : 'rgba(255,255,255,0.08)'}`,
-                      background: val === level.val ? level.color + '20' : 'rgba(255,255,255,0.03)',
-                      color: val === level.val ? level.color : '#475569', fontSize: 11, fontWeight: val === level.val ? 700 : 400, cursor: 'pointer', transition: 'all 0.15s',
-                    }}>
-                    {level.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
+// ── 1RM Calculator ─────────────────────────────────────────────────────────────
+function OneRMCalc({ ageGroup, onApply, onClose }) {
+  const [carga, setCarga] = useState('')
+  const [reps,  setReps]  = useState('')
+  const oneRM = calc1RM(carga, reps)
+  const rest  = AGE_RESTRICTIONS[ageGroup] || AGE_RESTRICTIONS.adulto_jovem
 
   return (
-    <div>
-      {/* PHV Card — se tiver dados */}
-      {(phvLabel || tgt) && (
-        <div style={{ background: 'linear-gradient(135deg,rgba(99,102,241,0.1),rgba(99,102,241,0.04))', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 16, padding: '18px 20px', marginBottom: 20 }}>
-          <div style={{ fontSize: 10, color: '#6366F1', fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 12 }}>Maturação Biológica — Estimativa</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {tgt && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.04)' }}>
-                <span style={{ fontSize: 12, color: '#64748B' }}>Altura alvo genética <span style={{ color: '#334155', fontSize: 10 }}>(Tanner 1970)</span></span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#E2E8F0' }}>{tgt.low}–{tgt.high} cm</span>
-              </div>
-            )}
-            {phvLabel && (
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.04)' }}>
-                <div style={{ width: 10, height: 10, borderRadius: '50%', background: phvLabel.color, flexShrink: 0, marginTop: 3 }}/>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: phvLabel.color }}>{phvLabel.label} <span style={{ fontWeight: 400, color: '#475569' }}>offset {phvOffset > 0 ? '+' : ''}{phvOffset} anos (Mirwald 2002)</span></div>
-                  <div style={{ fontSize: 11, color: '#475569', marginTop: 2, lineHeight: 1.5 }}>{phvLabel.desc}</div>
-                </div>
-              </div>
-            )}
-          </div>
-          <div style={{ fontSize: 10, color: '#334155', marginTop: 10, fontStyle: 'italic' }}>Estimativa estatística. Não substitui avaliação clínica. Cadastre altura dos pais e altura sentado no Editar Perfil para ativar.</div>
+    <div style={{ background:'rgba(14,9,0,0.95)', border:`1px solid ${V.border}`, borderRadius:12, padding:16, margin:'8px 0' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+        <span style={{ fontSize:13, fontWeight:700, color:V.accentBr }}>Calculadora 1RM</span>
+        <button onClick={onClose} style={{ background:'none', border:'none', color:V.textSub, cursor:'pointer', fontSize:16 }}>×</button>
+      </div>
+      {rest.warning && (
+        <div style={{ background:'rgba(217,119,6,0.08)', border:`1px solid rgba(217,119,6,0.2)`, borderRadius:8, padding:'8px 12px', fontSize:11, color:V.accentBr, marginBottom:12 }}>
+          {rest.warning}
         </div>
       )}
-
-      {/* Score summary */}
-      {sc && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 20 }}>
-          {[
-            { label: 'Padrões avaliados', val: `${sc.filled}/${sc.total}`, color: '#94A3B8' },
-            { label: 'Score motor', val: `${sc.pct}%`, color: sc.pct >= 75 ? '#34D399' : sc.pct >= 50 ? '#FBBF24' : '#F87171' },
-            { label: 'Data avaliação', val: student.tgmd_date ? new Date(student.tgmd_date+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'short'}) : '—', color: '#64748B' },
-          ].map(({ label, val, color }) => (
-            <div key={label} style={{ background: '#0A0F1A', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '12px 14px', textAlign: 'center' }}>
-              <div style={{ fontSize: 9, color: '#334155', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }}>{label}</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color, fontFamily: "'DM Sans',sans-serif" }}>{val}</div>
-            </div>
-          ))}
+      <div style={{ display:'flex', gap:8, marginBottom:12, flexWrap:'wrap' }}>
+        <div style={{ flex:1, minWidth:100 }}>
+          <div style={{ fontSize:9, color:V.textMuted, marginBottom:3, textTransform:'uppercase', letterSpacing:1 }}>Carga (kg)</div>
+          <input type="number" style={{ ...ss.smallInput, fontSize:15, fontWeight:700, textAlign:'center' }} value={carga} onChange={e => setCarga(e.target.value)} placeholder="ex: 80" />
         </div>
-      )}
-
-      {/* Instructions */}
-      <div style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', marginBottom: 20, fontSize: 11, color: '#475569', lineHeight: 1.6 }}>
-        <strong style={{ color: '#94A3B8' }}>Como aplicar o TGMD-3:</strong> observe o atleta realizando cada padrão por pelo menos 2 tentativas. Avalie com base na qualidade do movimento, não na velocidade ou distância. Registre o nível que melhor descreve o padrão atual.
-      </div>
-
-      <Section title="Habilidades de Locomoção" subtitle="Padrões de movimento que envolvem deslocamento do corpo no espaço" items={TGMD3_LOCOMOTION} />
-      <Section title="Controle de Objeto" subtitle="Padrões de manipulação e controle de implementos e bolas" items={TGMD3_OBJECT} />
-
-      <button onClick={save} disabled={saving}
-        style={{ width: '100%', padding: '13px', borderRadius: 10, border: 'none', background: saved ? 'linear-gradient(135deg,#34D399,#059669)' : 'linear-gradient(135deg,#6366F1,#4F46E5)', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', marginTop: 8, transition: 'all 0.2s' }}>
-        {saving ? 'Salvando…' : saved ? '✓ Avaliação salva' : 'Salvar Avaliação Motor'}
-      </button>
-      <div style={{ fontSize: 10, color: '#334155', textAlign: 'center', marginTop: 8 }}>TGMD-3 — Ulrich (2019). Test of Gross Motor Development, 3ª edição.</div>
-    </div>
-  )
-}
-
-// ── TabAvaliacao — Painel de 6 Fatores (automático) ──────────────────────────
-function TabAvaliacao({ student, studentId }) {
-  const [data,    setData]    = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [expandido, setExpandido] = useState(null)
-
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-      try {
-        // Step 1: fetch all plans (sem filtro de status) + logs em paralelo
-        const [plansRes, exLogsRes] = await Promise.all([
-          supabase.from('workout_plans').select('id,title,status').eq('student_id', studentId).order('created_at',{ascending:false}),
-          supabase.from('exercise_logs').select('exercise_id,date,sets,exercises(name,type,rest_seconds)').eq('student_id', studentId).order('date',{ascending:false}).limit(200),
-        ])
-        // Prefere plano ativo, se não tiver pega o primeiro
-        const allPlans = plansRes.data || []
-        const activePlan = allPlans.find(p => p.status === 'active') || allPlans[0] || null
-        const plans  = activePlan ? [activePlan] : []
-        const exLogs = exLogsRes.data || []
-
-        // Step 2: buscar dias do plano encontrado, depois exercícios separadamente
-        let wDays = []
-        if (activePlan) {
-          const { data: wd } = await supabase
-            .from('workout_days')
-            .select('id,day_of_week,name')
-            .eq('plan_id', activePlan.id)
-          if (wd && wd.length > 0) {
-            const dayIds = wd.map(d => d.id)
-            const { data: exs } = await supabase
-              .from('exercises')
-              .select('id,name,sets,reps,rest,type,day_id')
-              .in('day_id', dayIds)
-            const exByDay = {}
-            ;(exs || []).forEach(e => {
-              if (!exByDay[e.day_id]) exByDay[e.day_id] = []
-              exByDay[e.day_id].push({ ...e, rest_seconds: e.rest })
-            })
-            wDays = wd.map(d => ({ ...d, exercises: exByDay[d.id] || [] }))
-          }
-        }
-
-        setData({ plans, exLogs, wDays })
-      } catch (err) {
-        console.error('TabAvaliacao load error:', err)
-        setData({ plans:[], exLogs:[], wDays:[] })
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-  }, [studentId])
-
-  if (loading) return <div style={{ padding:40, textAlign:'center', color:'#64748B' }}>Analisando treinos...</div>
-
-  const { plans, exLogs, wDays } = data
-  const hasPlan = plans.length > 0
-  const age     = parseInt(student.age) || null
-  const nivel   = student.level || 'Iniciante'
-  const goal    = student.goal  || ''
-
-  // ── helpers ────────────────────────────────────────────────────────────────
-  const semaforo = (status) => {
-    const map = {
-      ok:      { cor:'#34D399', bg:'rgba(52,211,153,0.07)',  border:'rgba(52,211,153,0.2)',  label:'Adequado'    },
-      atencao: { cor:'#FBBF24', bg:'rgba(251,191,36,0.07)',  border:'rgba(251,191,36,0.2)',  label:'Atenção'     },
-      critico: { cor:'#F87171', bg:'rgba(248,113,113,0.07)', border:'rgba(248,113,113,0.2)', label:'Crítico'     },
-      sem:     { cor:'#475569', bg:'rgba(255,255,255,0.03)', border:'rgba(255,255,255,0.07)',label:'Sem dados'   },
-    }
-    return map[status] || map.sem
-  }
-
-  // ── 1. INTENSIDADE (1RM via Epley) ─────────────────────────────────────────
-  const calcIntensidade = () => {
-    if (!exLogs.length) return { status:'sem', valor:null, rec:'', detail:'' }
-
-    // Agrupar logs por exercício, pegar carga máx por série
-    const byEx = {}
-    exLogs.forEach(l => {
-      if (!l.sets) return
-      const maxW = Math.max(...l.sets.map(s => +(s.weight||0)))
-      const maxR = Math.max(...l.sets.map(s => +(s.reps||0)))
-      if (maxW > 0 && maxR > 0) {
-        const rm = maxW * (1 + maxR / 30) // Epley
-        const name = l.exercises?.name || l.exercise_id
-        if (!byEx[name] || rm > byEx[name].rm) byEx[name] = { rm, w: maxW, r: maxR }
-      }
-    })
-
-    const entries = Object.entries(byEx)
-    if (!entries.length) return { status:'sem', valor:null, rec:'', detail:'' }
-
-    // Calcular % média de intensidade relativa ao 1RM estimado
-    const pcts = entries.map(([, v]) => {
-      const pct = (v.w / v.rm) * 100
-      return pct
-    })
-    const avgPct = pcts.reduce((a,b) => a+b, 0) / pcts.length
-
-    // Faixas por objetivo
-    const zonas = {
-      'Força e Performance': { ideal:[80,95], nome:'Força (80–95% 1RM)' },
-      'Ganho de Massa':      { ideal:[67,80], nome:'Hipertrofia (67–80% 1RM)' },
-      'Emagrecimento':       { ideal:[50,70], nome:'Resistência (50–70% 1RM)' },
-      'Condicionamento':     { ideal:[50,70], nome:'Resistência (50–70% 1RM)' },
-    }
-    const zona = zonas[goal] || { ideal:[60,80], nome:'Moderada (60–80% 1RM)' }
-    const [min, max] = zona.ideal
-
-    let status = avgPct >= min && avgPct <= max ? 'ok'
-               : avgPct < min - 10 || avgPct > max + 10 ? 'critico' : 'atencao'
-
-    return {
-      status,
-      valor: avgPct.toFixed(0) + '% 1RM médio',
-      detail: `Zona alvo: ${zona.nome}. Baseado em ${entries.length} exercício(s) com carga registrada.`,
-      rec: status === 'ok'
-        ? 'Intensidade dentro da zona ideal para o objetivo. Mantenha a progressão de carga gradual.'
-        : status === 'atencao'
-        ? 'Intensidade fora da zona ideal. Revise as cargas dos principais exercícios.'
-        : avgPct < min
-        ? 'Cargas abaixo do necessário para o objetivo. Aumente progressivamente 5% por semana.'
-        : 'Cargas muito elevadas — risco de fadiga acumulada. Reduza 10% e reconstrua progressão.',
-    }
-  }
-
-  // ── 2. VOLUME por grupo muscular (Schoenfeld et al., 2017) ──────────────────
-  const calcVolume = () => {
-    if (!wDays.length) return { status:'sem', valor:null, rec:'', detail:'' }
-
-    // Mapeamento exercício → grupo muscular primário
-    const MUSCLE_MAP = {
-      // Peito
-      supino: 'Peito', 'supino reto': 'Peito', 'supino inclinado': 'Peito',
-      'supino declinado': 'Peito', crucifixo: 'Peito', voador: 'Peito',
-      'crossover': 'Peito', 'peck deck': 'Peito', 'flexão': 'Peito', 'push up': 'Peito',
-      // Costas
-      remada: 'Costas', 'puxada': 'Costas', 'barra fixa': 'Costas',
-      'levantamento terra': 'Costas', 'pulldown': 'Costas', 'pull': 'Costas',
-      'serrote': 'Costas', 'cavalinho': 'Costas', 'hiperextensão': 'Costas',
-      // Ombro
-      desenvolvimento: 'Ombro', 'elevação lateral': 'Ombro', 'elevação frontal': 'Ombro',
-      'arnold': 'Ombro', 'face pull': 'Ombro', 'encolhimento': 'Ombro',
-      // Bíceps
-      'rosca direta': 'Bíceps', 'rosca alternada': 'Bíceps', 'rosca martelo': 'Bíceps',
-      'rosca concentrada': 'Bíceps', 'rosca scott': 'Bíceps', 'curl': 'Bíceps',
-      // Tríceps
-      'tríceps': 'Tríceps', 'triceps': 'Tríceps', 'mergulho': 'Tríceps',
-      'extensão': 'Tríceps', 'testa': 'Tríceps', 'corda': 'Tríceps', 'paralelas': 'Tríceps',
-      // Quadríceps
-      agachamento: 'Quadríceps', 'leg press': 'Quadríceps', 'hack': 'Quadríceps',
-      'cadeira extensora': 'Quadríceps', 'avanço': 'Quadríceps', 'afundo': 'Quadríceps',
-      'passada': 'Quadríceps', 'búlgaro': 'Quadríceps',
-      // Posterior/Isquiotibiais
-      stiff: 'Posterior', 'mesa flexora': 'Posterior', 'flexora': 'Posterior',
-      'leg curl': 'Posterior', 'good morning': 'Posterior',
-      // Glúteo
-      'glúteo': 'Glúteo', 'gluteo': 'Glúteo', 'hip thrust': 'Glúteo',
-      'elevação pélvica': 'Glúteo', 'abdução': 'Glúteo',
-      // Panturrilha
-      'panturrilha': 'Panturrilha', 'gêmeos': 'Panturrilha', 'gemeos': 'Panturrilha',
-      'calf': 'Panturrilha',
-      // Abdômen
-      'abdominal': 'Abdômen', 'prancha': 'Abdômen', 'crunch': 'Abdômen',
-      'oblíquo': 'Abdômen', 'obliquo': 'Abdômen', 'plank': 'Abdômen',
-    }
-
-    const findGroup = (name) => {
-      const n = (name || '').toLowerCase()
-      for (const [key, group] of Object.entries(MUSCLE_MAP)) {
-        if (n.includes(key)) return group
-      }
-      return 'Outros'
-    }
-
-    // Contar sets por grupo muscular
-    const setsByGroup = {}
-    wDays.forEach(d => {
-      ;(d.exercises || []).forEach(ex => {
-        const group = findGroup(ex.name)
-        const sets  = +(ex.sets || 0)
-        setsByGroup[group] = (setsByGroup[group] || 0) + sets
-      })
-    })
-
-    const grupos = Object.entries(setsByGroup).filter(([g]) => g !== 'Outros')
-    if (!grupos.length) return { status:'sem', valor:null, rec:'', detail:'Nenhum exercício mapeado para grupo muscular.' }
-
-    // Faixa de referência por nível (sets/grupo/semana)
-    const REF = {
-      'Iniciante':          { min:10, max:15 },
-      'Intermediário':      { min:12, max:18 },
-      'Avançado':           { min:16, max:22 },
-      'Atleta Jovem':       { min:12, max:20 },
-      'Atleta Competitivo': { min:18, max:25 },
-    }
-    const ref = REF[nivel] || REF['Iniciante']
-
-    // Avaliar cada grupo
-    const baixos   = grupos.filter(([,s]) => s < ref.min).map(([g,s]) => `${g} (${s} sets)`)
-    const altos    = grupos.filter(([,s]) => s > ref.max).map(([g,s]) => `${g} (${s} sets)`)
-    const ok       = grupos.filter(([,s]) => s >= ref.min && s <= ref.max).length
-    const total    = grupos.length
-
-    // Score geral: % de grupos dentro da faixa
-    const pctOk = total > 0 ? ok / total : 0
-    const status = pctOk >= 0.8 ? 'ok' : pctOk >= 0.5 ? 'atencao' : 'critico'
-
-    // Texto de recomendação focado nos grupos problemáticos
-    let rec = ''
-    if (status === 'ok') {
-      rec = 'Volume equilibrado entre os grupos musculares. Mantenha a progressão gradual.'
-    } else {
-      const partes = []
-      if (baixos.length) partes.push(`Volume insuficiente em: ${baixos.join(', ')} — adicione séries ou um dia extra para esses grupos.`)
-      if (altos.length)  partes.push(`Volume excessivo em: ${altos.join(', ')} — reduza séries ou distribua em mais dias para evitar overreaching.`)
-      rec = partes.join(' ')
-    }
-
-    const totalSets = grupos.reduce((a,[,s]) => a+s, 0)
-
-    return {
-      status,
-      valor: `${ok}/${total} grupos musculares no volume ideal`,
-      detail: `Análise por grupo: ${grupos.map(([g,s])=>`${g}: ${s} sets`).join(' · ')}. Ref. ${nivel}: ${ref.min}–${ref.max} sets/grupo/semana. (Schoenfeld et al., 2017)`,
-      rec,
-    }
-  }
-
-  // ── 3. FREQUÊNCIA (vezes por músculo por semana) ───────────────────────────
-  const calcFrequencia = () => {
-    if (!wDays.length) return { status:'sem', valor:null, rec:'', detail:'' }
-
-    const diasComTreino = wDays.filter(d => (d.exercises||[]).length > 0).length
-
-    const refFreq = {
-      'Iniciante':    { min:2, max:3, label:'2–3x/semana' },
-      'Intermediário':{ min:3, max:4, label:'3–4x/semana' },
-      'Avançado':     { min:4, max:6, label:'4–6x/semana' },
-      'Atleta Jovem': { min:3, max:5, label:'3–5x/semana' },
-      'Atleta Competitivo': { min:4, max:6, label:'4–6x/semana' },
-    }
-    const ref = refFreq[nivel] || refFreq['Iniciante']
-    const status = diasComTreino >= ref.min && diasComTreino <= ref.max ? 'ok'
-                 : diasComTreino < ref.min - 1 || diasComTreino > ref.max + 1 ? 'critico' : 'atencao'
-
-    return {
-      status,
-      valor: diasComTreino + 'x/semana',
-      detail: `Referência para ${nivel}: ${ref.label}. Cada grupo muscular deve ser estimulado 2x/semana para hipertrofia ideal.`,
-      rec: status === 'ok'
-        ? 'Frequência adequada para o nível. Garanta que grupos musculares principais apareçam em pelo menos 2 dias.'
-        : diasComTreino < ref.min
-        ? 'Frequência abaixo do ideal. Adicione mais dias de treino ou redistribua os grupos musculares.'
-        : 'Frequência elevada — verifique se há descanso suficiente entre os dias de mesmo grupo muscular.',
-    }
-  }
-
-  // ── 4. DENSIDADE (tempo estimado de sessão) ────────────────────────────────
-  const calcDensidade = () => {
-    if (!wDays.length) return { status:'sem', valor:null, rec:'', detail:'' }
-
-    // Estimativa: (sets × tempo_série) + (sets × descanso)
-    // Tempo por série: ~40s execução. Descanso padrão: 90s se não cadastrado
-    let totalMinEstimado = 0
-    let diasCount = 0
-
-    wDays.forEach(d => {
-      if (!(d.exercises||[]).length) return
-      diasCount++
-      let minDia = 0
-      d.exercises.forEach(ex => {
-        const sets     = +(ex.sets || 3)
-        const descanso = +(ex.rest_seconds || 90) // segundos de descanso entre séries
-        // 1 min (60s) por série + descanso entre séries (sets-1 intervalos)
-        minDia += sets * 60 + (sets - 1) * descanso
-      })
-      totalMinEstimado += minDia / 60
-    })
-
-    if (!diasCount) return { status:'sem', valor:null, rec:'', detail:'' }
-    const mediaPorDia = Math.round(totalMinEstimado / diasCount)
-
-    // Referência: 45–75 min por sessão (ACSM)
-    const status = mediaPorDia >= 45 && mediaPorDia <= 75 ? 'ok'
-                 : mediaPorDia < 30 || mediaPorDia > 90 ? 'critico' : 'atencao'
-
-    return {
-      status,
-      valor: '~' + mediaPorDia + ' min/sessão',
-      detail: 'Estimativa baseada nos sets, execução (~40s/série) e descanso prescrito. Referência ACSM: 45–75 min.',
-      rec: status === 'ok'
-        ? 'Duração de sessão dentro do ideal. Sessões muito longas reduzem cortisol e prejudicam a recuperação.'
-        : mediaPorDia < 45
-        ? 'Sessão curta — pode indicar volume insuficiente ou descanso muito curto entre séries.'
-        : 'Sessão longa demais. Acima de 75–90 min, o nível de cortisol e fadiga comprometem o ganho. Reduza volume ou aumente o descanso.',
-    }
-  }
-
-  // ── 5. ORDEM DOS EXERCÍCIOS ────────────────────────────────────────────────
-  const calcOrdem = () => {
-    if (!wDays.length) return { status:'sem', valor:null, rec:'', detail:'' }
-
-    const MULTIARTICULARES = ['agachamento','supino','levantamento','terra','remada','barra','desenvolvimento','leg press','hack','stiff','avanço','afundo','paralelas','mergulho','clean','snatch']
-    const ISOLADOS = ['curl','rosca','extensão','crucifixo','voador','pulldown','puxada','tríceps','bíceps','panturrilha','elevação']
-
-    let diasOk = 0, diasTotal = 0
-
-    wDays.forEach(d => {
-      const exs = (d.exercises || [])
-      if (exs.length < 2) return
-      diasTotal++
-      const names = exs.map(e => (e.name||'').toLowerCase())
-
-      const firstMulti = names.findIndex(n => MULTIARTICULARES.some(m => n.includes(m)))
-      const firstIsolado = names.findIndex(n => ISOLADOS.some(i => n.includes(i)))
-
-      // Ok se: não tem isolado (tudo é multi), ou multi vem antes do isolado
-      if (firstIsolado === -1 || firstMulti === -1 || firstMulti < firstIsolado) diasOk++
-    })
-
-    if (!diasTotal) return { status:'sem', valor:null, rec:'', detail:'' }
-
-    const pct = Math.round((diasOk / diasTotal) * 100)
-    const status = pct >= 80 ? 'ok' : pct >= 50 ? 'atencao' : 'critico'
-
-    return {
-      status,
-      valor: pct + '% dos dias com ordem correta',
-      detail: 'Multiarticulares (agachamento, supino, terra) devem preceder isolados (curl, extensão). Pesos livres antes de máquinas quando possível.',
-      rec: status === 'ok'
-        ? 'Ordem dos exercícios adequada. Exercícios compostos no início garantem máximo recrutamento neural.'
-        : 'Revise a ordem dos exercícios. Coloque multiarticulares (agachamento, supino, terra) antes dos isolados para otimizar o estímulo neuromuscular.',
-    }
-  }
-
-  // ── 6. RECUPERAÇÃO ─────────────────────────────────────────────────────────
-  const calcRecuperacao = () => {
-    if (!exLogs.length) return { status:'sem', valor:null, rec:'', detail:'' }
-
-    // Verificar dias consecutivos de treino (sem folga)
-    const datesSet = [...new Set(exLogs.map(l => l.date?.slice(0,10)).filter(Boolean))].sort()
-    if (datesSet.length < 2) return { status:'sem', valor:null, rec:'', detail:'' }
-
-    let maxConsec = 1, currConsec = 1, alerts = 0
-    for (let i = 1; i < datesSet.length; i++) {
-      const diff = (new Date(datesSet[i]) - new Date(datesSet[i-1])) / 86400000
-      if (diff === 1) {
-        currConsec++
-        if (currConsec > 3) alerts++
-      } else {
-        maxConsec = Math.max(maxConsec, currConsec)
-        currConsec = 1
-      }
-    }
-    maxConsec = Math.max(maxConsec, currConsec)
-
-    // Descanso médio entre os dias do plano
-    const descansosPlan = []
-    if (wDays.length > 1) {
-      const DIA_JS = { Dom:0,Seg:1,Ter:2,Qua:3,Qui:4,Sex:5,Sáb:6 }
-      const diasJS = wDays.map(d => DIA_JS[d.day_of_week]).filter(x => x !== undefined).sort((a,b)=>a-b)
-      for (let i = 1; i < diasJS.length; i++) descansosPlan.push(diasJS[i] - diasJS[i-1])
-    }
-    const minDescanso = descansosPlan.length ? Math.min(...descansosPlan) : 1
-
-    const status = maxConsec <= 3 && minDescanso >= 1 ? 'ok'
-                 : maxConsec > 5 || minDescanso === 0 ? 'critico' : 'atencao'
-
-    return {
-      status,
-      valor: maxConsec + ' dias consecutivos máx · ' + (minDescanso) + 'd descanso mín entre sessões',
-      detail: 'Baseado nos logs de treino registrados. Recomendado: máx 3 dias consecutivos, mínimo 48h entre grupos musculares iguais.',
-      rec: status === 'ok'
-        ? 'Padrão de recuperação adequado. Mantenha pelo menos 1 dia de descanso a cada 3 dias de treino.'
-        : maxConsec > 3
-        ? 'Muitos dias consecutivos sem descanso detectados. Inclua dias de recuperação ativa ou descanso completo.'
-        : 'Dias de treino consecutivos no plano sem descanso suficiente. Redistribua os dias para garantir 48h de recuperação por grupo muscular.',
-    }
-  }
-
-  const fatores = [
-    { id:'intensidade', label:'Intensidade das Cargas', icone:'🏋️', ...calcIntensidade(), ref:'Zatsiorsky & Kraemer, 2006' },
-    { id:'volume',      label:'Volume Semanal',         icone:'📊', ...calcVolume(),      ref:'Schoenfeld et al., 2017' },
-    { id:'frequencia',  label:'Frequência',             icone:'📅', ...calcFrequencia(),  ref:'Ralston et al., 2017' },
-    { id:'densidade',   label:'Densidade (estimada)',   icone:'⏱️', ...calcDensidade(),   ref:'ACSM Guidelines, 2022' },
-    { id:'ordem',       label:'Ordem dos Exercícios',   icone:'🔢', ...calcOrdem(),       ref:'NSCA, 2016' },
-    { id:'recuperacao', label:'Recuperação',            icone:'😴', ...calcRecuperacao(), ref:'Meeusen et al., 2013' },
-  ]
-
-  const semCount = { ok:0, atencao:0, critico:0, sem:0 }
-  fatores.forEach(f => semCount[f.status]++)
-
-
-  return (
-    <div style={s.card}>
-      {/* Header */}
-      <div style={{ marginBottom:20 }}>
-        <div style={{ fontSize:16, fontWeight:800, color:'#E2E8F0', marginBottom:4 }}>Avaliação de Treino</div>
-        <div style={{ fontSize:12, color:'#475569' }}>Análise automática baseada no plano ativo e logs de carga</div>
-        {!hasPlan && (
-          <div style={{ marginTop:10, padding:'10px 14px', background:'rgba(217,119,6,0.08)', borderRadius:10, border:'1px solid rgba(217,119,6,0.2)', fontSize:12, color:'#92400E', fontWeight:600 }}>
-            Nenhum plano ativo encontrado. Crie um plano de treino para ativar a análise completa.
+        <div style={{ flex:1, minWidth:100 }}>
+          <div style={{ fontSize:9, color:V.textMuted, marginBottom:3, textTransform:'uppercase', letterSpacing:1 }}>Reps (1-15)</div>
+          <input type="number" style={{ ...ss.smallInput, fontSize:15, fontWeight:700, textAlign:'center' }} value={reps} onChange={e => setReps(e.target.value)} placeholder="ex: 8" />
+        </div>
+        <div style={{ flex:1, minWidth:100, display:'flex', flexDirection:'column', justifyContent:'flex-end' }}>
+          <div style={{ fontSize:9, color:V.textMuted, marginBottom:3, textTransform:'uppercase', letterSpacing:1 }}>1RM Estimado</div>
+          <div style={{ background: oneRM ? 'rgba(217,119,6,0.15)' : V.bgInput, border:`1px solid ${oneRM ? V.borderStrong : V.borderLight}`, borderRadius:6, padding:'7px', textAlign:'center', fontSize:18, fontWeight:900, color: oneRM ? V.accentBr : V.textDim }}>
+            {oneRM ? oneRM + ' kg' : '-'}
           </div>
-        )}
+        </div>
       </div>
-
-      {/* Semáforo geral */}
-      <div style={{ display:'flex', gap:8, marginBottom:20, padding:'12px 16px', background:'rgba(255,255,255,0.04)', borderRadius:12, border:'1px solid rgba(255,255,255,0.08)' }}>
-        {[
-          { k:'ok',      label:'Adequado', cor:'#16A34A' },
-          { k:'atencao', label:'Atenção',  cor:'#D97706' },
-          { k:'critico', label:'Crítico',  cor:'#DC2626' },
-          { k:'sem',     label:'Sem dados',cor:'#94A3B8' },
-        ].map(({ k, label, cor }) => (
-          <div key={k} style={{ display:'flex', alignItems:'center', gap:6, flex:1, justifyContent:'center' }}>
-            <div style={{ width:10, height:10, borderRadius:'50%', background:cor, boxShadow: semCount[k] > 0 ? '0 0 8px '+cor : 'none' }} />
-            <span style={{ fontSize:12, fontWeight:700, color:cor }}>{semCount[k]}</span>
-            <span style={{ fontSize:10, color:'#64748B' }}>{label}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Fatores */}
-      <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-        {fatores.map(f => {
-          const sem  = semaforo(f.status)
-          const open = expandido === f.id
-          return (
-            <div key={f.id}
-              style={{ borderRadius:12, border:'1.5px solid '+sem.border, background:sem.bg, overflow:'hidden', transition:'all 0.2s' }}>
-              {/* Linha principal — clicável */}
-              <div onClick={() => setExpandido(open ? null : f.id)}
-                style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', cursor:'pointer' }}>
-                {/* Semáforo dot */}
-                <div style={{ width:12, height:12, borderRadius:'50%', background:sem.cor, boxShadow:'0 0 8px '+sem.cor+'80', flexShrink:0 }} />
+      {oneRM && (
+        <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+          {ZONES.map(zone => {
+            const blocked    = rest.blockedZones.includes(zone.label)
+            const maxAllowed = Math.round(oneRM * rest.maxPct / 100)
+            const lo         = Math.round(oneRM * zone.pct[0] / 100)
+            const hi         = Math.round(Math.min(oneRM * zone.pct[1] / 100, maxAllowed))
+            const load       = lo <= maxAllowed ? { lo, hi } : null
+            return (
+              <div key={zone.label} style={{ display:'flex', alignItems:'center', gap:8, background: blocked ? 'rgba(255,255,255,0.01)' : zone.color + '10', border:`1px solid ${blocked ? 'rgba(255,255,255,0.04)' : zone.color + '30'}`, borderRadius:8, padding:'7px 10px', opacity: blocked ? 0.4 : 1 }}>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontSize:13, fontWeight:800, color:'#E2E8F0' }}>{f.label}</div>
-                  {f.valor && <div style={{ fontSize:11, color:sem.cor, fontWeight:700, marginTop:2 }}>{f.valor}</div>}
-                  {!f.valor && <div style={{ fontSize:11, color:'#94A3B8', marginTop:2 }}>Sem dados suficientes</div>}
+                  <div style={{ fontSize:11, fontWeight:700, color: blocked ? V.textDim : zone.color }}>{blocked ? 'Restrito — ':''}{zone.label}</div>
+                  <div style={{ fontSize:9, color:V.textMuted }}>{zone.reps} reps · {zone.rest}</div>
                 </div>
-                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                  <span style={{ fontSize:10, fontWeight:800, padding:'3px 10px', borderRadius:20, background:sem.cor+'18', color:sem.cor, border:'1px solid '+sem.cor+'40' }}>{sem.label}</span>
-                  <span style={{ color:'#94A3B8', fontSize:14 }}>{open ? '▲' : '▼'}</span>
-                </div>
-              </div>
-
-              {/* Expandido */}
-              {open && (
-                <div style={{ padding:'0 16px 14px', borderTop:'1px solid '+sem.border }}>
-                  {f.detail && (
-                    <div style={{ fontSize:11, color:'#64748B', lineHeight:1.6, marginTop:10, marginBottom:8 }}>{f.detail}</div>
-                  )}
-                  <div style={{ padding:'10px 12px', borderRadius:9, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.08)', fontSize:12, color:'#CBD5E1', lineHeight:1.6 }}>
-                    <span style={{ fontWeight:700, color:sem.cor }}>Recomendação: </span>{f.rec}
+                {load && !blocked ? (
+                  <div style={{ textAlign:'right' }}>
+                    <div style={{ fontSize:13, fontWeight:900, color:zone.color }}>{load.lo}-{load.hi}kg</div>
+                    <button onClick={() => onApply({ reps:zone.reps, rest:zone.rest })} style={{ fontSize:9, background:zone.color+'20', border:`1px solid ${zone.color}40`, borderRadius:5, padding:'2px 7px', color:zone.color, cursor:'pointer', fontWeight:700 }}>Usar</button>
                   </div>
-                  <div style={{ marginTop:6, fontSize:9, color:'#94A3B8', fontStyle:'italic' }}>Ref: {f.ref}</div>
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-
-
-
-// ── TgmdDeltaRow — delta between first and last score ────────────────────────
-function TgmdDeltaRow({ history }) {
-  if (!history || history.length < 2) return null
-  const delta = history[history.length-1].score - history[0].score
-  const col = delta > 0 ? '#4ADE80' : delta < 0 ? '#F87171' : '#94A3B8'
-  return (
-    <div style={{ fontSize:12, color:col, fontWeight:700 }}>
-      {delta > 0 ? '↑' : delta < 0 ? '↓' : '→'} {Math.abs(delta)} pontos nas últimas {history.length - 1} semanas
-    </div>
-  )
-}
-
-// ── EditFormFields — form de edição do perfil do aluno ───────────────────────
-// ── SepDark — separador dark para formulário de edição ───────────────────────
-function SepDark({ title }) {
-  return (
-    <div style={{ gridColumn:'1/-1', display:'flex', alignItems:'center', gap:10, marginTop:16, marginBottom:4 }}>
-      <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.08)' }} />
-      <span style={{ fontSize:10, color:'#475569', fontWeight:700, textTransform:'uppercase', letterSpacing:1.2, whiteSpace:'nowrap' }}>{title}</span>
-      <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.08)' }} />
-    </div>
-  )
-}
-
-function EditFormFields({ form, setForm }) {
-  const f   = (field, val) => setForm(prev => ({ ...prev, [field]: val }))
-  const inp = { width:'100%', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'10px 12px', color:'#E2E8F0', fontSize:13, outline:'none', boxSizing:'border-box' }
-  const lbl = { fontSize:10, color:'#64748B', marginBottom:4, textTransform:'uppercase', letterSpacing:1, fontWeight:700, display:'block', marginTop:12 }
-  // Sep defined at module level
-  const editAge  = parseInt(form.age) || null
-  const editLTAD = calcLTAD(editAge, parseInt(form.experience_years) || 0, form.sport)
-
-  return (
-    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-      <SepDark title="Dados Pessoais" />
-      <div style={{ gridColumn:'1/-1' }}>
-        <label style={lbl}>Nome</label>
-        <input style={inp} value={form.name||''} onChange={e=>f('name',e.target.value)} />
-      </div>
-      <div>
-        <label style={lbl}>Idade</label>
-        <input style={inp} type="number" placeholder="Ex: 14" value={form.age||''} onChange={e=>f('age',e.target.value)} />
-      </div>
-      <div>
-        <label style={lbl}>Nível</label>
-        <select style={inp} value={form.level||''} onChange={e=>f('level',e.target.value)}>
-          {LEVELS.map(l => <option key={l}>{l}</option>)}
-        </select>
-      </div>
-      <div>
-        <label style={lbl}>Peso (kg)</label>
-        <input style={inp} type="number" placeholder="Ex: 55" value={form.weight||''} onChange={e=>f('weight',e.target.value)} />
-      </div>
-      <div>
-        <label style={lbl}>Altura (cm)</label>
-        <input style={inp} type="number" placeholder="Ex: 165" value={form.height||''} onChange={e=>f('height',e.target.value)} />
-      </div>
-      <div>
-        <label style={lbl}>Altura sentado (cm)</label>
-        <input style={inp} type="number" placeholder="Para PHV" value={form.height_sitting||''} onChange={e=>f('height_sitting',e.target.value)} />
-      </div>
-      <div style={{ gridColumn:'1/-1' }}>
-        <label style={lbl}>Objetivo</label>
-        <select style={inp} value={form.goal||''} onChange={e=>f('goal',e.target.value)}>
-          <optgroup label="Esportivo">
-            {['Iniciação Esportiva','Desenvolvimento Atlético','Treinamento Competitivo'].map(g=><option key={g}>{g}</option>)}
-          </optgroup>
-          <optgroup label="Saúde">
-            {['Saúde e Bem-Estar','Condicionamento'].map(g=><option key={g}>{g}</option>)}
-          </optgroup>
-          <optgroup label="Estética / Força">
-            {['Ganho de Massa','Emagrecimento','Força e Performance'].map(g=><option key={g}>{g}</option>)}
-          </optgroup>
-        </select>
-      </div>
-
-      <SepDark title="Esporte" />
-      <div style={{ gridColumn:'1/-1' }}>
-        <label style={lbl}>Modalidade</label>
-        <select style={inp} value={form.sport||''} onChange={e=>f('sport',e.target.value)}>
-          <option value="">Nenhuma</option>
-          {SPORTS.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
-        </select>
-      </div>
-      <div>
-        <label style={lbl}>Posição / Especialidade</label>
-        <input style={inp} placeholder="Ex: Meia, Ala..." value={form.sport_position||''} onChange={e=>f('sport_position',e.target.value)} />
-      </div>
-      <div>
-        <label style={lbl}>Anos de experiência</label>
-        <input style={inp} type="number" min="0" placeholder="Ex: 2" value={form.experience_years||''} onChange={e=>f('experience_years',e.target.value)} />
-      </div>
-      {editLTAD && (
-        <div style={{ gridColumn:'1/-1', padding:'8px 12px', borderRadius:10, background:editLTAD.bg, border:'1px solid '+editLTAD.cor+'33', display:'flex', alignItems:'center', gap:8 }}>
-          <span style={{ width:10, height:10, borderRadius:'50%', background:editLTAD.cor, display:'inline-block', flexShrink:0 }} />
-          <div style={{ fontSize:11, fontWeight:700, color:editLTAD.cor }}>LTAD: {editLTAD.fase}</div>
+                ) : (
+                  <div style={{ fontSize:10, color:V.textDim }}>{blocked ? 'Restrito':'-'}</div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
-
-      <SepDark title="Responsável" />
-      <div>
-        <label style={lbl}>Nome do responsável</label>
-        <input style={inp} placeholder="Ex: Maria Silva" value={form.guardian_name||''} onChange={e=>f('guardian_name',e.target.value)} />
-      </div>
-      <div>
-        <label style={lbl}>WhatsApp</label>
-        <input style={inp} placeholder="(41) 99999-9999" value={form.guardian_phone||''} onChange={e=>f('guardian_phone',e.target.value)} />
-      </div>
-
-      <SepDark title="Maturação (PHV)" />
-      <div>
-        <label style={lbl}>Altura pai (cm)</label>
-        <input style={inp} type="number" placeholder="Ex: 178" value={form.parent_height_father||''} onChange={e=>f('parent_height_father',e.target.value)} />
-      </div>
-      <div>
-        <label style={lbl}>Altura mãe (cm)</label>
-        <input style={inp} type="number" placeholder="Ex: 165" value={form.parent_height_mother||''} onChange={e=>f('parent_height_mother',e.target.value)} />
-      </div>
-
-      <SepDark title="Observações" />
-      <div style={{ gridColumn:'1/-1' }}>
-        <label style={lbl}>Lesões, restrições, notas</label>
-        <textarea style={{ ...inp, minHeight:65, resize:'vertical', fontFamily:'inherit' }}
-          placeholder="Ex: entorse tornozelo direito..."
-          value={form.notes||''} onChange={e=>f('notes',e.target.value)} />
-      </div>
     </div>
   )
 }
 
+// ── Exercise Search ────────────────────────────────────────────────────────────
+function ExerciseSearch({ onSelect, suggestedTypes, ageGroup }) {
+  const [query,      setQuery]      = useState('')
+  const [filterType, setFilterType] = useState('')
+  const [modality,   setModality]   = useState('')
 
-// ── ProgressTab — Medidas e Força ────────────────────────────────────────────
-function ProgressTab({ progress, exLogs, showProgressForm, setShowProgressForm, newProgress, setNewProgress, addProgress, deleteProgress, saving, s }) {
-  const [subTab, setSubTab] = useState('medidas')
-  const [selEx,  setSelEx]  = useState(null)
+  const allowedTypes = modality ? MODALITY_MAP[modality] : null
 
-  const fmtDate = (d) => {
-    if (!d) return ''
-    const [,m,day] = String(d).slice(0,10).split('-')
-    return day + '/' + m
-  }
-
-  // ── Força: agrupar logs por exercício ──────────────────────────────────────
-  const exercicios = useMemo(() => {
-    const map = {}
-    ;(exLogs || []).forEach(l => {
-      const name = l.exercises?.name || l.exercise_id
-      if (!map[name]) map[name] = []
-      const maxW = Math.max(...(l.sets||[]).map(s => +(s.weight||0)))
-      if (maxW > 0) map[name].push({ date: l.date?.slice(0,10), max: maxW })
-    })
-    // Sort each exercise by date
-    Object.values(map).forEach(arr => arr.sort((a,b) => a.date > b.date ? 1 : -1))
-    return map
-  }, [exLogs])
-
-  const exNames = Object.keys(exercicios)
-  const exSel   = selEx || exNames[0] || null
-  const exData  = exSel ? exercicios[exSel] || [] : []
-
-  // Deduplicate by date (keep max per date)
-  const exDataDedup = useMemo(() => {
-    const byDate = {}
-    exData.forEach(e => { if (!byDate[e.date] || e.max > byDate[e.date]) byDate[e.date] = e.max })
-    return Object.entries(byDate).sort().map(([date, max]) => ({ date, max }))
-  }, [exData])
-
-  // ── Mini SVG chart ─────────────────────────────────────────────────────────
-  const MiniChart = ({ data, color }) => {
-    if (data.length < 2) return (
-      <div style={{ textAlign:'center', padding:'24px 0', color:'#334155', fontSize:12 }}>
-        Registre pelo menos 2 sessões com carga para ver o gráfico.
-      </div>
-    )
-    const W=320, H=100, PL=36, PR=12, PT=8, PB=24
-    const vals = data.map(d => d.max)
-    const minV = Math.min(...vals), maxV = Math.max(...vals)
-    const range = maxV - minV || 1
-    const cx = (i) => PL + (i/(data.length-1))*(W-PL-PR)
-    const cy = (v) => PT + (1-(v-minV)/range)*(H-PT-PB)
-    const pts = data.map((d,i) => cx(i)+','+cy(d.max)).join(' ')
-    const area = 'M'+cx(0)+','+cy(data[0].max)+' '+
-      data.slice(1).map((d,i)=>'L'+cx(i+1)+','+cy(d.max)).join(' ')+
-      ' L'+cx(data.length-1)+','+(H-PB)+' L'+cx(0)+','+(H-PB)+' Z'
-    const first = data[0].max, last = data[data.length-1].max
-    const delta = +(last-first).toFixed(1)
-    const pr = exDataDedup.length > 0 ? Math.max(...exDataDedup.map(d=>d.max)) : 0
-    const isNewPr = last >= pr && data.length > 1
-
-    return (
-      <div>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-          <div style={{ fontSize:11, color:'#475569' }}>
-            <span style={{ fontWeight:700, color:'#E2E8F0', fontSize:20 }}>{last}kg</span>
-            {' '}
-            <span style={{ fontSize:11, fontWeight:700, color: delta >= 0 ? '#34D399' : '#F87171', background: (delta>=0?'#34D399':'#F87171')+'18', padding:'2px 8px', borderRadius:20 }}>
-              {delta >= 0 ? '+' : ''}{delta}kg
-            </span>
-          </div>
-          {isNewPr && (
-            <div style={{ fontSize:10, fontWeight:800, color:'#A78BFA', background:'rgba(167,139,250,0.15)', padding:'3px 10px', borderRadius:20, border:'1px solid rgba(167,139,250,0.3)' }}>
-              PR {pr}kg
-            </div>
-          )}
-        </div>
-        <div style={{ overflowX:'auto' }}>
-          <svg width={W} height={H} style={{ display:'block', minWidth:W }}>
-            {[0,0.5,1].map(t => {
-              const y = PT + t*(H-PT-PB)
-              const v = (maxV - t*range).toFixed(1)
-              return (
-                <g key={t}>
-                  <line x1={PL} y1={y} x2={W-PR} y2={y} stroke="rgba(255,255,255,0.04)" />
-                  <text x={PL-4} y={y+4} textAnchor="end" fontSize={8} fill="#334155">{v}</text>
-                </g>
-              )
-            })}
-            {data.map((d,i) => (
-              (i===0||i===data.length-1||(data.length>4&&i===Math.floor(data.length/2)))
-                ? <text key={i} x={cx(i)} y={H-PB+14} textAnchor="middle" fontSize={8} fill="#334155">{fmtDate(d.date)}</text>
-                : null
-            ))}
-            <path d={area} fill={color+'10'} />
-            <polyline points={pts} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-            {data.map((d,i) => (
-              <circle key={i} cx={cx(i)} cy={cy(d.max)} r={i===data.length-1?5:3}
-                fill={color} stroke="#0D1117" strokeWidth={2} />
-            ))}
-          </svg>
-        </div>
-        <div style={{ fontSize:10, color:'#334155', marginTop:4 }}>{data.length} sessões registradas · {fmtDate(data[0].date)} → {fmtDate(data[data.length-1].date)}</div>
-      </div>
-    )
-  }
+  const results = EXERCISE_BANK.filter(ex => {
+    const matchQ = !query       || ex.name.toLowerCase().includes(query.toLowerCase())
+    const matchT = !filterType  || ex.type === filterType
+    const matchM = !allowedTypes || allowedTypes.includes(ex.type)
+    if (ageGroup === 'crianca' && (ex.sets === '5' || ex.reps === '3-5' || ex.reps === '1-5')) return false
+    return matchQ && matchT && matchM
+  }).slice(0, 10)
 
   return (
-    <div>
-      {/* Sub-tabs */}
-      <div style={{ display:'flex', gap:8, marginBottom:16 }}>
-        {[['medidas','Medidas'],['forca','Força']].map(([id,label]) => (
-          <button key={id} onClick={() => setSubTab(id)}
-            style={{ padding:'8px 20px', borderRadius:10, border:'none', cursor:'pointer', fontWeight:700, fontSize:13,
-              background: subTab===id ? 'linear-gradient(135deg,#7C3AED,#6D28D9)' : 'rgba(255,255,255,0.05)',
-              color: subTab===id ? '#fff' : '#475569',
-              boxShadow: subTab===id ? '0 4px 14px rgba(124,58,237,0.35)' : 'none' }}>
-            {label}
+    <div style={{ marginBottom:8 }}>
+      <div style={{ display:'flex', gap:5, flexWrap:'wrap', marginBottom:8 }}>
+        {Object.keys(MODALITY_MAP).map(mod => (
+          <button key={mod} onClick={() => { setModality(modality === mod ? '' : mod); setFilterType('') }}
+            style={{ padding:'4px 12px', borderRadius:20, border:`1px solid ${modality===mod ? MODALITY_COLORS[mod] : V.border}`, background: modality===mod ? MODALITY_COLORS[mod]+'18' : 'transparent', color: modality===mod ? MODALITY_COLORS[mod] : V.textSub, fontSize:11, cursor:'pointer', fontWeight: modality===mod ? 700 : 400, fontFamily:'inherit' }}>
+            {mod}
           </button>
         ))}
-        <button style={{ ...s.btn(), marginLeft:'auto' }} onClick={() => setShowProgressForm(!showProgressForm)}>
-          + Registrar Evolução
-        </button>
+        {(modality || filterType) && (
+          <button onClick={() => { setModality(''); setFilterType('') }} style={{ padding:'4px 8px', borderRadius:20, border:`1px solid ${V.borderLight}`, background:'transparent', color:V.textDim, fontSize:10, cursor:'pointer', fontFamily:'inherit' }}>
+            × Limpar
+          </button>
+        )}
       </div>
-
-      {/* Form */}
-      {showProgressForm && (
-        <div style={{ ...s.card, marginBottom:16 }}>
-          <div style={{ fontSize:15, fontWeight:700, color:'#fff', marginBottom:16 }}>Novo Registro de Medidas</div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-            {[['Data','date','date'],['Peso (kg)','weight','number'],['Cintura (cm)','waist','number'],['Peito (cm)','chest','number'],['Quadril (cm)','hip','number'],['Coxa (cm)','thigh','number']].map(([l,f,t]) => (
-              <div key={f}>
-                <div style={{ fontSize:10, color:'#64748B', marginBottom:4, textTransform:'uppercase' }}>{l}</div>
-                <input style={s.input} type={t} value={newProgress[f]} onChange={e => setNewProgress(x => ({ ...x, [f]: e.target.value }))} />
-              </div>
-            ))}
-            <div style={{ gridColumn:'1/-1' }}>
-              <div style={{ fontSize:10, color:'#64748B', marginBottom:4, textTransform:'uppercase' }}>Observações</div>
-              <textarea style={{ ...s.input, minHeight:60, resize:'vertical' }} value={newProgress.notes} onChange={e => setNewProgress(x => ({ ...x, notes: e.target.value }))} placeholder="Ex: Aluno relatou cansaço, aumentou carga no supino..." />
-            </div>
-          </div>
-          <button style={s.btn()} onClick={addProgress} disabled={saving}>{saving ? 'Salvando...' : 'Salvar Registro'}</button>
+      {suggestedTypes.length > 0 && (
+        <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginBottom:6 }}>
+          <span style={{ fontSize:9, color:V.textDim, textTransform:'uppercase', letterSpacing:1, alignSelf:'center' }}>Sugerido:</span>
+          {suggestedTypes.filter(t => !allowedTypes || allowedTypes.includes(t)).map(t => (
+            <button key={t} onClick={() => setFilterType(filterType === t ? '' : t)}
+              style={{ padding:'3px 10px', borderRadius:20, border:`1px solid ${filterType===t ? getTypeColor(t) : V.border}`, background: filterType===t ? getTypeColor(t)+'18' : 'transparent', color: filterType===t ? getTypeColor(t) : V.textSub, fontSize:11, cursor:'pointer', fontWeight: filterType===t ? 700 : 400, fontFamily:'inherit' }}>
+              {t}
+            </button>
+          ))}
         </div>
       )}
-
-      {/* ── MEDIDAS ── */}
-      {subTab === 'medidas' && (
-        <>
-          {progress.length === 0
-            ? <div style={{ textAlign:'center', padding:60, color:'#334155' }}>Nenhum registro ainda</div>
-            : progress.map((p, i) => (
-              <div key={p.id} style={{ ...s.card, marginBottom:10 }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-                  <div>
-                    <div style={{ fontSize:13, color:'#34D399', fontWeight:700, marginBottom:8 }}>
-                      {new Date(p.date+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'})}
-                      {i===0 && <span style={{ marginLeft:8, fontSize:10, background:'#34D39920', color:'#34D399', padding:'2px 8px', borderRadius:20, border:'1px solid #34D39940' }}>Mais recente</span>}
-                    </div>
-                    <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
-                      {p.weight && <div><span style={{ fontSize:10, color:'#475569' }}>Peso: </span><span style={{ fontWeight:700, color:'#E2E8F0' }}>{p.weight} kg</span></div>}
-                      {p.measurements?.waist && <div><span style={{ fontSize:10, color:'#475569' }}>Cintura: </span><span style={{ fontWeight:700, color:'#E2E8F0' }}>{p.measurements.waist} cm</span></div>}
-                      {p.measurements?.chest && <div><span style={{ fontSize:10, color:'#475569' }}>Peito: </span><span style={{ fontWeight:700, color:'#E2E8F0' }}>{p.measurements.chest} cm</span></div>}
-                      {p.measurements?.hip && <div><span style={{ fontSize:10, color:'#475569' }}>Quadril: </span><span style={{ fontWeight:700, color:'#E2E8F0' }}>{p.measurements.hip} cm</span></div>}
-                      {p.measurements?.thigh && <div><span style={{ fontSize:10, color:'#475569' }}>Coxa: </span><span style={{ fontWeight:700, color:'#E2E8F0' }}>{p.measurements.thigh} cm</span></div>}
-                    </div>
-                    {p.notes && <div style={{ fontSize:12, color:'#64748B', marginTop:8 }}>{p.notes}</div>}
-                  </div>
-                  <button onClick={() => deleteProgress(p.id)} style={{ background:'none', border:'none', color:'#334155', cursor:'pointer', fontSize:16 }}>🗑</button>
+      <input style={ss.smallInput} value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar exercício... (ex: agachamento, elástico, mobilidade)" />
+      {(query || filterType || modality) && results.length > 0 && (
+        <div style={{ background:'rgba(14,9,0,0.95)', border:`1px solid ${V.border}`, borderRadius:10, overflow:'hidden', marginTop:4 }}>
+          {results.map((ex, i) => {
+            const tc = getTypeColor(ex.type)
+            return (
+              <div key={i} onClick={() => { onSelect(ex); setQuery(''); setFilterType(''); setModality('') }}
+                style={{ padding:'9px 14px', borderBottom:`1px solid ${V.borderLight}`, cursor:'pointer', display:'flex', gap:10, alignItems:'flex-start', transition:'background 0.15s' }}
+                onMouseEnter={e => e.currentTarget.style.background='rgba(217,119,6,0.06)'}
+                onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, fontWeight:600, color:V.text }}>{ex.name}</div>
+                  <div style={{ fontSize:10, color:V.textSub, marginTop:2 }}>{ex.tip}</div>
+                </div>
+                <div style={{ flexShrink:0, display:'flex', gap:5, alignItems:'center' }}>
+                  <span style={{ fontSize:9, background:tc+'18', padding:'2px 7px', borderRadius:20, color:tc, border:`1px solid ${tc}35`, fontWeight:700 }}>{ex.type}</span>
+                  <span style={{ fontSize:9, color:V.textDim }}>{ex.sets}×{ex.reps}</span>
                 </div>
               </div>
-            ))
-          }
-        </>
-      )}
-
-      {/* ── FORÇA ── */}
-      {subTab === 'forca' && (
-        <div>
-          {exNames.length === 0 ? (
-            <div style={{ textAlign:'center', padding:60, color:'#334155', fontSize:13 }}>
-              Nenhuma carga registrada ainda. O aluno precisa registrar as cargas nos exercícios pelo link dele.
-            </div>
-          ) : (
-            <>
-              {/* Seletor de exercício */}
-              <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:16 }}>
-                {exNames.map(name => (
-                  <button key={name} onClick={() => setSelEx(name)}
-                    style={{ padding:'5px 12px', borderRadius:20, fontSize:11, fontWeight:700, cursor:'pointer', border:'none',
-                      background: (exSel===name) ? '#7C3AED' : 'rgba(255,255,255,0.05)',
-                      color: (exSel===name) ? '#fff' : '#475569',
-                      transition:'all 0.15s' }}>
-                    {name}
-                  </button>
-                ))}
-              </div>
-
-              {/* Gráfico */}
-              {exSel && (
-                <div style={{ ...s.card, marginBottom:12 }}>
-                  <div style={{ fontSize:13, fontWeight:800, color:'#E2E8F0', marginBottom:12 }}>{exSel}</div>
-                  <MiniChart data={exDataDedup} color="#A78BFA" />
-                </div>
-              )}
-
-              {/* Histórico de cargas */}
-              {exSel && exDataDedup.length > 0 && (
-                <div style={{ ...s.card }}>
-                  <div style={{ fontSize:11, color:'#475569', fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:10 }}>Histórico</div>
-                  <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:200, overflowY:'auto' }}>
-                    {[...exDataDedup].reverse().map((d,i) => (
-                      <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'7px 10px', background:'rgba(255,255,255,0.03)', borderRadius:8 }}>
-                        <span style={{ fontSize:12, color:'#475569' }}>{new Date(d.date+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'short'})}</span>
-                        <span style={{ fontSize:14, fontWeight:800, color:'#A78BFA' }}>{d.max} kg</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+            )
+          })}
         </div>
+      )}
+      {(query || filterType || modality) && results.length === 0 && (
+        <div style={{ padding:'8px 12px', fontSize:12, color:V.textDim, marginTop:4 }}>Nenhum resultado — preencha manualmente abaixo</div>
       )}
     </div>
   )
 }
 
-export default function StudentDetail({ navigate, studentId }) {
-  const [student, setStudent] = useState(null)
-  const [plans, setPlans] = useState([])
-  const [progress, setProgress] = useState([])
-  const [exLogs,   setExLogs]   = useState([])
-  const [tab, setTab] = useState('plans')
-  const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState({})
-  const [newProgress, setNewProgress] = useState({ date: new Date().toISOString().slice(0, 10), weight: '', notes: '', waist: '', chest: '', hip: '', thigh: '' })
-  const [showProgressForm, setShowProgressForm] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [shareLink, setShareLink] = useState('')
-  const [goals, setGoals] = useState([])
-  const [duplicarPlan, setDuplicarPlan] = useState(null)
-  const [loadingPage, setLoadingPage] = useState(true)
-  const [fetchError, setFetchError] = useState(null)
-
-  useEffect(() => {
-    fetchAll()
-    setShareLink(`${window.location.origin}/view/${studentId}`)
-  }, [studentId])
-
-  const fetchAll = async () => {
-    setLoadingPage(true)
-    setFetchError(null)
-    try {
-      const [stRes, plRes, prRes, gsRes, elRes] = await Promise.all([
-        supabase.from('students').select('id,name,age,weight,height,goal,level,notes,teacher_id,birth_date,sport,sport_position,experience_years,guardian_name,guardian_phone,parent_message,parent_message_date,parent_height_father,parent_height_mother,height_sitting,tgmd_scores,tgmd_date').eq('id', studentId).single(),
-        supabase.from('workout_plans').select('*').eq('student_id', studentId).order('created_at', { ascending: false }),
-        supabase.from('progress_entries').select('*').eq('student_id', studentId).order('date', { ascending: false }),
-        supabase.from('student_goals').select('*').eq('student_id', studentId).order('created_at', { ascending: false }),
-        supabase.from('exercise_logs').select('exercise_id,date,sets,exercises(name)').eq('student_id', studentId).order('date', { ascending: true }).limit(300),
-      ])
-
-      // Se a query de student falhar por coluna nova inexistente, tenta com colunas básicas
-      let st = stRes.data
-      if (stRes.error) {
-        console.warn('fetch with new cols failed, retrying basic:', stRes.error.message)
-        const fallback = await supabase.from('students').select('id,name,age,weight,height,goal,level,notes,teacher_id').eq('id', studentId).single()
-        st = fallback.data
-        if (!st) { setFetchError('Aluno não encontrado. Verifique o ID ou as permissões.'); setLoadingPage(false); return }
-      }
-
-      if (plRes.data) setPlans(plRes.data)
-      if (elRes.data) setExLogs(elRes.data)
-      if (prRes.data) setProgress(prRes.data)
-      if (gsRes.data) setGoals(gsRes.data)
-
-      if (st) {
-        const latestWeight = prRes.data?.find(e => e.weight)?.weight
-        const merged = latestWeight ? { ...st, weight: latestWeight } : st
-        setStudent(merged)
-        setForm(merged)
-      } else {
-        setFetchError('Aluno não encontrado.')
-      }
-    } catch (err) {
-      console.error('fetchAll error:', err)
-      setFetchError('Erro ao carregar dados. Verifique sua conexão.')
-    } finally {
-      setLoadingPage(false)
-    }
-  }
-
-  const saveStudent = async () => {
-    setSaving(true)
-    await supabase.from('students').update({
-      ...form,
-      age:              +form.age              || null,
-      weight:           +form.weight           || null,
-      height:           +form.height           || null,
-      experience_years: +form.experience_years || null,
-      sport:            form.sport === 'custom' ? (form.sport_custom || 'outro') : (form.sport || null),
-      sport_position:   form.sport_position    || null,
-      guardian_name:      form.guardian_name     || null,
-      guardian_phone:    form.guardian_phone    || null,
-      parent_message:       form.parent_message    || null,
-      parent_message_date:  form.parent_message ? new Date().toISOString().slice(0,10) : null,
-      parent_height_father: +form.parent_height_father || null,
-      parent_height_mother: +form.parent_height_mother || null,
-      height_sitting:       +form.height_sitting       || null,
-    }).eq('id', studentId)
-    await fetchAll()
-    setEditing(false)
-    setSaving(false)
-  }
-
-  const createPlan = async () => {
-    const { data } = await supabase.from('workout_plans').insert([{ student_id: studentId, teacher_id: student.teacher_id, title: 'Novo Plano de Treino', status: 'draft' }]).select().single()
-    if (data) navigate('workout-editor', { studentId, planId: data.id })
-  }
-
-  const addProgress = async () => {
-    setSaving(true)
-    const measurements = { waist: newProgress.waist, chest: newProgress.chest, hip: newProgress.hip, thigh: newProgress.thigh }
-    const ops = [
-      supabase.from('progress_entries').insert([{ student_id: studentId, date: newProgress.date, weight: +newProgress.weight || null, notes: newProgress.notes, measurements }])
-    ]
-    // Sincroniza peso nos dados pessoais do aluno
-    if (newProgress.weight) {
-      ops.push(supabase.from('students').update({ weight: +newProgress.weight }).eq('id', studentId))
-    }
-    await Promise.all(ops)
-    await fetchAll()
-    setShowProgressForm(false)
-    setNewProgress({ date: new Date().toISOString().slice(0, 10), weight: '', notes: '', waist: '', chest: '', hip: '', thigh: '' })
-    setSaving(false)
-  }
-
-  const deleteProgress = async (id) => {
-    if (!confirm('Excluir este registro?')) return
-    await supabase.from('progress_entries').delete().eq('id', id)
-    await fetchAll()
-  }
-
-  if (loadingPage) return (
-    <div style={{ minHeight: '100vh', background: '#080B12', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-      <div style={{ fontSize: 32, animation: 'spin 1s linear infinite' }}>⚙️</div>
-      <div style={{ color: '#475569', fontSize: 15 }}>Carregando perfil do aluno...</div>
-    </div>
-  )
-  if (fetchError || !student) return (
-    <div style={{ minHeight: '100vh', background: '#080B12', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 32 }}>
-      <div style={{ fontSize: 40 }}>⚠️</div>
-      <div style={{ color: '#F87171', fontSize: 16, fontWeight: 700, textAlign: 'center' }}>{fetchError || 'Aluno não encontrado.'}</div>
-      <button onClick={() => navigate('dashboard')} style={{ marginTop: 8, padding: '10px 24px', borderRadius: 10, border: 'none', background: '#1E293B', color: '#94A3B8', cursor: 'pointer', fontSize: 14 }}>← Voltar ao Painel</button>
-    </div>
-  )
-
-  const imc = student.weight && student.height ? (student.weight / ((student.height / 100) ** 2)).toFixed(1) : '—'
+// ── Template Modal ─────────────────────────────────────────────────────────────
+function TemplateModal({ student, ageGroup, semAcademia, onApply, onClose }) {
+  const goal      = student?.goal  || ''
+  const sport     = student?.sport || ''
+  const suggested = getTemplate(goal, ageGroup, sport, semAcademia)
+  const keys      = Object.keys(T)
+  const initKey   = keys.find(k => T[k] === suggested) || 'massa'
+  const [selected,    setSelected]    = useState(initKey)
+  const [showSemAcad, setShowSemAcad] = useState(semAcademia)
+  const tpl         = T[selected]
+  const visibleKeys = keys.filter(k => showSemAcad ? T[k].semAcademia : !T[k].semAcademia)
 
   return (
-    <div style={s.wrap}>
-      <div style={s.inner}>
-        {duplicarPlan && <DuplicarPlanoModal plan={duplicarPlan} student={student} onClose={() => setDuplicarPlan(null)} />}
-        <button style={s.back} onClick={() => navigate('dashboard')}>← Voltar ao Painel</button>
-
-        {/* Header */}
-        <div style={s.header}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
-            <div>
-              <div style={{ fontSize: 10, color: '#34D399', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 }}>Perfil do Aluno</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: '#fff' }}>{student.name}</div>
-              <div style={{ fontSize: 13, color: '#475569' }}>{student.goal} · {student.level}</div>
-            </div>
-            <button style={s.outlineBtn} onClick={() => setEditing(!editing)}>{editing ? 'Cancelar' : '✏️ Editar Perfil'}</button>
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:'rgba(14,9,0,0.97)', borderRadius:20, padding:24, width:'100%', maxWidth:560, maxHeight:'90vh', overflowY:'auto', border:`1px solid ${V.border}` }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+          <div>
+            <div style={{ fontSize:16, fontWeight:700, color:V.text }}>Gerar Estrutura do Treino</div>
+            <div style={{ fontSize:11, color:V.textSub, marginTop:2 }}>Selecione um template e personalize depois</div>
           </div>
-
-          {editing ? (
-            <>
-              <EditFormFields form={form} setForm={setForm} student={student} />
-              <div style={{ display:'flex', gap:8, marginTop:16 }}>
-                <button onClick={saveStudent} disabled={saving} style={{ flex:1, padding:'13px', borderRadius:12, border:'none', background:'linear-gradient(135deg,#34D399,#059669)', color:'#022c22', fontWeight:800, fontSize:14, cursor:'pointer' }}>
-                  {saving ? 'Salvando...' : '✓ Salvar Alterações'}
-                </button>
-                <button onClick={() => setEditing(false)} style={{ padding:'13px 18px', borderRadius:12, border:'1px solid rgba(255,255,255,0.1)', background:'transparent', color:'#64748B', fontWeight:600, fontSize:13, cursor:'pointer' }}>
-                  Cancelar
-                </button>
-              </div>
-            </>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
-              {[['Idade', `${student.age || '—'} anos`], ['Peso', `${student.weight || '—'} kg`], ['Altura', `${student.height || '—'} cm`], ['IMC', imc]].map(([l, v]) => (
-                <div key={l} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: '10px 14px' }}>
-                  <div style={s.label}>{l}</div>
-                  <div style={s.val}>{v}</div>
-                </div>
-              ))}
-            </div>)}
-
-          {/* Share links */}
-          <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div>
-              <div style={{ fontSize: 11, color: '#475569', marginBottom: 4 }}>🎮 Link do <strong>aluno</strong> — para o atleta ver e registrar o treino:</div>
-              <div style={s.shareBox} onClick={() => { navigator.clipboard.writeText(shareLink); alert('Link do aluno copiado!') }}>
-                {shareLink} <span style={{ color: '#34D399', marginLeft: 8, cursor: 'pointer' }}>📋 Copiar</span>
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: '#475569', marginBottom: 4 }}>👨‍👩‍👧 Link do <strong>responsável</strong> — para o pai/mãe acompanhar a evolução:</div>
-              <div style={{ ...s.shareBox, borderColor: 'rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.05)' }}
-                onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/parent/${studentId}`); alert('Link do responsável copiado!') }}>
-                {window.location.origin}/parent/{studentId}
-                <span style={{ color: '#FBBF24', marginLeft: 8, cursor: 'pointer' }}>📋 Copiar</span>
-              </div>
-            </div>
-          </div>
+          <button onClick={onClose} style={{ background:'none', border:'none', color:V.textSub, cursor:'pointer', fontSize:18 }}>×</button>
         </div>
-
-        {/* Tabs */}
-        <div style={s.tabs}>
-          {[['plans', 'Treinos'], ['progress', 'Evolução'], ['metas', 'Metas'], ['avaliacao', 'Avaliação'],
-            ['notes', 'Obs.']
-          ].map(([id, label]) => (
-            <button key={id} style={s.tab(tab === id, id === 'avaliacao')} onClick={() => setTab(id)}>{label}</button>
+        <div style={{ display:'flex', gap:6, marginBottom:18, background:'rgba(217,119,6,0.04)', borderRadius:10, padding:4 }}>
+          <button onClick={() => { setShowSemAcad(false); setSelected('massa') }}
+            style={{ flex:1, padding:'8px', borderRadius:8, border:'none', background: !showSemAcad ? `linear-gradient(135deg,${V.accent},#B45309)` : 'transparent', color: !showSemAcad ? '#431C00' : V.textSub, fontWeight:700, fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>
+            🏋️ Com Academia
+          </button>
+          <button onClick={() => { setShowSemAcad(true); setSelected('funcional_casa') }}
+            style={{ flex:1, padding:'8px', borderRadius:8, border:'none', background: showSemAcad ? 'linear-gradient(135deg,#34D399,#059669)' : 'transparent', color: showSemAcad ? '#fff' : V.textSub, fontWeight:700, fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>
+            🏠 Sem Academia
+          </button>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:18 }}>
+          {visibleKeys.map(key => (
+            <div key={key} onClick={() => setSelected(key)}
+              style={{ padding:'10px 14px', borderRadius:10, border:`1px solid ${selected===key ? T[key].color+'60' : V.borderLight}`, background: selected===key ? T[key].color+'10' : 'transparent', cursor:'pointer', display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ width:10, height:10, borderRadius:'50%', background:T[key].color, flexShrink:0 }} />
+              <span style={{ fontSize:13, fontWeight: selected===key ? 700 : 400, color: selected===key ? T[key].color : V.textSub }}>{T[key].label}</span>
+              {T[key] === suggested && <span style={{ fontSize:9, background:'rgba(52,211,153,0.12)', color:'#34D399', border:'1px solid rgba(52,211,153,0.2)', borderRadius:20, padding:'1px 7px', marginLeft:'auto' }}>Sugerido</span>}
+            </div>
           ))}
         </div>
-
-        {/* PLANS TAB */}
-        {tab === 'plans' && (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-              <button style={s.btn()} onClick={createPlan}>+ Criar Plano de Treino</button>
-            </div>
-            {plans.length === 0 && <div style={{ textAlign: 'center', padding: 60, color: '#334155' }}>Nenhum plano criado ainda</div>}
-            {plans.map(plan => (
-              <div key={plan.id} style={{ ...s.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                    <span style={{ fontSize: 9, padding: '2px 8px', borderRadius: 20, fontWeight: 700, background: `${STATUS_COLOR[plan.status]}20`, color: STATUS_COLOR[plan.status], border: `1px solid ${STATUS_COLOR[plan.status]}40` }}>
-                      {STATUS_LABEL[plan.status]}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>{plan.title}</div>
-                  <div style={{ fontSize: 12, color: '#475569' }}>Criado em {new Date(plan.created_at).toLocaleDateString('pt-BR')}</div>
-                </div>
-                <button style={s.btn('#00C9FF')} onClick={() => navigate('workout-editor', { studentId, planId: plan.id })}>
-                  ✏️ Editar Treino
-                </button>
-                <button style={{ ...s.outlineBtn, fontSize: 12 }} onClick={() => setDuplicarPlan(plan)}>
-                  📋 Duplicar
-                </button>
+        {tpl && (
+          <div style={{ background:'rgba(217,119,6,0.04)', borderRadius:12, padding:14, marginBottom:18 }}>
+            <div style={{ fontSize:10, color:V.textMuted, fontWeight:700, letterSpacing:1, textTransform:'uppercase', marginBottom:10 }}>Preview — {tpl.days.length} dias</div>
+            {tpl.days.map((day, i) => (
+              <div key={i} style={{ marginBottom:8, padding:'8px 12px', borderRadius:8, background:'rgba(217,119,6,0.04)', border:`1px solid ${V.borderLight}` }}>
+                <div style={{ fontSize:12, fontWeight:700, color:V.text, marginBottom:2 }}>{day.name} <span style={{ color:V.textSub, fontWeight:400 }}>— {day.day_of_week}</span></div>
+                <div style={{ fontSize:10, color:V.textMuted }}>{day.exercises.length} exercícios · {day.focus}</div>
               </div>
             ))}
           </div>
         )}
-
-        {/* PROGRESS TAB */}
-        {tab === 'progress' && (
-          <ProgressTab
-            progress={progress}
-            exLogs={exLogs}
-            showProgressForm={showProgressForm}
-            setShowProgressForm={setShowProgressForm}
-            newProgress={newProgress}
-            setNewProgress={setNewProgress}
-            addProgress={addProgress}
-            deleteProgress={deleteProgress}
-            saving={saving}
-            s={s}
-          />
-        )}
-
-
-        {/* METAS TAB — read-only para o professor */}
-        {tab === 'metas' && (
-          <div>
-            <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#94A3B8' }}>🎯 Metas do Aluno</div>
-              <span style={{ fontSize: 11, color: '#334155', background: 'rgba(255,255,255,0.04)', padding: '4px 10px', borderRadius: 20, border: '1px solid rgba(255,255,255,0.07)' }}>👁️ Somente visualização</span>
-            </div>
-            {goals.length === 0 ? (
-              <div style={{ ...s.card, textAlign: 'center', padding: '40px 20px' }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>🎯</div>
-                <div style={{ fontSize: 14, color: '#475569' }}>O aluno ainda não cadastrou nenhuma meta.</div>
-              </div>
-            ) : (
-              <>
-                {['ativa','concluida'].map(status => {
-                  const list = goals.filter(g => g.status === status)
-                  if (!list.length) return null
-                  const statusLabel = status === 'ativa' ? 'Em andamento' : 'Concluídas ✅'
-                  return (
-                    <div key={status} style={{ marginBottom: 18 }}>
-                      <div style={{ fontSize: 11, color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>{statusLabel}</div>
-                      {list.map(g => {
-                        const catColors = { peso:'#34D399', imc:'#60A5FA', medida:'#A78BFA', forca:'#FBBF24', cardio:'#F87171', habito:'#F5C842', outro:'#94A3B8' }
-                        const cc = catColors[g.category] || '#94A3B8'
-                        const daysLeft = g.deadline ? Math.ceil((new Date(g.deadline) - new Date()) / 86400000) : null
-                        return (
-                          <div key={g.id} style={{ ...s.card, marginBottom: 8, borderLeft: `3px solid ${cc}`, opacity: status === 'concluida' ? 0.65 : 1 }}>
-                            <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:8 }}>
-                              <div>
-                                <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:4 }}>
-                                  <span style={{ fontSize:13, fontWeight:800, color:'#CBD5E1', textDecoration: status==='concluida'?'line-through':'none' }}>{g.title}</span>
-                                  <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:20, background:`${cc}18`, color:cc, border:`1px solid ${cc}35` }}>{g.category}</span>
-                                </div>
-                                {g.target_value && <div style={{ fontSize:12, color:'#64748B' }}>Alvo: <strong style={{ color:cc }}>{g.target_value} {g.target_unit}</strong></div>}
-                                {g.description && g.description !== g.title && <div style={{ fontSize:11, color:'#475569', marginTop:3, fontStyle:'italic' }}>{g.description}</div>}
-                                {daysLeft !== null && status === 'ativa' && (
-                                  <div style={{ fontSize:11, color: daysLeft<7?'#F87171':daysLeft<30?'#FBBF24':'#475569', fontWeight:600, marginTop:4 }}>
-                                    {daysLeft>0 ? `⏳ ${daysLeft} dias restantes` : daysLeft===0 ? '🔔 Prazo hoje!' : `⚠️ ${Math.abs(daysLeft)}d em atraso`}
-                                  </div>
-                                )}
-                              </div>
-                              {status === 'concluida' && <span style={{ fontSize:18 }}>✅</span>}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )
-                })}
-              </>
-            )}
-          </div>
-        )}
-
-        {/* AVALIACAO TAB */}
-        {tab === 'avaliacao' && (
-          <TabAvaliacao
-            student={student}
-            studentId={studentId}
-          />
-        )}
-
-        {/* Motor Development moved to Escolinha > Banco de Atividades */}
-
-        {/* NOTES TAB */}
-        {tab === 'notes' && (
-          <div style={s.card}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#94A3B8', marginBottom: 8 }}>Observações do Aluno</div>
-            {editing ? null : (
-              student.notes
-                ? <div style={{ fontSize: 14, color: '#CBD5E1', lineHeight: 1.7 }}>{student.notes}</div>
-                : <div style={{ color: '#334155', fontSize: 14 }}>Nenhuma observação registrada. Clique em "Editar Perfil" para adicionar.</div>
-            )}
-          </div>
-        )}
+        <div style={{ display:'flex', gap:8 }}>
+          <button onClick={() => onApply(tpl)} style={{ ...ss.btn(V.accent), flex:1, padding:'12px' }}>Aplicar Template</button>
+          <button onClick={onClose} style={ss.outlineBtn}>Cancelar</button>
+        </div>
       </div>
+    </div>
+  )
+}
+
+// ── NoEquipmentSection ─────────────────────────────────────────────────────────
+function NoEquipmentSection({ onAddExercise }) {
+  const [open, setOpen] = useState(false)
+  const QUICK = [
+    { label:'Flexão de Braço',     type:'Funcional',    sets:'3', reps:'10-15', rest:'60s', tip:'Corpo rígido, peito toca o chão' },
+    { label:'Agachamento Corpo',   type:'Peso Corporal',sets:'3', reps:'20',    rest:'45s', tip:'Sem carga, foco em técnica' },
+    { label:'Burpee',              type:'Funcional',    sets:'3', reps:'8-10',  rest:'90s', tip:'Movimento completo' },
+    { label:'Prancha Frontal',     type:'Peso Corporal',sets:'3', reps:'40s',   rest:'30s', tip:'Quadril neutro' },
+    { label:'Abdominal Bicicleta', type:'Funcional',    sets:'3', reps:'15-20', rest:'45s', tip:'Cotovelo toca joelho oposto' },
+    { label:'Mountain Climber',    type:'Funcional',    sets:'3', reps:'25-30', rest:'45s', tip:'Core ativado, quadril estável' },
+    { label:'Elevação Pélvica',    type:'Peso Corporal',sets:'3', reps:'20',    rest:'30s', tip:'Extensão completa de quadril' },
+    { label:'Gato-Vaca',           type:'Mobilidade',   sets:'2', reps:'12',    rest:'20s', tip:'Mobilidade torácica e lombar' },
+    { label:'Equilíbrio Unipodal', type:'Peso Corporal',sets:'2', reps:'30s',   rest:'20s', tip:'Propriocepção' },
+    { label:'Superman',            type:'Peso Corporal',sets:'3', reps:'12',    rest:'30s', tip:'Extensão bilateral' },
+  ]
+
+  if (!open) return (
+    <button onClick={() => setOpen(true)} style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(96,165,250,0.05)', border:'1px solid rgba(96,165,250,0.15)', borderRadius:8, padding:'7px 12px', color:'#60A5FA', fontSize:11, fontWeight:700, cursor:'pointer', marginTop:6, fontFamily:'inherit' }}>
+      🏠 + Exercício sem equipamento
+    </button>
+  )
+
+  return (
+    <div style={{ marginTop:8, background:'rgba(96,165,250,0.03)', border:'1px solid rgba(96,165,250,0.1)', borderRadius:10, padding:'12px 14px' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+        <span style={{ fontSize:11, fontWeight:700, color:'#60A5FA', textTransform:'uppercase', letterSpacing:1 }}>🏠 Sem equipamento</span>
+        <button onClick={() => setOpen(false)} style={{ background:'none', border:'none', color:V.textMuted, cursor:'pointer', fontSize:14 }}>×</button>
+      </div>
+      <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+        {QUICK.map((ex, i) => {
+          const tc = getTypeColor(ex.type)
+          return (
+            <button key={i} onClick={() => onAddExercise({ name:ex.label, type:ex.type, sets:ex.sets, reps:ex.reps, rest:ex.rest, tip:ex.tip })}
+              style={{ padding:'5px 11px', borderRadius:20, border:`1px solid ${tc}35`, background:`${tc}10`, color:tc, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+              {ex.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ── WorkoutEditor Principal ────────────────────────────────────────────────────
+export default function WorkoutEditor({ navigate, studentId, planId }) {
+  const [plan,         setPlan]         = useState(null)
+  const [days,         setDays]         = useState([])
+  const [student,      setStudent]      = useState(null)
+  const [loading,      setLoading]      = useState(true)
+  const [saving,       setSaving]       = useState(false)
+  const [newExForms,   setNewExForms]   = useState({})
+  const [openCalc,     setOpenCalc]     = useState(null)
+  const [showTemplate, setShowTemplate] = useState(false)
+  const [semAcademia,  setSemAcademia]  = useState(false)
+  const [showAval,     setShowAval]     = useState(false)
+
+  const ageGroup   = getAgeGroup(student?.birth_date, student?.age)
+  const studentAge = student?.birth_date
+    ? Math.floor((Date.now() - new Date(student.birth_date)) / (365.25 * 24 * 3600 * 1000))
+    : student?.age ? parseInt(student.age) : null
+  const suggestedTypes = getSuggestedTypes(student?.goal || '', student?.sport || '')
+
+  useEffect(() => { fetchAll() }, [planId])
+
+  const fetchAll = async () => {
+    setLoading(true)
+    const [{ data:planData }, { data:daysData }, { data:studentData }] = await Promise.all([
+      supabase.from('workout_plans').select('*').eq('id', planId).single(),
+      supabase.from('workout_days').select('*, exercises(*)').eq('plan_id', planId).order('order_index'),
+      supabase.from('students').select('id,name,birth_date,age,goal,sport').eq('id', studentId).single(),
+    ])
+    if (planData)    setPlan(planData)
+    if (daysData)    setDays(daysData.map(d => ({ ...d, exercises:(d.exercises||[]).sort((a,b) => a.order_index - b.order_index) })))
+    if (studentData) setStudent(studentData)
+    setLoading(false)
+  }
+
+  const savePlanTitle = async () => {
+    setSaving(true)
+    await supabase.from('workout_plans').update({ title:plan.title, status:plan.status, updated_at:new Date().toISOString() }).eq('id', planId)
+    setSaving(false)
+  }
+
+  const saveStatus = async (newStatus) => {
+    setSaving(true)
+    await supabase.from('workout_plans').update({ status:newStatus, updated_at:new Date().toISOString() }).eq('id', planId)
+    setSaving(false)
+  }
+
+  // ── Análise de avaliação — calculada em tempo real a partir dos days ────────
+  const avalAnalysis = (() => {
+    if (!days.length) return {}
+
+    const MUSCLE_MAP = {
+      supino:'Peito','supino reto':'Peito','supino inclinado':'Peito','supino declinado':'Peito',
+      crucifixo:'Peito',voador:'Peito',crossover:'Peito','peck deck':'Peito','flexão':'Peito','push up':'Peito',
+      remada:'Costas',puxada:'Costas','barra fixa':'Costas','levantamento terra':'Costas',
+      pulldown:'Costas',serrote:'Costas',cavalinho:'Costas',hiperextensão:'Costas',
+      desenvolvimento:'Ombro','elevação lateral':'Ombro','elevação frontal':'Ombro',
+      arnold:'Ombro','face pull':'Ombro',encolhimento:'Ombro',
+      'rosca direta':'Bíceps','rosca alternada':'Bíceps','rosca martelo':'Bíceps',
+      'rosca concentrada':'Bíceps','rosca scott':'Bíceps',curl:'Bíceps',
+      tríceps:'Tríceps',triceps:'Tríceps',mergulho:'Tríceps',extensão:'Tríceps',
+      testa:'Tríceps',corda:'Tríceps',paralelas:'Tríceps',
+      agachamento:'Quadríceps','leg press':'Quadríceps',hack:'Quadríceps',
+      'cadeira extensora':'Quadríceps',avanço:'Quadríceps',afundo:'Quadríceps',passada:'Quadríceps',búlgaro:'Quadríceps',
+      stiff:'Posterior','mesa flexora':'Posterior',flexora:'Posterior','leg curl':'Posterior',
+      glúteo:'Glúteo',gluteo:'Glúteo','hip thrust':'Glúteo','elevação pélvica':'Glúteo',abdução:'Glúteo',
+      panturrilha:'Panturrilha',gêmeos:'Panturrilha',gemeos:'Panturrilha',calf:'Panturrilha',
+      abdominal:'Abdômen',prancha:'Abdômen',crunch:'Abdômen',oblíquo:'Abdômen',obliquo:'Abdômen',plank:'Abdômen',
+    }
+    const findGroup = (name) => {
+      const n = (name||'').toLowerCase()
+      for (const [k,g] of Object.entries(MUSCLE_MAP)) { if (n.includes(k)) return g }
+      return null
+    }
+
+    const nivel = student?.level || 'Iniciante'
+    const REF_VOL = { 'Iniciante':{min:10,max:15},'Intermediário':{min:12,max:18},'Avançado':{min:16,max:22},'Atleta Jovem':{min:12,max:20},'Atleta Competitivo':{min:18,max:25} }
+    const ref = REF_VOL[nivel] || REF_VOL['Iniciante']
+
+    const MULTI = ['agachamento','supino','levantamento','terra','remada','barra','desenvolvimento','leg press','hack','stiff','avanço','afundo','paralelas','mergulho']
+    const ISOL  = ['curl','rosca','extensão','crucifixo','voador','pulldown','puxada','tríceps','bíceps','panturrilha','elevação']
+    const isMulti = (n) => MULTI.some(k => (n||'').toLowerCase().includes(k))
+    const isIsol  = (n) => ISOL.some(k  => (n||'').toLowerCase().includes(k))
+
+    // Volume por grupo
+    const setsByGroup = {}
+    days.forEach(d => {
+      (d.exercises||[]).forEach(ex => {
+        const g = findGroup(ex.name)
+        if (g) setsByGroup[g] = (setsByGroup[g]||0) + (+(ex.sets)||0)
+      })
+    })
+
+    // ── Análise por dia e por campo de exercício ──────────────────────────────
+    const REF_SETS = {
+      // [min_sets, max_sets] por exercício de acordo com objetivo
+      'Força e Performance':  [3,6],
+      'Ganho de Massa':       [3,5],
+      'Emagrecimento':        [2,4],
+      'Condicionamento':      [2,4],
+    }
+    const REF_REST = {
+      'Força e Performance':  { min:120, max:300, label:'2–5 min' },
+      'Ganho de Massa':       { min:60,  max:120, label:'60–120s' },
+      'Emagrecimento':        { min:30,  max:60,  label:'30–60s'  },
+      'Condicionamento':      { min:30,  max:90,  label:'30–90s'  },
+    }
+    const goal = student?.goal || ''
+    const refSets = REF_SETS[goal] || [2,5]
+    const refRest = REF_REST[goal] || { min:45, max:120, label:'45–120s' }
+
+    const parseRest = (r) => {
+      if (!r) return null
+      const n = String(r).replace(/[^0-9]/g,'')
+      return n ? +n : null
+    }
+
+    const dayResults = {}
+    days.forEach(d => {
+      const exs = d.exercises || []
+      const issues = []
+      const exFields = {} // { [exId]: { sets, reps, rest, order, overall } }
+
+      // Ordem
+      const firstMulti = exs.findIndex(e => isMulti(e.name))
+      const firstIsol  = exs.findIndex(e => isIsol(e.name))
+      const ordemErrada = firstIsol !== -1 && firstMulti !== -1 && firstIsol < firstMulti
+      if (ordemErrada) issues.push({ type:'critico', msg:'Coloque multiarticulares (agachamento, supino, terra…) antes dos isolados (rosca, extensão…)' })
+
+      exs.forEach((ex, i) => {
+        const s = +(ex.sets||0)
+        const restSec = parseRest(ex.rest)
+        const fields = {}
+
+        // Sets
+        if (!ex.sets || s === 0) {
+          fields.sets = { status:'atencao', msg:'Defina o número de séries' }
+          issues.push({ type:'atencao', msg:`${ex.name||'Exercício'}: séries não definidas` })
+        } else if (s < refSets[0]) {
+          fields.sets = { status:'atencao', msg:`Aumente para ${refSets[0]}+ séries (recomendado para ${goal||'o objetivo'})` }
+          issues.push({ type:'atencao', msg:`${ex.name}: ${s} séries — abaixo do ideal (${refSets[0]}–${refSets[1]})` })
+        } else if (s > refSets[1]) {
+          fields.sets = { status:'atencao', msg:`Reduza para máx ${refSets[1]} séries por exercício` }
+          issues.push({ type:'atencao', msg:`${ex.name}: ${s} séries — acima do ideal (${refSets[0]}–${refSets[1]})` })
+        } else {
+          fields.sets = { status:'ok', msg:`${s} séries — adequado` }
+        }
+
+        // Reps
+        if (!ex.reps || ex.reps === '') {
+          fields.reps = { status:'atencao', msg:'Defina as repetições' }
+        } else {
+          fields.reps = { status:'ok', msg:`${ex.reps} reps — preenchido` }
+        }
+
+        // Descanso
+        if (!restSec) {
+          fields.rest = { status:'atencao', msg:`Defina o descanso (recomendado: ${refRest.label})` }
+          issues.push({ type:'atencao', msg:`${ex.name||'Exercício'}: descanso não definido` })
+        } else if (restSec < refRest.min) {
+          fields.rest = { status:'atencao', msg:`Descanso curto — aumente para ${refRest.label}` }
+          issues.push({ type:'atencao', msg:`${ex.name}: descanso de ${restSec}s — abaixo do recomendado (${refRest.label})` })
+        } else if (restSec > refRest.max) {
+          fields.rest = { status:'atencao', msg:`Descanso longo — reduza para ${refRest.label}` }
+        } else {
+          fields.rest = { status:'ok', msg:`${restSec}s — adequado` }
+        }
+
+        // Ordem
+        if (ordemErrada && isIsol(ex.name) && (firstMulti === -1 || i < firstMulti)) {
+          fields.order = { status:'critico', msg:'Mova este exercício para depois dos multiarticulares' }
+        }
+
+        // Overall
+        const hasC = Object.values(fields).some(f => f.status==='critico')
+        const hasA = Object.values(fields).some(f => f.status==='atencao')
+        fields.overall = hasC ? 'critico' : hasA ? 'atencao' : 'ok'
+
+        exFields[ex.id] = fields
+      })
+
+      const hasC = issues.some(i=>i.type==='critico')
+      const hasA = issues.some(i=>i.type==='atencao')
+      dayResults[d.id] = {
+        status: hasC ? 'critico' : hasA ? 'atencao' : 'ok',
+        issues,
+        exFields,
+      }
+    })
+
+    return dayResults
+  })()
+
+    const deletePlan = async () => {
+    if (!window.confirm('Excluir este plano de treino? Todos os dias e exercícios serão removidos permanentemente.')) return
+    setSaving(true)
+    // Delete exercises first, then days, then plan
+    const dayIds = days.map(d => d.id)
+    if (dayIds.length > 0) {
+      await supabase.from('exercises').delete().in('workout_day_id', dayIds)
+      await supabase.from('workout_days').delete().in('id', dayIds)
+    }
+    await supabase.from('workout_plans').delete().eq('id', planId)
+    navigate('student-detail', { id: studentId })
+  }
+
+  const addDay = async () => {
+    const name = 'Treino ' + String.fromCharCode(65 + days.length)
+    const { data } = await supabase.from('workout_days').insert([{ plan_id:planId, name, focus:'', day_of_week:'', order_index:days.length }]).select().single()
+    if (data) setDays(d => [...d, { ...data, exercises:[] }])
+  }
+
+  const updateDay = async (dayId, field, val) => {
+    setDays(d => d.map(day => day.id === dayId ? { ...day, [field]:val } : day))
+    await supabase.from('workout_days').update({ [field]:val }).eq('id', dayId)
+  }
+
+  const deleteDay = async (dayId) => {
+    if (!confirm('Excluir este dia de treino e todos os exercícios?')) return
+    await supabase.from('workout_days').delete().eq('id', dayId)
+    setDays(d => d.filter(day => day.id !== dayId))
+  }
+
+  const addExercise = async (dayId, exData) => {
+    const form = exData || (newExForms[dayId] || { ...emptyEx })
+    if (!form.name?.trim()) return
+    const { data } = await supabase.from('exercises').insert([{
+      day_id:dayId, name:form.name, sets:form.sets, reps:form.reps,
+      rest:form.rest, tip:form.tip||'', type:form.type,
+      order_index:(days.find(d => d.id === dayId)?.exercises?.length || 0),
+    }]).select().single()
+    if (data) {
+      setDays(d => d.map(day => day.id === dayId ? { ...day, exercises:[...day.exercises, data] } : day))
+      if (!exData) setNewExForms(f => ({ ...f, [dayId]:{ ...emptyEx } }))
+    }
+  }
+
+  const updateExercise = async (dayId, exId, field, val) => {
+    setDays(d => d.map(day => day.id === dayId
+      ? { ...day, exercises:day.exercises.map(ex => ex.id === exId ? { ...ex, [field]:val } : ex) }
+      : day))
+    await supabase.from('exercises').update({ [field]:val }).eq('id', exId)
+  }
+
+  const deleteExercise = async (dayId, exId) => {
+    await supabase.from('exercises').delete().eq('id', exId)
+    setDays(d => d.map(day => day.id === dayId ? { ...day, exercises:day.exercises.filter(ex => ex.id !== exId) } : day))
+  }
+
+  const applyTemplate = async (tpl) => {
+    setShowTemplate(false)
+    for (const day of days) await supabase.from('workout_days').delete().eq('id', day.id)
+    setDays([])
+    for (let i = 0; i < tpl.days.length; i++) {
+      const td = tpl.days[i]
+      const { data:newDay } = await supabase.from('workout_days').insert([{
+        plan_id:planId, name:td.name, focus:td.focus, day_of_week:td.day_of_week, order_index:i,
+      }]).select().single()
+      if (newDay) {
+        const exInserts = td.exercises.map((ex, j) => ({ day_id:newDay.id, name:ex.name, sets:ex.sets, reps:ex.reps, rest:ex.rest, tip:ex.tip||'', type:ex.type, order_index:j }))
+        const { data:exData } = await supabase.from('exercises').insert(exInserts).select()
+        setDays(d => [...d, { ...newDay, exercises:(exData||[]).sort((a,b) => a.order_index - b.order_index) }])
+      }
+    }
+  }
+
+  const getNewExForm  = (dayId) => newExForms[dayId] || { ...emptyEx }
+  const setNewExField = (dayId, field, val) => setNewExForms(f => ({ ...f, [dayId]:{ ...getNewExForm(dayId), [field]:val } }))
+
+  if (loading) return (
+    <div style={{ minHeight:'100vh', background:V.bgSolid, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div style={{ fontSize:14, color:V.accent, fontWeight:700, fontFamily:"'DM Sans',system-ui,sans-serif" }}>
+        Carregando treino...
+      </div>
+    </div>
+  )
+  if (!plan) return null
+
+  const ageColor = AGE_GROUP_COLOR[ageGroup]
+  const ageRestr = AGE_RESTRICTIONS[ageGroup]
+
+  return (
+    <div style={{ minHeight:'100vh', background:V.bgSolid, position:'relative', fontFamily:"'DM Sans',system-ui,sans-serif" }}>
+
+      {/* ── Fundo SVG vestiário — inline, zero requisição de rede ── */}
+      <div
+        style={{ position:'fixed', inset:0, zIndex:0, pointerEvents:'none' }}
+        dangerouslySetInnerHTML={{ __html: LOCKER_SVG }}
+      />
+
+      {/* ── Overlay âmbar sutil para legibilidade ── */}
+      <div style={{ position:'fixed', inset:0, zIndex:1, pointerEvents:'none', background:'rgba(6,4,0,0.68)' }} />
+
+      {/* ── Conteúdo ── */}
+      <div style={{ position:'relative', zIndex:2, padding:'24px 20px' }}>
+        <div style={{ maxWidth:860, margin:'0 auto' }}>
+
+          {/* Voltar */}
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+            <button
+              style={{ background:'none', border:'none', color:V.accentDim, fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', gap:6, fontFamily:'inherit', fontWeight:600 }}
+              onClick={() => navigate('student-detail', { id:studentId })}>
+              ← Voltar ao Aluno
+            </button>
+            <button onClick={deletePlan} disabled={saving}
+              style={{ background:'rgba(239,68,68,0.1)', border:'1px solid rgba(239,68,68,0.3)', borderRadius:8, padding:'6px 14px', color:'#F87171', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:6 }}>
+              🗑 Excluir Plano
+            </button>
+          </div>
+
+          {/* ── Header do plano ── */}
+          <div style={{ background:V.bgCard, borderRadius:16, padding:20, border:`1px solid ${V.border}`, marginBottom:20, display:'flex', gap:12, alignItems:'center', flexWrap:'wrap', backdropFilter:'blur(8px)' }}>
+            <input
+              style={{ ...ss.input, flex:2, fontSize:18, fontWeight:700, minWidth:180 }}
+              value={plan.title}
+              onChange={e => setPlan(p => ({ ...p, title:e.target.value }))}
+              onBlur={savePlanTitle}
+              placeholder="Nome do plano..."
+            />
+            <select style={{ ...ss.input, fontSize:13 }} value={plan.status} onChange={e => { const v=e.target.value; setPlan(p => ({ ...p, status:v })); saveStatus(v) }}>
+              {STATUS_OPTIONS.map(o => <option key={o} value={o}>{STATUS_LABEL[o]}</option>)}
+            </select>
+            {student && (
+              <div style={{ display:'flex', alignItems:'center', gap:6, background:`${ageColor}15`, border:`1px solid ${ageColor}30`, borderRadius:8, padding:'6px 12px' }}>
+                <span style={{ fontSize:11, color:ageColor, fontWeight:700 }}>
+                  {student.name} · {AGE_GROUP_LABEL[ageGroup]}
+                </span>
+              </div>
+            )}
+            <button onClick={() => setSemAcademia(v => !v)}
+              style={{ padding:'7px 14px', borderRadius:8, border:`1px solid ${semAcademia ? '#34D39940' : V.border}`, background: semAcademia ? 'rgba(52,211,153,0.1)' : V.accentFaint, color: semAcademia ? '#34D399' : V.textSub, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+              {semAcademia ? '🏠 Sem academia' : '🏋️ Com academia'}
+            </button>
+            <button onClick={() => setShowTemplate(true)} style={{ ...ss.btn(V.accent), display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
+              ⚡ Gerar Estrutura
+            </button>
+            <button onClick={() => setShowAval(v => !v)}
+              style={{ padding:'7px 14px', borderRadius:8, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:6, border: showAval ? '1.5px solid #34D399' : `1px solid ${V.border}`, background: showAval ? 'rgba(52,211,153,0.12)' : V.accentFaint, color: showAval ? '#34D399' : V.textSub, transition:'all 0.2s' }}>
+              {showAval ? '✓ Avaliando' : '🔍 Avaliar Plano'}
+            </button>
+            <div style={{ fontSize:11, color:V.textMuted }}>
+              {saving ? <span style={{ color:V.accentBr }}>Salvando...</span> : 'Salvo automaticamente'}
+            </div>
+          </div>
+
+          {/* Warning de faixa etária */}
+          {ageRestr?.warning && (
+            <div style={{ background:'rgba(217,119,6,0.07)', border:`1px solid rgba(217,119,6,0.2)`, borderRadius:12, padding:'10px 16px', fontSize:13, color:V.accentBr, marginBottom:16, backdropFilter:'blur(4px)' }}>
+              ⚠️ {ageRestr.warning}
+            </div>
+          )}
+
+          {/* Legenda tipos */}
+          <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:16 }}>
+            {NEW_TYPES.map(t => {
+              const c = getTypeColor(t)
+              return (
+                <div key={t} style={{ display:'flex', alignItems:'center', gap:5, padding:'4px 10px', borderRadius:20, background:c+'12', border:`1px solid ${c}30` }}>
+                  <div style={{ width:6, height:6, borderRadius:'50%', background:c }} />
+                  <span style={{ fontSize:10, color:c, fontWeight:700 }}>{t}</span>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* ── Dias de treino ── */}
+          {days.map((day, idx) => {
+            const color  = DAY_COLORS[idx % DAY_COLORS.length]
+            const newEx  = getNewExForm(day.id)
+            return (
+              <div key={day.id} style={{ background:V.bgCard, borderRadius:16, border:`1px solid ${color}30`, overflow:'hidden', marginBottom:14, backdropFilter:'blur(8px)' }}>
+
+                {/* Header do dia */}
+                <div style={{ background:`${color}10`, padding:'14px 20px', borderBottom:`1px solid ${color}22`, display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10 }}>
+                  <div style={{ display:'flex', gap:8, alignItems:'center', flex:1, flexWrap:'wrap' }}>
+                    <div style={{ width:8, height:8, borderRadius:'50%', background:color, boxShadow:`0 0 6px ${color}` }} />
+                    <input
+                      style={{ ...ss.input, fontWeight:700, color, background:'transparent', border:'none', fontSize:15, minWidth:80, padding:'4px 0' }}
+                      value={day.name}
+                      onChange={e => updateDay(day.id, 'name', e.target.value)}
+                      placeholder="Nome do treino"
+                    />
+                    <span style={{ color:V.textDim }}>—</span>
+                    <input
+                      style={{ ...ss.input, fontSize:13, flex:1, minWidth:100 }}
+                      value={day.focus||''}
+                      onChange={e => updateDay(day.id, 'focus', e.target.value)}
+                      placeholder="Foco (ex: Inferior + Core)"
+                    />
+                    <select style={{ ...ss.input, fontSize:12, maxWidth:90 }} value={day.day_of_week||''} onChange={e => updateDay(day.id, 'day_of_week', e.target.value)}>
+                      <option value="">Dia...</option>
+                      {['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].map(d => <option key={d}>{d}</option>)}
+                    </select>
+                  </div>
+                  {showAval && avalAnalysis[day.id] && (
+                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      {avalAnalysis[day.id].status === 'ok' && (
+                        <span style={{ fontSize:10, fontWeight:800, padding:'3px 8px', borderRadius:20, background:'rgba(52,211,153,0.15)', color:'#34D399', border:'1px solid rgba(52,211,153,0.3)' }}>✓ OK</span>
+                      )}
+                      {avalAnalysis[day.id].status === 'atencao' && (
+                        <span style={{ fontSize:10, fontWeight:800, padding:'3px 8px', borderRadius:20, background:'rgba(251,191,36,0.15)', color:'#FBBF24', border:'1px solid rgba(251,191,36,0.3)' }}>⚠ Atenção</span>
+                      )}
+                      {avalAnalysis[day.id].status === 'critico' && (
+                        <span style={{ fontSize:10, fontWeight:800, padding:'3px 8px', borderRadius:20, background:'rgba(248,113,113,0.15)', color:'#F87171', border:'1px solid rgba(248,113,113,0.3)' }}>✕ Crítico</span>
+                      )}
+                    </div>
+                  )}
+                  <button style={ss.delBtn} onClick={() => deleteDay(day.id)}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ opacity:0.35 }}><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                  </button>
+                </div>
+
+                {/* Lista de exercícios */}
+                {day.exercises.length > 0 && (
+                  <div style={{ padding:'4px 0' }}>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr auto auto auto auto', gap:8, padding:'6px 16px 2px', borderBottom:`1px solid rgba(255,255,255,0.03)` }}>
+                      {['Exercício','Tipo','Séries','Reps','Desc.'].map(h => (
+                        <div key={h} style={{ fontSize:9, color:V.textDim, textTransform:'uppercase', letterSpacing:1 }}>{h}</div>
+                      ))}
+                    </div>
+                    {day.exercises.map(ex => {
+                      const tc = getTypeColor(ex.type)
+                      const exFields  = showAval ? (avalAnalysis[day.id]?.exFields?.[ex.id]) : null
+                      const exOverall = exFields?.overall
+                      const SEM = {
+                        ok:      { bg:'rgba(52,211,153,0.13)',  color:'#34D399', border:'1px solid rgba(52,211,153,0.35)',  dot:'#34D399' },
+                        atencao: { bg:'rgba(251,191,36,0.13)',  color:'#FBBF24', border:'1px solid rgba(251,191,36,0.35)',  dot:'#FBBF24' },
+                        critico: { bg:'rgba(248,113,113,0.13)', color:'#F87171', border:'1px solid rgba(248,113,113,0.35)', dot:'#F87171' },
+                      }
+                      const fieldTag = (field) => {
+                        if (!exFields || !exFields[field]) return null
+                        const f = exFields[field]
+                        const st = SEM[f.status]
+                        return (
+                          <span title={f.msg} style={{ fontSize:9, fontWeight:800, padding:'2px 7px', borderRadius:8, background:st.bg, color:st.color, border:st.border, cursor:'help', flexShrink:0, whiteSpace:'nowrap' }}>
+                            {f.status==='ok' ? '✓' : f.status==='atencao' ? '⚠' : '✕'}
+                          </span>
+                        )
+                      }
+                      // Collect active warnings for this exercise
+                      const exAlerts = !showAval || !exFields ? [] : [
+                        exFields.order && exFields.order.status !== 'ok' ? { field:'Ordem', ...exFields.order } : null,
+                        exFields.sets  && exFields.sets.status  !== 'ok' ? { field:'Séries', ...exFields.sets   } : null,
+                        exFields.rest  && exFields.rest.status  !== 'ok' ? { field:'Descanso', ...exFields.rest } : null,
+                        exFields.reps  && exFields.reps.status  !== 'ok' ? { field:'Reps', ...exFields.reps     } : null,
+                      ].filter(Boolean)
+
+                      return (
+                        <div key={ex.id} style={{ borderLeft: exOverall && exOverall!=='ok' ? `3px solid ${SEM[exOverall]?.dot}` : '3px solid transparent' }}>
+                          <div style={{ padding:'10px 16px', borderBottom:`1px solid rgba(255,255,255,0.03)`, display:'flex', gap:8, alignItems:'flex-start' }}>
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ display:'flex', gap:5, alignItems:'center', marginBottom:4 }}>
+                                <span style={{ fontSize:9, background:`${tc}18`, color:tc, border:`1px solid ${tc}35`, borderRadius:10, padding:'1px 6px', fontWeight:700, flexShrink:0, whiteSpace:'nowrap' }}>{ex.type}</span>
+                                <input style={{ ...ss.smallInput, fontWeight:600, flex:1 }} value={ex.name} onChange={e => updateExercise(day.id, ex.id, 'name', e.target.value)} placeholder="Nome" />
+                                <button
+                                  onClick={() => setOpenCalc(openCalc === ex.id ? null : ex.id)}
+                                  style={{ background: openCalc===ex.id ? 'rgba(217,119,6,0.2)' : V.accentFaint, border:`1px solid ${openCalc===ex.id ? V.borderStrong : V.borderLight}`, borderRadius:6, padding:'4px 8px', color:V.accent, fontSize:10, cursor:'pointer', fontWeight:700, flexShrink:0, fontFamily:'inherit' }}>
+                                  1RM
+                                </button>
+                                <button style={ss.delBtn} onClick={() => deleteExercise(day.id, ex.id)}>
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ opacity:0.35 }}><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                                </button>
+                              </div>
+                              <input style={{ ...ss.smallInput, fontSize:11, color:V.textSub }} value={ex.tip||''} onChange={e => updateExercise(day.id, ex.id, 'tip', e.target.value)} placeholder="Dica de execução (opcional)" />
+                              {/* ── Alert tags inline, below the name ── */}
+                              {exAlerts.length > 0 && (
+                                <div style={{ display:'flex', flexWrap:'wrap', gap:4, marginTop:6 }}>
+                                  {exAlerts.map((al, ai) => {
+                                    const col = al.status==='critico' ? '#F87171' : '#FBBF24'
+                                    const bg  = al.status==='critico' ? 'rgba(248,113,113,0.12)' : 'rgba(251,191,36,0.12)'
+                                    const brd = al.status==='critico' ? 'rgba(248,113,113,0.4)' : 'rgba(251,191,36,0.4)'
+                                    return (
+                                      <span key={ai} style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:10, fontWeight:700, padding:'3px 9px', borderRadius:8, background:bg, color:col, border:`1px solid ${brd}`, whiteSpace:'nowrap' }}>
+                                        <span>{al.status==='critico' ? '✕' : '⚠'}</span>
+                                        <span>{al.field}: {al.msg}</span>
+                                      </span>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                            <select style={{ ...ss.smallInput, width:110, flexShrink:0 }} value={ex.type||''} onChange={e => updateExercise(day.id, ex.id, 'type', e.target.value)}>
+                              <optgroup label="— Musculação">
+                                {MUSCLE_TYPES.map(t => <option key={t}>{t}</option>)}
+                              </optgroup>
+                              <optgroup label="— Funcional / Casa">
+                                {NEW_TYPES.map(t => <option key={t}>{t}</option>)}
+                              </optgroup>
+                            </select>
+                            {[['sets','3'],['reps','10-12'],['rest','60s']].map(([field, ph]) => {
+                              const fData = exFields?.[field]
+                              const fcol = fData?.status==='critico' ? '#F87171' : fData?.status==='atencao' ? '#FBBF24' : 'transparent'
+                              return (
+                                <div key={field} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, flexShrink:0 }}>
+                                  <input style={{ ...ss.smallInput, width:58, outline: fData && fData.status!=='ok' ? `1.5px solid ${fcol}` : 'none' }} value={ex[field]||''} onChange={e => updateExercise(day.id, ex.id, field, e.target.value)} placeholder={ph} />
+                                </div>
+                              )
+                            })}
+                          </div>
+                          {openCalc === ex.id && (
+                            <div style={{ padding:'0 16px 4px' }}>
+                              <OneRMCalc
+                                ageGroup={ageGroup}
+                                onApply={({ reps, rest }) => { updateExercise(day.id, ex.id, 'reps', reps); updateExercise(day.id, ex.id, 'rest', rest); setOpenCalc(null) }}
+                                onClose={() => setOpenCalc(null)}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              {showAval && avalAnalysis[day.id]?.issues?.length > 0 && (
+                <div style={{ padding:'10px 16px', background:'rgba(0,0,0,0.2)', borderTop:'1px solid rgba(255,255,255,0.04)' }}>
+                  {avalAnalysis[day.id].issues.map((issue, i) => (
+                    <div key={i} style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 0', fontSize:11, color: issue.type==='critico' ? '#F87171' : '#FBBF24' }}>
+                      <span>{issue.type==='critico' ? '✕' : '⚠'}</span>
+                      <span>{issue.msg}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+                {/* Adicionar exercício */}
+                <div style={{ padding:'16px 20px', background:'rgba(217,119,6,0.02)' }}>
+                  <div style={{ fontSize:10, color:V.textDim, marginBottom:10, textTransform:'uppercase', letterSpacing:1, fontWeight:600 }}>Adicionar Exercício</div>
+
+                  <ExerciseSearch
+                    onSelect={ex => setNewExForms(f => ({ ...f, [day.id]:{ name:ex.name, sets:ex.sets, reps:ex.reps, rest:ex.rest, tip:ex.tip, type:ex.type } }))}
+                    suggestedTypes={suggestedTypes}
+                    ageGroup={ageGroup}
+                  />
+
+                  <NoEquipmentSection onAddExercise={(ex) => addExercise(day.id, ex)} />
+
+                  {/* Formulário manual */}
+                  <div style={{ marginTop:10 }}>
+                    <div style={{ fontSize:9, color:V.textDim, textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>Ou adicionar manualmente</div>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 110px 58px 58px 58px', gap:6, marginBottom:8 }}>
+                      <input style={ss.smallInput} value={newEx.name} onChange={e => setNewExField(day.id, 'name', e.target.value)} placeholder="Nome do exercício *" />
+                      <select style={ss.smallInput} value={newEx.type} onChange={e => setNewExField(day.id, 'type', e.target.value)}>
+                        <optgroup label="— Musculação">
+                          {MUSCLE_TYPES.map(t => <option key={t}>{t}</option>)}
+                        </optgroup>
+                        <optgroup label="— Funcional / Casa">
+                          {NEW_TYPES.map(t => <option key={t}>{t}</option>)}
+                        </optgroup>
+                      </select>
+                      <input style={ss.smallInput} value={newEx.sets} onChange={e => setNewExField(day.id, 'sets', e.target.value)} placeholder="3" />
+                      <input style={ss.smallInput} value={newEx.reps} onChange={e => setNewExField(day.id, 'reps', e.target.value)} placeholder="10-12" />
+                      <input style={ss.smallInput} value={newEx.rest} onChange={e => setNewExField(day.id, 'rest', e.target.value)} placeholder="60s" />
+                    </div>
+                    <input style={{ ...ss.smallInput, marginBottom:8, fontSize:11 }} value={newEx.tip} onChange={e => setNewExField(day.id, 'tip', e.target.value)} placeholder="Dica de execução (opcional)" />
+                    <button style={{ ...ss.btn(color), fontFamily:'inherit' }} onClick={() => addExercise(day.id)}>+ Adicionar ao Treino</button>
+                  </div>
+                </div>
+
+              </div>
+            )
+          })}
+
+          <button
+            style={{ ...ss.outlineBtn, width:'100%', padding:'16px', fontSize:14, borderStyle:'dashed', borderRadius:12, fontFamily:'inherit' }}
+            onClick={addDay}>
+            + Adicionar Dia de Treino
+          </button>
+
+          <div style={{ marginTop:12, textAlign:'center', fontSize:11, color:V.textDim }}>
+            Alterações salvas automaticamente
+          </div>
+
+        </div>
+      </div>
+
+      {showTemplate && (
+        <TemplateModal
+          student={student}
+          ageGroup={ageGroup}
+          semAcademia={semAcademia}
+          onApply={applyTemplate}
+          onClose={() => setShowTemplate(false)}
+        />
+      )}
+
     </div>
   )
 }
