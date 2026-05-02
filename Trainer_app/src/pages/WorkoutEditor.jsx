@@ -964,51 +964,100 @@ export default function WorkoutEditor({ navigate, studentId, planId }) {
       })
     })
 
-    // Analisa cada dia
+    // ── Análise por dia e por campo de exercício ──────────────────────────────
+    const REF_SETS = {
+      // [min_sets, max_sets] por exercício de acordo com objetivo
+      'Força e Performance':  [3,6],
+      'Ganho de Massa':       [3,5],
+      'Emagrecimento':        [2,4],
+      'Condicionamento':      [2,4],
+    }
+    const REF_REST = {
+      'Força e Performance':  { min:120, max:300, label:'2–5 min' },
+      'Ganho de Massa':       { min:60,  max:120, label:'60–120s' },
+      'Emagrecimento':        { min:30,  max:60,  label:'30–60s'  },
+      'Condicionamento':      { min:30,  max:90,  label:'30–90s'  },
+    }
+    const goal = student?.goal || ''
+    const refSets = REF_SETS[goal] || [2,5]
+    const refRest = REF_REST[goal] || { min:45, max:120, label:'45–120s' }
+
+    const parseRest = (r) => {
+      if (!r) return null
+      const n = String(r).replace(/[^0-9]/g,'')
+      return n ? +n : null
+    }
+
     const dayResults = {}
     days.forEach(d => {
       const exs = d.exercises || []
       const issues = []
-      const tags   = {}
+      const exFields = {} // { [exId]: { sets, reps, rest, order, overall } }
 
-      // Ordem: multi antes de isol
+      // Ordem
       const firstMulti = exs.findIndex(e => isMulti(e.name))
       const firstIsol  = exs.findIndex(e => isIsol(e.name))
-      if (firstIsol !== -1 && firstMulti !== -1 && firstIsol < firstMulti) {
-        issues.push({ type:'critico', msg:'Ordem incorreta: coloque multiarticulares antes dos isolados' })
-        exs.forEach((e,i) => {
-          if (i < firstMulti && isIsol(e.name)) tags[e.id] = 'critico'
-        })
-      }
+      const ordemErrada = firstIsol !== -1 && firstMulti !== -1 && firstIsol < firstMulti
+      if (ordemErrada) issues.push({ type:'critico', msg:'Coloque multiarticulares (agachamento, supino, terra…) antes dos isolados (rosca, extensão…)' })
 
-      // Sets por exercício — muito baixo ou alto
-      exs.forEach(ex => {
+      exs.forEach((ex, i) => {
         const s = +(ex.sets||0)
-        const r = (ex.reps||'').replace(/[^0-9–-]/g,'')
-        if (s === 0) { tags[ex.id] = tags[ex.id]==='critico'?'critico':'atencao'; issues.push({ type:'atencao', msg:`${ex.name}: séries não definidas` }) }
-        else if (s < 2) { tags[ex.id] = tags[ex.id]==='critico'?'critico':'atencao'; issues.push({ type:'atencao', msg:`${ex.name}: menos de 2 séries` }) }
-        else if (s > 5) { tags[ex.id] = tags[ex.id]==='critico'?'critico':'atencao'; issues.push({ type:'atencao', msg:`${ex.name}: mais de 5 séries por exercício` }) }
-        if (!ex.reps || ex.reps === '') { tags[ex.id] = tags[ex.id]==='critico'?'critico':'atencao' }
-      })
+        const restSec = parseRest(ex.rest)
+        const fields = {}
 
-      // Exercícios sem volume de grupo no range
-      exs.forEach(ex => {
-        const g = findGroup(ex.name)
-        if (g) {
-          const total = setsByGroup[g]||0
-          if (total < ref.min && !tags[ex.id]) tags[ex.id] = 'atencao'
-          else if (total > ref.max && !tags[ex.id]) tags[ex.id] = 'atencao'
-          else if (!tags[ex.id]) tags[ex.id] = 'ok'
+        // Sets
+        if (!ex.sets || s === 0) {
+          fields.sets = { status:'atencao', msg:'Defina o número de séries' }
+          issues.push({ type:'atencao', msg:`${ex.name||'Exercício'}: séries não definidas` })
+        } else if (s < refSets[0]) {
+          fields.sets = { status:'atencao', msg:`Aumente para ${refSets[0]}+ séries (recomendado para ${goal||'o objetivo'})` }
+          issues.push({ type:'atencao', msg:`${ex.name}: ${s} séries — abaixo do ideal (${refSets[0]}–${refSets[1]})` })
+        } else if (s > refSets[1]) {
+          fields.sets = { status:'atencao', msg:`Reduza para máx ${refSets[1]} séries por exercício` }
+          issues.push({ type:'atencao', msg:`${ex.name}: ${s} séries — acima do ideal (${refSets[0]}–${refSets[1]})` })
+        } else {
+          fields.sets = { status:'ok', msg:`${s} séries — adequado` }
         }
+
+        // Reps
+        if (!ex.reps || ex.reps === '') {
+          fields.reps = { status:'atencao', msg:'Defina as repetições' }
+        } else {
+          fields.reps = { status:'ok', msg:`${ex.reps} reps — preenchido` }
+        }
+
+        // Descanso
+        if (!restSec) {
+          fields.rest = { status:'atencao', msg:`Defina o descanso (recomendado: ${refRest.label})` }
+          issues.push({ type:'atencao', msg:`${ex.name||'Exercício'}: descanso não definido` })
+        } else if (restSec < refRest.min) {
+          fields.rest = { status:'atencao', msg:`Descanso curto — aumente para ${refRest.label}` }
+          issues.push({ type:'atencao', msg:`${ex.name}: descanso de ${restSec}s — abaixo do recomendado (${refRest.label})` })
+        } else if (restSec > refRest.max) {
+          fields.rest = { status:'atencao', msg:`Descanso longo — reduza para ${refRest.label}` }
+        } else {
+          fields.rest = { status:'ok', msg:`${restSec}s — adequado` }
+        }
+
+        // Ordem
+        if (ordemErrada && isIsol(ex.name) && (firstMulti === -1 || i < firstMulti)) {
+          fields.order = { status:'critico', msg:'Mova este exercício para depois dos multiarticulares' }
+        }
+
+        // Overall
+        const hasC = Object.values(fields).some(f => f.status==='critico')
+        const hasA = Object.values(fields).some(f => f.status==='atencao')
+        fields.overall = hasC ? 'critico' : hasA ? 'atencao' : 'ok'
+
+        exFields[ex.id] = fields
       })
 
-      // Status geral do dia
       const hasC = issues.some(i=>i.type==='critico')
       const hasA = issues.some(i=>i.type==='atencao')
       dayResults[d.id] = {
         status: hasC ? 'critico' : hasA ? 'atencao' : 'ok',
         issues,
-        exTags: tags,
+        exFields,
       }
     })
 
@@ -1244,23 +1293,37 @@ export default function WorkoutEditor({ navigate, studentId, planId }) {
                     </div>
                     {day.exercises.map(ex => {
                       const tc = getTypeColor(ex.type)
-                      const exTag = showAval ? (avalAnalysis[day.id]?.exTags?.[ex.id]) : null
-                      const TAG_STYLE = {
-                        ok:      { bg:'rgba(52,211,153,0.15)',  color:'#34D399', border:'rgba(52,211,153,0.3)',  label:'✓' },
-                        atencao: { bg:'rgba(251,191,36,0.15)',  color:'#FBBF24', border:'rgba(251,191,36,0.3)',  label:'⚠' },
-                        critico: { bg:'rgba(248,113,113,0.15)', color:'#F87171', border:'rgba(248,113,113,0.3)', label:'✕' },
+                      const exFields  = showAval ? (avalAnalysis[day.id]?.exFields?.[ex.id]) : null
+                      const exOverall = exFields?.overall
+                      const SEM = {
+                        ok:      { bg:'rgba(52,211,153,0.13)',  color:'#34D399', border:'1px solid rgba(52,211,153,0.35)',  dot:'#34D399' },
+                        atencao: { bg:'rgba(251,191,36,0.13)',  color:'#FBBF24', border:'1px solid rgba(251,191,36,0.35)',  dot:'#FBBF24' },
+                        critico: { bg:'rgba(248,113,113,0.13)', color:'#F87171', border:'1px solid rgba(248,113,113,0.35)', dot:'#F87171' },
                       }
+                      const fieldTag = (field) => {
+                        if (!exFields || !exFields[field]) return null
+                        const f = exFields[field]
+                        const st = SEM[f.status]
+                        return (
+                          <span title={f.msg} style={{ fontSize:9, fontWeight:800, padding:'2px 7px', borderRadius:8, background:st.bg, color:st.color, border:st.border, cursor:'help', flexShrink:0, whiteSpace:'nowrap' }}>
+                            {f.status==='ok' ? '✓' : f.status==='atencao' ? '⚠' : '✕'}
+                          </span>
+                        )
+                      }
+                      // Collect active warnings for this exercise
+                      const exAlerts = !showAval || !exFields ? [] : [
+                        exFields.order && exFields.order.status !== 'ok' ? { field:'Ordem', ...exFields.order } : null,
+                        exFields.sets  && exFields.sets.status  !== 'ok' ? { field:'Séries', ...exFields.sets   } : null,
+                        exFields.rest  && exFields.rest.status  !== 'ok' ? { field:'Descanso', ...exFields.rest } : null,
+                        exFields.reps  && exFields.reps.status  !== 'ok' ? { field:'Reps', ...exFields.reps     } : null,
+                      ].filter(Boolean)
+
                       return (
-                        <div key={ex.id} style={{ outline: exTag && exTag!=='ok' ? `1.5px solid ${TAG_STYLE[exTag]?.color}30` : 'none', outlineOffset:-1 }}>
+                        <div key={ex.id} style={{ borderLeft: exOverall && exOverall!=='ok' ? `3px solid ${SEM[exOverall]?.dot}` : '3px solid transparent' }}>
                           <div style={{ padding:'10px 16px', borderBottom:`1px solid rgba(255,255,255,0.03)`, display:'flex', gap:8, alignItems:'flex-start' }}>
                             <div style={{ flex:1, minWidth:0 }}>
                               <div style={{ display:'flex', gap:5, alignItems:'center', marginBottom:4 }}>
                                 <span style={{ fontSize:9, background:`${tc}18`, color:tc, border:`1px solid ${tc}35`, borderRadius:10, padding:'1px 6px', fontWeight:700, flexShrink:0, whiteSpace:'nowrap' }}>{ex.type}</span>
-                                {exTag && (
-                                  <span style={{ fontSize:9, fontWeight:800, padding:'1px 7px', borderRadius:10, background:TAG_STYLE[exTag].bg, color:TAG_STYLE[exTag].color, border:`1px solid ${TAG_STYLE[exTag].border}`, flexShrink:0 }}>
-                                    {TAG_STYLE[exTag].label}
-                                  </span>
-                                )}
                                 <input style={{ ...ss.smallInput, fontWeight:600, flex:1 }} value={ex.name} onChange={e => updateExercise(day.id, ex.id, 'name', e.target.value)} placeholder="Nome" />
                                 <button
                                   onClick={() => setOpenCalc(openCalc === ex.id ? null : ex.id)}
@@ -1272,6 +1335,22 @@ export default function WorkoutEditor({ navigate, studentId, planId }) {
                                 </button>
                               </div>
                               <input style={{ ...ss.smallInput, fontSize:11, color:V.textSub }} value={ex.tip||''} onChange={e => updateExercise(day.id, ex.id, 'tip', e.target.value)} placeholder="Dica de execução (opcional)" />
+                              {/* ── Alert tags inline, below the name ── */}
+                              {exAlerts.length > 0 && (
+                                <div style={{ display:'flex', flexWrap:'wrap', gap:4, marginTop:6 }}>
+                                  {exAlerts.map((al, ai) => {
+                                    const col = al.status==='critico' ? '#F87171' : '#FBBF24'
+                                    const bg  = al.status==='critico' ? 'rgba(248,113,113,0.12)' : 'rgba(251,191,36,0.12)'
+                                    const brd = al.status==='critico' ? 'rgba(248,113,113,0.4)' : 'rgba(251,191,36,0.4)'
+                                    return (
+                                      <span key={ai} style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:10, fontWeight:700, padding:'3px 9px', borderRadius:8, background:bg, color:col, border:`1px solid ${brd}`, whiteSpace:'nowrap' }}>
+                                        <span>{al.status==='critico' ? '✕' : '⚠'}</span>
+                                        <span>{al.field}: {al.msg}</span>
+                                      </span>
+                                    )
+                                  })}
+                                </div>
+                              )}
                             </div>
                             <select style={{ ...ss.smallInput, width:110, flexShrink:0 }} value={ex.type||''} onChange={e => updateExercise(day.id, ex.id, 'type', e.target.value)}>
                               <optgroup label="— Musculação">
@@ -1281,9 +1360,15 @@ export default function WorkoutEditor({ navigate, studentId, planId }) {
                                 {NEW_TYPES.map(t => <option key={t}>{t}</option>)}
                               </optgroup>
                             </select>
-                            {[['sets','3'],['reps','10-12'],['rest','60s']].map(([field, ph]) => (
-                              <input key={field} style={{ ...ss.smallInput, width:58, flexShrink:0 }} value={ex[field]||''} onChange={e => updateExercise(day.id, ex.id, field, e.target.value)} placeholder={ph} />
-                            ))}
+                            {[['sets','3'],['reps','10-12'],['rest','60s']].map(([field, ph]) => {
+                              const fData = exFields?.[field]
+                              const fcol = fData?.status==='critico' ? '#F87171' : fData?.status==='atencao' ? '#FBBF24' : 'transparent'
+                              return (
+                                <div key={field} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, flexShrink:0 }}>
+                                  <input style={{ ...ss.smallInput, width:58, outline: fData && fData.status!=='ok' ? `1.5px solid ${fcol}` : 'none' }} value={ex[field]||''} onChange={e => updateExercise(day.id, ex.id, field, e.target.value)} placeholder={ph} />
+                                </div>
+                              )
+                            })}
                           </div>
                           {openCalc === ex.id && (
                             <div style={{ padding:'0 16px 4px' }}>
