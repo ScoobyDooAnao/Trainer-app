@@ -973,19 +973,31 @@ export default function WorkoutEditor({ navigate, studentId, planId }) {
       'Condicionamento':      [2,4],
     }
     const REF_REST = {
-      'Força e Performance':  { min:120, max:300, label:'2–5 min' },
-      'Ganho de Massa':       { min:60,  max:120, label:'60–120s' },
-      'Emagrecimento':        { min:30,  max:60,  label:'30–60s'  },
-      'Condicionamento':      { min:30,  max:90,  label:'30–90s'  },
+      'Força e Performance':  { min:120, max:300, label:'2min–5min' },
+      'Ganho de Massa':       { min:60,  max:120, label:'1min–2min' },
+      'Emagrecimento':        { min:30,  max:60,  label:'30s–1min'  },
+      'Condicionamento':      { min:30,  max:90,  label:'30s–1min30s' },
     }
     const goal = student?.goal || ''
     const refSets = REF_SETS[goal] || [2,5]
-    const refRest = REF_REST[goal] || { min:45, max:120, label:'45–120s' }
+    const refRest = REF_REST[goal] || { min:45, max:120, label:'45s–2min' }
 
     const parseRest = (r) => {
       if (!r) return null
-      const n = String(r).replace(/[^0-9]/g,'')
-      return n ? +n : null
+      const s = String(r).trim().toLowerCase()
+      // "1min30s" or "1min 30s" → 90s
+      const minSec = s.match(/^(\d+(?:\.\d+)?)\s*min\s*(\d+)\s*s?$/)
+      if (minSec) return Math.round(+minSec[1] * 60 + +minSec[2])
+      // "1:30" → 90s
+      const colonFmt = s.match(/^(\d+):(\d{2})$/)
+      if (colonFmt) return +colonFmt[1] * 60 + +colonFmt[2]
+      // "2min" or "1.5min" → seconds
+      const minOnly = s.match(/^(\d+(?:\.\d+)?)\s*min$/)
+      if (minOnly) return Math.round(+minOnly[1] * 60)
+      // "90s" or "90" → seconds
+      const secOnly = s.match(/^(\d+)\s*s?$/)
+      if (secOnly) return +secOnly[1]
+      return null
     }
 
     const dayResults = {}
@@ -1032,11 +1044,11 @@ export default function WorkoutEditor({ navigate, studentId, planId }) {
           issues.push({ type:'atencao', msg:`${ex.name||'Exercício'}: descanso não definido` })
         } else if (restSec < refRest.min) {
           fields.rest = { status:'atencao', msg:`Descanso curto — aumente para ${refRest.label}` }
-          issues.push({ type:'atencao', msg:`${ex.name}: descanso de ${restSec}s — abaixo do recomendado (${refRest.label})` })
+          issues.push({ type:'atencao', msg:`${ex.name}: descanso de ${restSec >= 60 ? Math.floor(restSec/60)+'min'+(restSec%60?restSec%60+'s':'') : restSec+'s'} — abaixo do recomendado (${refRest.label})` })
         } else if (restSec > refRest.max) {
           fields.rest = { status:'atencao', msg:`Descanso longo — reduza para ${refRest.label}` }
         } else {
-          fields.rest = { status:'ok', msg:`${restSec}s — adequado` }
+          fields.rest = { status:'ok', msg:`${restSec >= 60 ? Math.floor(restSec/60)+'min'+(restSec%60?restSec%60+'s':'') : restSec+'s'} — adequado` }
         }
 
         // Ordem
