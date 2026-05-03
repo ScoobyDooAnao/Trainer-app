@@ -922,6 +922,11 @@ export default function WorkoutEditor({ navigate, studentId, planId }) {
   const avalAnalysis = (() => {
     if (!days.length) return {}
 
+    const goal  = student?.goal  || ''
+    const nivel = student?.level || 'Iniciante'
+    const age   = parseInt(student?.age) || null
+
+    // ── Classificações de exercícios ─────────────────────────────────────────
     const MUSCLE_MAP = {
       supino:'Peito','supino reto':'Peito','supino inclinado':'Peito','supino declinado':'Peito',
       crucifixo:'Peito',voador:'Peito',crossover:'Peito','peck deck':'Peito','flexão':'Peito','push up':'Peito',
@@ -934,135 +939,264 @@ export default function WorkoutEditor({ navigate, studentId, planId }) {
       tríceps:'Tríceps',triceps:'Tríceps',mergulho:'Tríceps',extensão:'Tríceps',
       testa:'Tríceps',corda:'Tríceps',paralelas:'Tríceps',
       agachamento:'Quadríceps','leg press':'Quadríceps',hack:'Quadríceps',
-      'cadeira extensora':'Quadríceps',avanço:'Quadríceps',afundo:'Quadríceps',passada:'Quadríceps',búlgaro:'Quadríceps',
+      'cadeira extensora':'Quadríceps',avanço:'Quadríceps',afundo:'Quadríceps',búlgaro:'Quadríceps',
       stiff:'Posterior','mesa flexora':'Posterior',flexora:'Posterior','leg curl':'Posterior',
-      glúteo:'Glúteo',gluteo:'Glúteo','hip thrust':'Glúteo','elevação pélvica':'Glúteo',abdução:'Glúteo',
-      panturrilha:'Panturrilha',gêmeos:'Panturrilha',gemeos:'Panturrilha',calf:'Panturrilha',
-      abdominal:'Abdômen',prancha:'Abdômen',crunch:'Abdômen',oblíquo:'Abdômen',obliquo:'Abdômen',plank:'Abdômen',
+      glúteo:'Glúteo',gluteo:'Glúteo','hip thrust':'Glúteo','elevação pélvica':'Glúteo',
+      panturrilha:'Panturrilha',gêmeos:'Panturrilha',calf:'Panturrilha',
+      abdominal:'Abdômen',prancha:'Abdômen',crunch:'Abdômen',plank:'Abdômen',
     }
-    const findGroup = (name) => {
-      const n = (name||'').toLowerCase()
-      for (const [k,g] of Object.entries(MUSCLE_MAP)) { if (n.includes(k)) return g }
-      return null
+    // Padrões de movimento
+    const EMPURRAR  = ['supino','flexão','push','desenvolvimento','arnold','tríceps','triceps','paralelas','mergulho','crossover','crucifixo','voador','peck','extensão de tríceps']
+    const PUXAR     = ['remada','pulldown','puxada','barra fixa','pull','serrote','rosca','curl','bíceps','biceps']
+    const JOELHO    = ['agachamento','leg press','hack','cadeira','avanço','afundo','búlgaro','passada']
+    const QUADRIL   = ['stiff','mesa','flexora','leg curl','hip thrust','glúteo','elevação pélvica','levantamento terra']
+    const LIVRE     = ['agachamento','barra','halteres','kettlebell','terra','stiff']
+    const MAQUINA   = ['leg press','cadeira','mesa','voador','peck','crossover','pulldown','hack']
+    const MULTI_EX  = ['agachamento','supino','levantamento','terra','remada','barra','desenvolvimento','leg press','hack','stiff','avanço','afundo','paralelas','mergulho']
+    const ISOL_EX   = ['curl','rosca','extensão','crucifixo','voador','pulldown','puxada','tríceps','bíceps','panturrilha','elevação lateral','elevação frontal','face pull']
+
+    const chk   = (name, list) => list.some(k => (name||'').toLowerCase().includes(k))
+    const group = (name) => { const n=(name||'').toLowerCase(); for(const[k,g] of Object.entries(MUSCLE_MAP)){if(n.includes(k))return g}; return null }
+
+    // ── Faixas de referência por objetivo e nível ────────────────────────────
+    const REF_REPS = {
+      'Força e Performance':  { min:1,  max:6,  label:'1–6 reps (força máxima)' },
+      'Ganho de Massa':       { min:6,  max:15, label:'6–15 reps (hipertrofia)' },
+      'Emagrecimento':        { min:12, max:20, label:'12–20 reps (resistência metabólica)' },
+      'Condicionamento':      { min:12, max:20, label:'12–20 reps (resistência)' },
+      'Saúde e Bem-Estar':    { min:10, max:15, label:'10–15 reps (saúde geral)' },
     }
-
-    const nivel = student?.level || 'Iniciante'
-    const REF_VOL = { 'Iniciante':{min:10,max:15},'Intermediário':{min:12,max:18},'Avançado':{min:16,max:22},'Atleta Jovem':{min:12,max:20},'Atleta Competitivo':{min:18,max:25} }
-    const ref = REF_VOL[nivel] || REF_VOL['Iniciante']
-
-    const MULTI = ['agachamento','supino','levantamento','terra','remada','barra','desenvolvimento','leg press','hack','stiff','avanço','afundo','paralelas','mergulho']
-    const ISOL  = ['curl','rosca','extensão','crucifixo','voador','pulldown','puxada','tríceps','bíceps','panturrilha','elevação']
-    const isMulti = (n) => MULTI.some(k => (n||'').toLowerCase().includes(k))
-    const isIsol  = (n) => ISOL.some(k  => (n||'').toLowerCase().includes(k))
-
-    // Volume por grupo
-    const setsByGroup = {}
-    days.forEach(d => {
-      (d.exercises||[]).forEach(ex => {
-        const g = findGroup(ex.name)
-        if (g) setsByGroup[g] = (setsByGroup[g]||0) + (+(ex.sets)||0)
-      })
-    })
-
-    // ── Análise por dia e por campo de exercício ──────────────────────────────
     const REF_SETS = {
-      // [min_sets, max_sets] por exercício de acordo com objetivo
       'Força e Performance':  [3,6],
       'Ganho de Massa':       [3,5],
       'Emagrecimento':        [2,4],
       'Condicionamento':      [2,4],
+      'Saúde e Bem-Estar':    [2,4],
     }
     const REF_REST = {
       'Força e Performance':  { min:120, max:300, label:'2min–5min' },
       'Ganho de Massa':       { min:60,  max:120, label:'1min–2min' },
       'Emagrecimento':        { min:30,  max:60,  label:'30s–1min'  },
       'Condicionamento':      { min:30,  max:90,  label:'30s–1min30s' },
+      'Saúde e Bem-Estar':    { min:45,  max:90,  label:'45s–1min30s' },
     }
-    const goal = student?.goal || ''
+    const refReps = REF_REPS[goal] || { min:8, max:15, label:'8–15 reps' }
     const refSets = REF_SETS[goal] || [2,5]
     const refRest = REF_REST[goal] || { min:45, max:120, label:'45s–2min' }
 
     const parseRest = (r) => {
       if (!r) return null
       const s = String(r).trim().toLowerCase()
-      // "1min30s" or "1min 30s" → 90s
       const minSec = s.match(/^(\d+(?:\.\d+)?)\s*min\s*(\d+)\s*s?$/)
-      if (minSec) return Math.round(+minSec[1] * 60 + +minSec[2])
-      // "1:30" → 90s
-      const colonFmt = s.match(/^(\d+):(\d{2})$/)
-      if (colonFmt) return +colonFmt[1] * 60 + +colonFmt[2]
-      // "2min" or "1.5min" → seconds
+      if (minSec) return Math.round(+minSec[1]*60 + +minSec[2])
+      const col = s.match(/^(\d+):(\d{2})$/)
+      if (col) return +col[1]*60 + +col[2]
       const minOnly = s.match(/^(\d+(?:\.\d+)?)\s*min$/)
-      if (minOnly) return Math.round(+minOnly[1] * 60)
-      // "90s" or "90" → seconds
+      if (minOnly) return Math.round(+minOnly[1]*60)
       const secOnly = s.match(/^(\d+)\s*s?$/)
       if (secOnly) return +secOnly[1]
       return null
     }
+    const fmtSec = (s) => s >= 60 ? Math.floor(s/60)+'min'+(s%60?s%60+'s':'') : s+'s'
+    const parseRepsRange = (r) => {
+      if (!r) return null
+      const m = String(r).match(/^(\d+)(?:[–-](\d+))?/)
+      if (!m) return null
+      return m[2] ? { min:+m[1], max:+m[2] } : { min:+m[1], max:+m[1] }
+    }
 
+    // ── Volume por grupo muscular (semana inteira) ────────────────────────────
+    const setsByGroup = {}
+    days.forEach(d => {
+      ;(d.exercises||[]).forEach(ex => {
+        const g = group(ex.name)
+        if (g) setsByGroup[g] = (setsByGroup[g]||0) + (+(ex.sets)||0)
+      })
+    })
+    const REF_VOL = { 'Iniciante':{min:10,max:15},'Intermediário':{min:12,max:18},'Avançado':{min:16,max:22},'Atleta Jovem':{min:12,max:20},'Atleta Competitivo':{min:18,max:25} }
+    const refVol = REF_VOL[nivel] || REF_VOL['Iniciante']
+
+    // ── Overlap muscular entre dias consecutivos ──────────────────────────────
+    const DIA_JS = {Dom:0,Seg:1,Ter:2,Qua:3,Qui:4,Sex:5,Sáb:6}
+    const daysSorted = [...days].sort((a,b) => (DIA_JS[a.day_of_week]||0) - (DIA_JS[b.day_of_week]||0))
+
+    const overlapMap = {} // { dayId: [overlapping muscle groups] }
+    for (let i=1; i<daysSorted.length; i++) {
+      const prev = daysSorted[i-1], curr = daysSorted[i]
+      const prevDayJs = DIA_JS[prev.day_of_week], currDayJs = DIA_JS[curr.day_of_week]
+      if (currDayJs - prevDayJs === 1) { // dias consecutivos
+        const prevGroups = new Set((prev.exercises||[]).map(e=>group(e.name)).filter(Boolean))
+        const currGroups = (curr.exercises||[]).map(e=>group(e.name)).filter(Boolean)
+        const overlap = currGroups.filter(g => prevGroups.has(g))
+        if (overlap.length) overlapMap[curr.id] = overlap
+      }
+    }
+
+    // ── Análise global de empurrar/puxar ─────────────────────────────────────
+    let totalEmpurrar = 0, totalPuxar = 0
+    days.forEach(d => {
+      ;(d.exercises||[]).forEach(ex => {
+        if (chk(ex.name, EMPURRAR)) totalEmpurrar += +(ex.sets||0)
+        if (chk(ex.name, PUXAR))    totalPuxar    += +(ex.sets||0)
+      })
+    })
+    const razaoPP = totalPuxar && totalEmpurrar ? totalPuxar/totalEmpurrar : null
+
+    // ── Análise por dia ───────────────────────────────────────────────────────
     const dayResults = {}
     days.forEach(d => {
-      const exs = d.exercises || []
+      const exs    = d.exercises || []
       const issues = []
-      const exFields = {} // { [exId]: { sets, reps, rest, order, overall } }
+      const exFields = {}
 
-      // Ordem
-      const firstMulti = exs.findIndex(e => isMulti(e.name))
-      const firstIsol  = exs.findIndex(e => isIsol(e.name))
+      if (!exs.length) {
+        dayResults[d.id] = { status:'atencao', issues:[{ type:'atencao', msg:'Nenhum exercício cadastrado neste dia.' }], exFields:{} }
+        return
+      }
+
+      // ── 1. ORDEM: multiarticulares antes de isolados ─────────────────────
+      const firstMulti = exs.findIndex(e => chk(e.name, MULTI_EX))
+      const firstIsol  = exs.findIndex(e => chk(e.name, ISOL_EX))
       const ordemErrada = firstIsol !== -1 && firstMulti !== -1 && firstIsol < firstMulti
-      if (ordemErrada) issues.push({ type:'critico', msg:'Coloque multiarticulares (agachamento, supino, terra…) antes dos isolados (rosca, extensão…)' })
+      if (ordemErrada) {
+        issues.push({ type:'critico', msg:`Ordem incorreta: exercícios isolados aparecem antes dos multiarticulares. Comece sempre por agachamento, supino, terra e similares — eles recrutam mais fibras e exigem maior foco neural.` })
+      }
 
+      // ── 2. PESOS LIVRES antes de máquinas (quando possível) ─────────────
+      const firstLivre   = exs.findIndex(e => chk(e.name, LIVRE))
+      const firstMaquina = exs.findIndex(e => chk(e.name, MAQUINA))
+      if (firstLivre !== -1 && firstMaquina !== -1 && firstLivre > firstMaquina) {
+        issues.push({ type:'atencao', msg:`Pesos livres aparecem depois das máquinas. O ideal é usar pesos livres (barra, halteres) primeiro — eles exigem mais estabilização e devem ser feitos quando há mais energia.` })
+      }
+
+      // ── 3. EMPURRAR × PUXAR no dia (para dias de corpo inteiro) ─────────
+      const empDia = exs.filter(e => chk(e.name, EMPURRAR)).length
+      const puxDia = exs.filter(e => chk(e.name, PUXAR)).length
+      if (empDia >= 2 && puxDia === 0) {
+        issues.push({ type:'atencao', msg:`Desequilíbrio muscular: ${empDia} exercícios de empurrar e nenhum de puxar. Inclua uma remada ou puxada para equilibrar ombros e prevenir lesões posturais.` })
+      }
+      if (puxDia >= 2 && empDia === 0) {
+        issues.push({ type:'atencao', msg:`Desequilíbrio muscular: ${puxDia} exercícios de puxar e nenhum de empurrar. Inclua um supino ou desenvolvimento para equilibrar.` })
+      }
+
+      // ── 4. JOELHO × QUADRIL (dias de lower) ─────────────────────────────
+      const joelhoDia = exs.filter(e => chk(e.name, JOELHO)).length
+      const quadrilDia = exs.filter(e => chk(e.name, QUADRIL)).length
+      if (joelhoDia >= 2 && quadrilDia === 0) {
+        issues.push({ type:'atencao', msg:`Muitos exercícios dominantes de joelho (agachamento, leg press) sem nenhum dominante de quadril (stiff, terra, flexora). Inclua 1–2 exercícios para posterior de coxa e glúteo.` })
+      }
+
+      // ── 5. OVERLAP MUSCULAR com dia anterior ────────────────────────────
+      if (overlapMap[d.id]) {
+        const g = overlapMap[d.id].join(', ')
+        issues.push({ type:'atencao', msg:`Recuperação insuficiente: ${g} também foi treinado ontem. Músculo precisa de 48h para se recuperar — considere reorganizar os dias.` })
+      }
+
+      // ── 6. ADEQUAÇÃO AO NÍVEL ────────────────────────────────────────────
+      const livresNoDia = exs.filter(e => chk(e.name, LIVRE))
+      if ((nivel === 'Iniciante') && livresNoDia.length >= 3) {
+        issues.push({ type:'atencao', msg:`Iniciante com ${livresNoDia.length} exercícios com pesos livres num mesmo dia. Para iniciantes, priorize máquinas e movimentos guiados nos primeiros meses — reduz risco de lesão por técnica incorreta.` })
+      }
+      if (age && age < 16 && exs.some(e => chk(e.name,['terra','agachamento livre','barra']))) {
+        issues.push({ type:'atencao', msg:`Adolescente em desenvolvimento: exercícios com carga axial pesada (terra, agachamento com barra) devem ser supervisionados com atenção. Priorize técnica e cargas submáximas.` })
+      }
+
+      // ── Por exercício ────────────────────────────────────────────────────
       exs.forEach((ex, i) => {
-        const s = +(ex.sets||0)
+        const s       = +(ex.sets||0)
         const restSec = parseRest(ex.rest)
-        const fields = {}
+        const repsR   = parseRepsRange(ex.reps)
+        const grp     = group(ex.name)
+        const fields  = {}
 
         // Sets
-        if (!ex.sets || s === 0) {
-          fields.sets = { status:'atencao', msg:'Defina o número de séries' }
-          issues.push({ type:'atencao', msg:`${ex.name||'Exercício'}: séries não definidas` })
+        if (!ex.sets || s===0) {
+          fields.sets = { status:'atencao', msg:`Defina o número de séries. Para ${goal||'este objetivo'}: ${refSets[0]}–${refSets[1]} séries.` }
+          issues.push({ type:'atencao', msg:`${ex.name||'Exercício'}: séries não definidas.` })
         } else if (s < refSets[0]) {
-          fields.sets = { status:'atencao', msg:`Aumente para ${refSets[0]}+ séries (recomendado para ${goal||'o objetivo'})` }
-          issues.push({ type:'atencao', msg:`${ex.name}: ${s} séries — abaixo do ideal (${refSets[0]}–${refSets[1]})` })
+          fields.sets = { status:'atencao', msg:`${s} série${s>1?'s':''} — abaixo do ideal. Para ${goal||'este objetivo'}, use ${refSets[0]}–${refSets[1]} séries.` }
+          issues.push({ type:'atencao', msg:`${ex.name}: ${s} séries — abaixo do ideal para ${goal||'o objetivo'}.` })
         } else if (s > refSets[1]) {
-          fields.sets = { status:'atencao', msg:`Reduza para máx ${refSets[1]} séries por exercício` }
-          issues.push({ type:'atencao', msg:`${ex.name}: ${s} séries — acima do ideal (${refSets[0]}–${refSets[1]})` })
+          fields.sets = { status:'atencao', msg:`${s} séries — acima do ideal. Reduza para ${refSets[1]} séries e prefira aumentar a intensidade (carga).` }
         } else {
-          fields.sets = { status:'ok', msg:`${s} séries — adequado` }
+          fields.sets = { status:'ok', msg:`${s} séries — correto para ${goal||'o objetivo'}.` }
         }
 
-        // Reps
-        if (!ex.reps || ex.reps === '') {
-          fields.reps = { status:'atencao', msg:'Defina as repetições' }
+        // Reps × objetivo
+        if (!ex.reps) {
+          fields.reps = { status:'atencao', msg:`Reps não definidas. Recomendado: ${refReps.label}.` }
+          issues.push({ type:'atencao', msg:`${ex.name||'Exercício'}: repetições não definidas.` })
+        } else if (repsR) {
+          const repMid = (repsR.min + repsR.max) / 2
+          if (repMid < refReps.min - 2) {
+            fields.reps = { status:'atencao', msg:`${ex.reps} reps — baixo para ${goal}. Carga muito pesada pode ser força pura, não ${goal}. Ideal: ${refReps.label}.` }
+            issues.push({ type:'atencao', msg:`${ex.name}: ${ex.reps} reps — fora da faixa ideal para ${goal} (${refReps.label}).` })
+          } else if (repMid > refReps.max + 2) {
+            fields.reps = { status:'atencao', msg:`${ex.reps} reps — alto para ${goal}. Carga muito leve gera pouca tensão mecânica. Ideal: ${refReps.label}.` }
+            issues.push({ type:'atencao', msg:`${ex.name}: ${ex.reps} reps — acima da faixa ideal para ${goal} (${refReps.label}).` })
+          } else {
+            fields.reps = { status:'ok', msg:`${ex.reps} reps — dentro da faixa para ${goal}.` }
+          }
         } else {
-          fields.reps = { status:'ok', msg:`${ex.reps} reps — preenchido` }
+          fields.reps = { status:'ok', msg:'Preenchido.' }
         }
 
         // Descanso
         if (!restSec) {
-          fields.rest = { status:'atencao', msg:`Defina o descanso (recomendado: ${refRest.label})` }
-          issues.push({ type:'atencao', msg:`${ex.name||'Exercício'}: descanso não definido` })
+          fields.rest = { status:'atencao', msg:`Descanso não definido. Para ${goal||'este objetivo'}: ${refRest.label}.` }
+          issues.push({ type:'atencao', msg:`${ex.name||'Exercício'}: descanso não definido.` })
         } else if (restSec < refRest.min) {
-          fields.rest = { status:'atencao', msg:`Descanso curto — aumente para ${refRest.label}` }
-          issues.push({ type:'atencao', msg:`${ex.name}: descanso de ${restSec >= 60 ? Math.floor(restSec/60)+'min'+(restSec%60?restSec%60+'s':'') : restSec+'s'} — abaixo do recomendado (${refRest.label})` })
+          fields.rest = { status:'atencao', msg:`${fmtSec(restSec)} de descanso — curto demais para ${goal}. Aumente para ${refRest.label} para garantir recuperação entre séries.` }
+          issues.push({ type:'atencao', msg:`${ex.name}: descanso de ${fmtSec(restSec)} — curto para ${goal} (ideal: ${refRest.label}).` })
         } else if (restSec > refRest.max) {
-          fields.rest = { status:'atencao', msg:`Descanso longo — reduza para ${refRest.label}` }
+          fields.rest = { status:'atencao', msg:`${fmtSec(restSec)} — descanso longo. Para ${goal}, o ideal é ${refRest.label}. Descanso longo demais reduz o estímulo metabólico.` }
+          issues.push({ type:'atencao', msg:`${ex.name}: descanso de ${fmtSec(restSec)} — longo para ${goal} (ideal: ${refRest.label}).` })
         } else {
-          fields.rest = { status:'ok', msg:`${restSec >= 60 ? Math.floor(restSec/60)+'min'+(restSec%60?restSec%60+'s':'') : restSec+'s'} — adequado` }
+          fields.rest = { status:'ok', msg:`${fmtSec(restSec)} — adequado para ${goal}.` }
         }
 
         // Ordem
-        if (ordemErrada && isIsol(ex.name) && (firstMulti === -1 || i < firstMulti)) {
-          fields.order = { status:'critico', msg:'Mova este exercício para depois dos multiarticulares' }
+        if (ordemErrada && chk(ex.name, ISOL_EX) && (firstMulti===-1 || i<firstMulti)) {
+          fields.order = { status:'critico', msg:`Este exercício isolado está antes dos multiarticulares. Mova-o para depois de agachamento, supino ou terra.` }
         }
 
-        // Overall
-        const hasC = Object.values(fields).some(f => f.status==='critico')
-        const hasA = Object.values(fields).some(f => f.status==='atencao')
-        fields.overall = hasC ? 'critico' : hasA ? 'atencao' : 'ok'
+        // Volume do grupo muscular (semanal)
+        if (grp && setsByGroup[grp]) {
+          const vs = setsByGroup[grp]
+          if (vs < refVol.min) {
+            if (!fields.volume) fields.volume = { status:'atencao', msg:`${grp} com ${vs} sets/semana — abaixo do mínimo (${refVol.min}–${refVol.max} sets). Adicione mais volume para este grupo.` }
+          } else if (vs > refVol.max) {
+            if (!fields.volume) fields.volume = { status:'atencao', msg:`${grp} com ${vs} sets/semana — alto (máx recomendado: ${refVol.max} sets). Risco de overreaching — redistribua em mais dias ou reduza séries.` }
+          } else {
+            if (!fields.volume) fields.volume = { status:'ok', msg:`${grp}: ${vs} sets/semana — volume adequado.` }
+          }
+        }
 
+        const hasC = Object.values(fields).some(f=>f.status==='critico')
+        const hasA = Object.values(fields).some(f=>f.status==='atencao')
+        fields.overall = hasC ? 'critico' : hasA ? 'atencao' : 'ok'
         exFields[ex.id] = fields
       })
+
+      // ── 7. COERÊNCIA COM OBJETIVO (nível de plano) ───────────────────────
+      if (goal === 'Emagrecimento') {
+        const avgSets = exs.reduce((a,e)=>a+(+(e.sets)||0),0) / exs.length
+        if (avgSets > 5) issues.push({ type:'atencao', msg:`Para Emagrecimento, muitas séries por exercício reduzem a densidade do treino. Prefira mais exercícios com menos séries (circuito ou supersets).` })
+      }
+      if (goal === 'Força e Performance') {
+        const temIsol = exs.some(e => chk(e.name, ISOL_EX))
+        const temMulti = exs.some(e => chk(e.name, MULTI_EX))
+        if (temIsol && !temMulti) issues.push({ type:'atencao', msg:`Dia com apenas exercícios isolados — para Força e Performance, multiarticulares são essenciais (agachamento, terra, supino, remada).` })
+      }
+
+      // ── 8. BALANÇO EMPURRAR/PUXAR semanal ───────────────────────────────
+      if (d.id === days[0].id && razaoPP !== null) {
+        if (razaoPP < 0.7) {
+          issues.push({ type:'atencao', msg:`No plano inteiro: muito mais volume de empurrar (${totalEmpurrar} sets) do que puxar (${totalPuxar} sets). Desequilíbrio crônico causa postura cifótica e lesão de ombro. Adicione mais remadas e puxadas.` })
+        } else if (razaoPP > 1.5) {
+          issues.push({ type:'atencao', msg:`No plano inteiro: muito mais volume de puxar (${totalPuxar} sets) do que empurrar (${totalEmpurrar} sets). Adicione supino, desenvolvimento ou flexões para equilibrar.` })
+        }
+      }
 
       const hasC = issues.some(i=>i.type==='critico')
       const hasA = issues.some(i=>i.type==='atencao')
