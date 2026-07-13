@@ -7,6 +7,7 @@ import WorkoutEditor from './pages/WorkoutEditor'
 import StudentView from './pages/StudentView'
 import ParentView from './pages/ParentView'
 import TeacherProfile from './pages/TeacherProfile'
+import Planner from './pages/Planner'
 
 export default function App() {
   const [session, setSession]   = useState(null)
@@ -69,6 +70,7 @@ export default function App() {
       {page === 'student-detail'  && <StudentDetail navigate={navigate} studentId={pageParams.id} />}
       {page === 'workout-editor'  && <WorkoutEditor navigate={navigate} studentId={pageParams.studentId} planId={pageParams.planId} />}
       {page === 'teacher-profile' && <TeacherProfile navigate={navigate} session={session} />}
+      {page === 'planner' && <Planner navigate={navigate} studentId={pageParams.studentId} />}
     </>
   )
 }
