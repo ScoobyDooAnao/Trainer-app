@@ -2181,7 +2181,11 @@ export default function StudentDetail({ navigate, studentId }) {
         {/* PLANS TAB */}
         {tab === 'plans' && (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <button onClick={() => navigate('planner', { studentId })}
+                style={{ padding:'8px 16px', borderRadius:10, border:'1px solid rgba(96,165,250,0.3)', background:'rgba(96,165,250,0.08)', color:'#60A5FA', fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:6, fontFamily:'inherit' }}>
+                📋 Periodização
+              </button>
               <button style={s.btn()} onClick={createPlan}>+ Criar Plano de Treino</button>
             </div>
             {plans.length === 0 && <div style={{ textAlign: 'center', padding: 60, color: '#334155' }}>Nenhum plano criado ainda</div>}
