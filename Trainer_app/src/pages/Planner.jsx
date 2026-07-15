@@ -62,57 +62,21 @@ function PlannerBg() {
   )
 }
 
-// ── Modal criar macrociclo ────────────────────────────────────────────────────
+// ── Modal criar macrociclo — livre, sem templates ─────────────────────────────
 function ModalMacro({ student, teacherId, onSave, onClose }) {
-  const [titulo,  setTitulo]  = useState(student?.goal ? `${student.goal} — Macrociclo` : 'Novo Macrociclo')
-  const [semanas, setSemanas] = useState(16)
+  const [titulo,  setTitulo]  = useState('')
+  const [semanas, setSemanas] = useState('')
   const [inicio,  setInicio]  = useState(new Date().toISOString().slice(0,10))
   const [saving,  setSaving]  = useState(false)
 
-  const TEMPLATES = [
-    { label:'Emagrecimento 16 sem', semanas:16, fases:[
-      { nome:'Adaptação',     fase:'adaptacao',      semana_inicio:1,  semana_fim:4  },
-      { nome:'Acumulação',    fase:'acumulacao',     semana_inicio:5,  semana_fim:10 },
-      { nome:'Intensificação',fase:'intensificacao', semana_inicio:11, semana_fim:14 },
-      { nome:'Deload',        fase:'deload',         semana_inicio:15, semana_fim:16 },
-    ]},
-    { label:'Hipertrofia 20 sem', semanas:20, fases:[
-      { nome:'Adaptação',     fase:'adaptacao',      semana_inicio:1,  semana_fim:4  },
-      { nome:'Acumulação',    fase:'acumulacao',     semana_inicio:5,  semana_fim:12 },
-      { nome:'Intensificação',fase:'intensificacao', semana_inicio:13, semana_fim:18 },
-      { nome:'Deload',        fase:'deload',         semana_inicio:19, semana_fim:20 },
-    ]},
-    { label:'Força 12 sem', semanas:12, fases:[
-      { nome:'Volume',        fase:'acumulacao',     semana_inicio:1,  semana_fim:4  },
-      { nome:'Intensificação',fase:'intensificacao', semana_inicio:5,  semana_fim:9  },
-      { nome:'Pico',          fase:'pico',           semana_inicio:10, semana_fim:11 },
-      { nome:'Deload',        fase:'deload',         semana_inicio:12, semana_fim:12 },
-    ]},
-  ]
-
-  const [selectedTpl, setSelectedTpl] = useState(0)
-
   const save = async () => {
+    if (!titulo.trim() || !semanas) return
     setSaving(true)
-    const { data: macro } = await supabase.from('macrociclos').insert([{
+    await supabase.from('macrociclos').insert([{
       teacher_id: teacherId, student_id: student.id,
-      titulo, objetivo: student?.goal, semanas_total: semanas, data_inicio: inicio,
-    }]).select().single()
-
-    if (macro) {
-      const tpl = TEMPLATES[selectedTpl]
-      const mesos = tpl.fases.map((f, i) => {
-        const def = FASE_DEFAULTS[f.fase]
-        return {
-          macrociclo_id: macro.id, nome: f.nome, fase: f.fase,
-          semana_inicio: f.semana_inicio, semana_fim: f.semana_fim,
-          ref_sets_min: def.sets[0], ref_sets_max: def.sets[1],
-          ref_reps_min: def.reps[0], ref_reps_max: def.reps[1],
-          ref_intensidade: def.intensidade, ref_descanso: def.descanso, ordem: i,
-        }
-      })
-      await supabase.from('mesociclos').insert(mesos)
-    }
+      titulo: titulo.trim(), objetivo: student?.goal,
+      semanas_total: +semanas, data_inicio: inicio || null,
+    }])
     setSaving(false)
     onSave()
     onClose()
@@ -123,12 +87,12 @@ function ModalMacro({ student, teacherId, onSave, onClose }) {
 
   return (
     <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:300, padding:16 }}>
-      <div onClick={e=>e.stopPropagation()} style={{ background:'#0D1117', borderRadius:20, padding:28, width:'100%', maxWidth:480, border:'1px solid rgba(255,255,255,0.08)', boxShadow:'0 24px 60px rgba(0,0,0,0.5)' }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:'#0D1117', borderRadius:20, padding:28, width:'100%', maxWidth:420, border:'1px solid rgba(255,255,255,0.08)', boxShadow:'0 24px 60px rgba(0,0,0,0.5)' }}>
         <div style={{ fontSize:18, fontWeight:800, color:'#E2E8F0', marginBottom:4 }}>Novo Macrociclo</div>
         <div style={{ fontSize:12, color:'#475569', marginBottom:20 }}>Para: {student?.name}</div>
 
-        <label style={lbl}>Nome</label>
-        <input style={inp} value={titulo} onChange={e=>setTitulo(e.target.value)} />
+        <label style={lbl}>Nome do planejamento *</label>
+        <input style={inp} placeholder="Ex: Preparação Verão, Temporada 2025..." value={titulo} onChange={e=>setTitulo(e.target.value)} />
 
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
           <div>
@@ -136,34 +100,18 @@ function ModalMacro({ student, teacherId, onSave, onClose }) {
             <input style={inp} type="date" value={inicio} onChange={e=>setInicio(e.target.value)} />
           </div>
           <div>
-            <label style={lbl}>Semanas totais</label>
-            <input style={inp} type="number" min="4" max="52" value={semanas} onChange={e=>setSemanas(+e.target.value)} />
+            <label style={lbl}>Total de semanas *</label>
+            <input style={inp} type="number" min="1" max="104" placeholder="Ex: 12" value={semanas} onChange={e=>setSemanas(e.target.value)} />
           </div>
         </div>
 
-        <label style={lbl}>Template de mesociclos</label>
-        <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-          {TEMPLATES.map((t,i) => (
-            <div key={i} onClick={() => { setSelectedTpl(i); setSemanas(t.semanas) }}
-              style={{ padding:'10px 14px', borderRadius:10, border:`1px solid ${selectedTpl===i ? '#60A5FA' : 'rgba(255,255,255,0.08)'}`, background: selectedTpl===i ? 'rgba(96,165,250,0.1)' : 'rgba(255,255,255,0.03)', cursor:'pointer' }}>
-              <div style={{ fontSize:12, fontWeight:700, color: selectedTpl===i ? '#60A5FA' : '#E2E8F0', marginBottom:6 }}>{t.label}</div>
-              <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
-                {t.fases.map((f,j) => {
-                  const fc = FASES[f.fase]
-                  const w = f.semana_fim - f.semana_inicio + 1
-                  return (
-                    <span key={j} style={{ fontSize:9, fontWeight:700, padding:'2px 7px', borderRadius:20, background:fc.bg, color:fc.cor, border:`1px solid ${fc.border}` }}>
-                      {f.nome} ({w}sem)
-                    </span>
-                  )
-                })}
-              </div>
-            </div>
-          ))}
+        <div style={{ marginTop:16, padding:'12px 14px', background:'rgba(96,165,250,0.06)', borderRadius:10, border:'1px solid rgba(96,165,250,0.15)', fontSize:12, color:'#60A5FA', lineHeight:1.6 }}>
+          Após criar, você adiciona os mesociclos livremente — nome, fase, duração e parâmetros de treino conforme sua metodologia.
         </div>
 
-        <div style={{ display:'flex', gap:8, marginTop:24 }}>
-          <button onClick={save} disabled={saving} style={{ flex:1, padding:'13px', borderRadius:12, border:'none', cursor:'pointer', background:'linear-gradient(135deg,#3B82F6,#1D4ED8)', color:'#fff', fontWeight:800, fontSize:14 }}>
+        <div style={{ display:'flex', gap:8, marginTop:20 }}>
+          <button onClick={save} disabled={saving || !titulo.trim() || !semanas}
+            style={{ flex:1, padding:'13px', borderRadius:12, border:'none', cursor: titulo.trim() && semanas ? 'pointer' : 'default', background: titulo.trim() && semanas ? 'linear-gradient(135deg,#3B82F6,#1D4ED8)' : 'rgba(255,255,255,0.06)', color: titulo.trim() && semanas ? '#fff' : '#334155', fontWeight:800, fontSize:14 }}>
             {saving ? 'Criando...' : 'Criar Macrociclo'}
           </button>
           <button onClick={onClose} style={{ flex:1, padding:'13px', borderRadius:12, border:'1px solid rgba(255,255,255,0.08)', background:'transparent', color:'#475569', fontWeight:600, fontSize:13, cursor:'pointer' }}>
@@ -390,13 +338,9 @@ export default function Planner({ navigate, studentId, student: studentProp }) {
 
   const addMeso = async (macroId, mesos) => {
     const lastSem = mesos.length ? Math.max(...mesos.map(m => m.semana_fim)) : 0
-    const def = FASE_DEFAULTS.adaptacao
     await supabase.from('mesociclos').insert([{
       macrociclo_id: macroId, nome: 'Novo Mesociclo', fase: 'adaptacao',
       semana_inicio: lastSem + 1, semana_fim: lastSem + 4,
-      ref_sets_min: def.sets[0], ref_sets_max: def.sets[1],
-      ref_reps_min: def.reps[0], ref_reps_max: def.reps[1],
-      ref_intensidade: def.intensidade, ref_descanso: def.descanso,
       ordem: mesos.length,
     }])
     load()
