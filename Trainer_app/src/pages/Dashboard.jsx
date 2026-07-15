@@ -41,11 +41,12 @@ const DIAS_SEMANA = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 const DIA_JS_MAP  = { Seg: 1, Ter: 2, Qua: 3, Qui: 4, Sex: 5, Sáb: 6, Dom: 0 }
 
 const NAV = [
-  { id: 'alunos',    icon: '', label: 'Meus Alunos' },
-  { id: 'treinos',   icon: '', label: 'Cronograma'   },
-  { id: 'evolucao',  icon: '', label: 'Evolução'     },
-  { id: 'cardio',    icon: '', label: 'Cardio'       },
-  { id: 'escolinha', icon: '', label: 'Escolinha'    },
+  { id: 'alunos',        icon: '', label: 'Meus Alunos'    },
+  { id: 'treinos',       icon: '', label: 'Cronograma'      },
+  { id: 'evolucao',      icon: '', label: 'Evolução'        },
+  { id: 'cardio',        icon: '', label: 'Cardio'          },
+  { id: 'escolinha',     icon: '', label: 'Escolinha'       },
+  { id: 'planejamento',  icon: '', label: 'Planejamento'    },
 ]
 const GOALS  = ['Ganho de Massa', 'Emagrecimento', 'Condicionamento', 'Força e Performance', 'Saúde e Bem-Estar', 'Iniciação Esportiva', 'Desenvolvimento Atlético', 'Treinamento Competitivo']
 const LEVELS = ['Iniciante', 'Intermediário', 'Avançado', 'Atleta Jovem', 'Atleta Competitivo']
@@ -272,7 +273,8 @@ const NAV_ICONS = {
   cardio:   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>,
   perfil:   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>,
   escolinha: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3L1 9l4 2.18V15c0 3 3.58 6 7 6s7-3 7-6v-3.82L22 9 12 3zm6 10.99l-1 .55V15c0 1.76-2.69 4-5 4s-5-2.24-5-4v-1.46l-1-.55V9.7l6-3.27 6 3.27v4.29z"/></svg>,
-  sair:     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>,
+  sair:         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>,
+  planejamento: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>,
 }
 
 function NavItem({ item, active, onClick }) {
@@ -2583,6 +2585,82 @@ function MobileBottomNav({ nav, setNav, navigate, logout }) {
   )
 }
 
+
+// ── TabPlanejamento — lista de alunos com acesso direto ao Planner ────────────
+function TabPlanejamento({ students, navigate, session }) {
+  const [search, setSearch] = useState('')
+
+  const filtered = students.filter(s =>
+    s.name.toLowerCase().includes(search.toLowerCase())
+  )
+
+  return (
+    <div>
+      <div style={{ marginBottom:24 }}>
+        <h1 style={{ fontSize:26, fontWeight:800, color:'#0C3251', letterSpacing:'-0.5px', marginBottom:4, textShadow:'0 1px 3px rgba(255,255,255,0.5)' }}>
+          Planejamento
+        </h1>
+        <p style={{ fontSize:13, color:'#0C4A6E', fontWeight:600 }}>
+          Gerencie macrociclos e mesociclos de cada aluno
+        </p>
+      </div>
+
+      {/* Busca */}
+      <div style={{ marginBottom:18, background:'rgba(255,255,255,0.55)', borderRadius:12, border:'1px solid rgba(255,255,255,0.8)', backdropFilter:'blur(8px)', padding:'10px 14px', display:'flex', alignItems:'center', gap:10 }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="#94A3B8"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+        <input placeholder="Buscar aluno..." value={search} onChange={e => setSearch(e.target.value)}
+          style={{ flex:1, background:'none', border:'none', outline:'none', fontSize:13, color:'#0D1B2A', fontFamily:'inherit' }} />
+      </div>
+
+      {/* Lista de alunos */}
+      {filtered.length === 0 ? (
+        <div style={{ textAlign:'center', padding:'60px 20px', color:'#0C4A6E', opacity:0.4 }}>
+          <div style={{ fontSize:36, marginBottom:10 }}>📋</div>
+          <div style={{ fontSize:15, fontWeight:700 }}>Nenhum aluno encontrado</div>
+        </div>
+      ) : (
+        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          {filtered.map(st => {
+            const g = GOAL[st.goal]
+            return (
+              <div key={st.id}
+                style={{ background:'rgba(255,255,255,0.65)', backdropFilter:'blur(8px)', borderRadius:14, border:'1.5px solid rgba(255,255,255,0.85)', padding:'14px 18px', display:'flex', alignItems:'center', gap:14, boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
+                {/* Avatar inicial */}
+                <div style={{ width:42, height:42, borderRadius:12, background: g ? g.accent+'20' : '#E2E8F0', border:`1.5px solid ${g ? g.accent+'40' : '#E2E8F0'}`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                  <span style={{ fontSize:16, fontWeight:800, color: g ? g.accent : '#64748B' }}>
+                    {st.name.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                {/* Info */}
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:14, fontWeight:800, color:'#0C3251', marginBottom:2 }}>{st.name}</div>
+                  <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                    {st.goal && (
+                      <span style={{ fontSize:10, fontWeight:700, color: g ? g.accent : '#64748B' }}>{st.goal}</span>
+                    )}
+                    {st.level && (
+                      <span style={{ fontSize:10, color:'#94A3B8' }}>· {st.level}</span>
+                    )}
+                    {st.age && (
+                      <span style={{ fontSize:10, color:'#94A3B8' }}>· {st.age} anos</span>
+                    )}
+                  </div>
+                </div>
+                {/* Botão planner */}
+                <button onClick={() => navigate('planner', { studentId: st.id })}
+                  style={{ padding:'9px 18px', borderRadius:10, border:'none', cursor:'pointer', background:'linear-gradient(135deg,#3B82F6,#1D4ED8)', color:'#fff', fontWeight:700, fontSize:12, fontFamily:'inherit', flexShrink:0, display:'flex', alignItems:'center', gap:6 }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
+                  Planejar
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Dashboard({ navigate, session }) {
   const [nav, setNav]             = useState('alunos')
   const [students, setStudents]   = useState([])
@@ -2838,6 +2916,11 @@ export default function Dashboard({ navigate, session }) {
 
         {nav === 'escolinha' && (
           <TabEscolinha session={session} students={students} />
+        )}
+
+        {/* ABA: PLANEJAMENTO */}
+        {nav === 'planejamento' && (
+          <TabPlanejamento students={students} navigate={navigate} session={session} />
         )}
 
         {/* OUTRAS ABAS */}
