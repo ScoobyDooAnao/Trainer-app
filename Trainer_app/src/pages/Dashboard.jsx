@@ -2588,14 +2588,13 @@ function MobileBottomNav({ nav, setNav, navigate, logout }) {
 
 
 // ── Blocos de planejamento ────────────────────────────────────────────────────
-const BLOCOS = {
-  volume:      { label:'Volume',       cor:'#3B82F6', bg:'rgba(59,130,246,0.15)',  border:'rgba(59,130,246,0.4)',  desc:'Alto volume de séries' },
-  intensidade: { label:'Intensidade',  cor:'#EF4444', bg:'rgba(239,68,68,0.15)',   border:'rgba(239,68,68,0.4)',   desc:'Cargas elevadas, baixas reps' },
-  densidade:   { label:'Densidade',    cor:'#F97316', bg:'rgba(249,115,22,0.15)',  border:'rgba(249,115,22,0.4)',  desc:'Pouco descanso, circuitos' },
-  recuperacao: { label:'Recuperação',  cor:'#22C55E', bg:'rgba(34,197,94,0.15)',   border:'rgba(34,197,94,0.4)',   desc:'Treino leve ou ativo' },
-  descanso:    { label:'Descanso',     cor:'#475569', bg:'rgba(71,85,105,0.15)',   border:'rgba(71,85,105,0.35)',  desc:'Dia de descanso completo' },
-  tecnico:     { label:'Técnico',      cor:'#A855F7', bg:'rgba(168,85,247,0.15)', border:'rgba(168,85,247,0.4)',  desc:'Foco em técnica e habilidade' },
-  avaliacao:   { label:'Avaliação',    cor:'#EAB308', bg:'rgba(234,179,8,0.15)',  border:'rgba(234,179,8,0.4)',   desc:'Teste ou avaliação' },
+// Diário de Carga — graus de intensidade
+const GRAUS = {
+  repouso:    { label:'Repouso',         cor:'#334155', bg:'rgba(51,65,85,0.18)',    border:'rgba(51,65,85,0.35)',    desc:'Descanso completo — sem atividade física' },
+  regeneracao:{ label:'Regeneração',     cor:'#22C55E', bg:'rgba(34,197,94,0.15)',   border:'rgba(34,197,94,0.35)',   desc:'Atividade leve: mobilidade, caminhada, alongamento' },
+  moderado:   { label:'Moderado',        cor:'#60A5FA', bg:'rgba(96,165,250,0.15)',  border:'rgba(96,165,250,0.35)',  desc:'Treino dentro da zona de conforto — volume controlado' },
+  intenso:    { label:'Intenso',         cor:'#F59E0B', bg:'rgba(245,158,11,0.15)',  border:'rgba(245,158,11,0.35)',  desc:'Acima do confortável — exige esforço real e foco' },
+  maximo:     { label:'Máximo',          cor:'#EF4444', bg:'rgba(239,68,68,0.15)',   border:'rgba(239,68,68,0.35)',   desc:'Sessão de pico — limite do aluno, usar com parcimônia' },
 }
 
 const DIAS_SEMANA_LABELS = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
@@ -2605,7 +2604,7 @@ function MensalModal({ student, teacherId, onClose }) {
   const [mesRef, setMesRef]     = useState({ year: today.getFullYear(), month: today.getMonth() })
   const [entradas, setEntradas] = useState({}) // { 'YYYY-MM-DD': tipo }
   const [loading, setLoading]   = useState(true)
-  const [blocoSel, setBlocoSel] = useState('volume')
+  const [grauSel, setBlocoSel] = useState('moderado')
   const [saving, setSaving]     = useState(false)
 
   const mesLabel = new Date(mesRef.year, mesRef.month, 1)
@@ -2628,7 +2627,7 @@ function MensalModal({ student, teacherId, onClose }) {
 
   const toggleDia = async (dateStr) => {
     setSaving(true)
-    if (entradas[dateStr] === blocoSel) {
+    if (entradas[dateStr] === grauSel) {
       // Remove
       await supabase.from('planejamento_diario')
         .delete().eq('student_id', student.id).eq('data', dateStr)
@@ -2637,9 +2636,9 @@ function MensalModal({ student, teacherId, onClose }) {
       // Upsert
       await supabase.from('planejamento_diario').upsert([{
         teacher_id: teacherId, student_id: student.id,
-        data: dateStr, tipo: blocoSel,
+        data: dateStr, tipo: grauSel,
       }], { onConflict: 'student_id,data' })
-      setEntradas(p => ({ ...p, [dateStr]: blocoSel }))
+      setEntradas(p => ({ ...p, [dateStr]: grauSel }))
     }
     setSaving(false)
   }
@@ -2686,16 +2685,16 @@ function MensalModal({ student, teacherId, onClose }) {
             Selecione o tipo de estímulo e clique nos dias
           </div>
           <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
-            {Object.entries(BLOCOS).map(([k,b]) => (
+            {Object.entries(GRAUS).map(([k,b]) => (
               <button key={k} onClick={() => setBlocoSel(k)}
-                style={{ padding:'5px 12px', borderRadius:20, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit', border:`1.5px solid ${blocoSel===k ? b.cor : 'transparent'}`, background: blocoSel===k ? b.bg : 'rgba(255,255,255,0.04)', color: blocoSel===k ? b.cor : '#475569', transition:'all 0.15s' }}>
+                style={{ padding:'5px 12px', borderRadius:20, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit', border:`1.5px solid ${grauSel===k ? b.cor : 'transparent'}`, background: grauSel===k ? b.bg : 'rgba(255,255,255,0.04)', color: grauSel===k ? b.cor : '#475569', transition:'all 0.15s' }}>
                 {b.label}
               </button>
             ))}
           </div>
-          {blocoSel && (
-            <div style={{ marginTop:8, fontSize:11, color:BLOCOS[blocoSel].cor, opacity:0.8 }}>
-              {BLOCOS[blocoSel].desc} — clique num dia para atribuir ou remover
+          {grauSel && (
+            <div style={{ marginTop:8, fontSize:11, color:GRAUS[grauSel].cor, opacity:0.8 }}>
+              {GRAUS[grauSel].desc} — clique num dia para atribuir ou remover
             </div>
           )}
         </div>
@@ -2727,7 +2726,7 @@ function MensalModal({ student, teacherId, onClose }) {
                     if (!dia) return <div key={di} />
                     const dateStr = `${mesRef.year}-${String(mesRef.month+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`
                     const tipo    = entradas[dateStr]
-                    const bloco   = tipo ? BLOCOS[tipo] : null
+                    const bloco   = tipo ? GRAUS[tipo] : null
                     const isToday = dateStr === todayStr
                     return (
                       <div key={di} onClick={() => toggleDia(dateStr)}
@@ -2764,7 +2763,7 @@ function MensalModal({ student, teacherId, onClose }) {
             <div style={{ marginTop:16, padding:'12px 14px', background:'rgba(255,255,255,0.03)', borderRadius:10, border:'1px solid rgba(255,255,255,0.06)' }}>
               <div style={{ fontSize:10, color:'#334155', fontWeight:700, textTransform:'uppercase', letterSpacing:0.8, marginBottom:8 }}>Resumo do mês</div>
               <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                {Object.entries(BLOCOS).map(([k,b]) => {
+                {Object.entries(GRAUS).map(([k,b]) => {
                   const count = Object.values(entradas).filter(t => t === k).length
                   if (!count) return null
                   return (
@@ -2783,78 +2782,246 @@ function MensalModal({ student, teacherId, onClose }) {
   )
 }
 
+
+// ── FundamentosModal — Planilha de Fundamentos por semana ────────────────────
+const FUND_BLOCOS = {
+  volume:      { label:'Volume',       cor:'#3B82F6', bg:'rgba(59,130,246,0.13)', border:'rgba(59,130,246,0.3)', desc:'Séries · Repetições · Exercícios · km · min' },
+  intensidade: { label:'Intensidade',  cor:'#EF4444', bg:'rgba(239,68,68,0.13)',  border:'rgba(239,68,68,0.3)',  desc:'% 1RM · Velocidade · Altura · PSE alvo' },
+  frequencia:  { label:'Frequência',   cor:'#F97316', bg:'rgba(249,115,22,0.13)', border:'rgba(249,115,22,0.3)', desc:'Sessões/semana · Dias por grupo muscular' },
+  recuperacao: { label:'Recuperação',  cor:'#22C55E', bg:'rgba(34,197,94,0.13)',  border:'rgba(34,197,94,0.3)',  desc:'Dias descanso · Sono · Alimentação' },
+}
+
+function calcDensidade(intens, rec) {
+  // Densidade = relação Intensidade × (1 / Recuperação)
+  // Inputs livres — faz análise qualitativa
+  if (!intens || !rec) return { label:'—', cor:'#475569' }
+  const intensNum = parseFloat(intens)
+  const recNum    = parseFloat(rec)
+  if (!intensNum || !recNum) return { label:'—', cor:'#475569' }
+  const ratio = intensNum / recNum
+  if (ratio > 25)  return { label:'Muito Alta', cor:'#EF4444' }
+  if (ratio > 15)  return { label:'Alta',       cor:'#F97316' }
+  if (ratio > 8)   return { label:'Moderada',   cor:'#F59E0B' }
+  return               { label:'Baixa',      cor:'#22C55E' }
+}
+
+function FundamentosModal({ student, teacherId, onClose }) {
+  const [semanas,  setSemanas]  = useState([])
+  const [loading,  setLoading]  = useState(true)
+  const [saving,   setSaving]   = useState(false)
+  const NUM_SEMANAS = 12
+
+  useEffect(() => { loadFundamentos() }, [])
+
+  const loadFundamentos = async () => {
+    setLoading(true)
+    const { data } = await supabase.from('fundamentos_semana')
+      .select('*').eq('student_id', student.id).order('semana_num')
+    if (data && data.length) {
+      setSemanas(data)
+    } else {
+      // Inicializa semanas vazias
+      setSemanas(Array.from({ length: NUM_SEMANAS }, (_, i) => ({
+        semana_num: i + 1, volume: '', intensidade: '', frequencia: '', recuperacao: '', notas: '',
+      })))
+    }
+    setLoading(false)
+  }
+
+  const updateSemana = (idx, field, val) => {
+    setSemanas(p => p.map((s, i) => i === idx ? { ...s, [field]: val } : s))
+  }
+
+  const salvar = async () => {
+    setSaving(true)
+    const rows = semanas.map(s => ({
+      teacher_id: teacherId, student_id: student.id,
+      semana_num: s.semana_num, volume: s.volume || null,
+      intensidade: s.intensidade || null, frequencia: s.frequencia || null,
+      recuperacao: s.recuperacao || null, notas: s.notas || null,
+    }))
+    await supabase.from('fundamentos_semana').upsert(rows, { onConflict: 'student_id,semana_num' })
+    setSaving(false)
+  }
+
+  const inp = { background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:6, padding:'6px 8px', color:'#E2E8F0', fontSize:11, outline:'none', width:'100%', boxSizing:'border-box', fontFamily:'inherit' }
+
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.65)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:300, padding:12 }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:'#0D1117', borderRadius:20, width:'100%', maxWidth:900, maxHeight:'95vh', overflowY:'auto', border:'1px solid rgba(255,255,255,0.08)', boxShadow:'0 24px 60px rgba(0,0,0,0.6)' }}>
+
+        {/* Header */}
+        <div style={{ padding:'18px 22px', borderBottom:'1px solid rgba(255,255,255,0.07)', display:'flex', alignItems:'center', gap:12, position:'sticky', top:0, background:'#0D1117', zIndex:10 }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:16, fontWeight:800, color:'#E2E8F0' }}>Planilha de Fundamentos — {student.name.split(' ')[0]}</div>
+            <div style={{ fontSize:11, color:'#475569', marginTop:2 }}>{student.goal} · {student.level} · {NUM_SEMANAS} semanas</div>
+          </div>
+          <button onClick={salvar} disabled={saving}
+            style={{ padding:'8px 18px', borderRadius:9, border:'none', cursor:'pointer', background:'linear-gradient(135deg,#A855F7,#7C3AED)', color:'#fff', fontWeight:700, fontSize:12, fontFamily:'inherit' }}>
+            {saving ? 'Salvando...' : '💾 Salvar'}
+          </button>
+          <button onClick={onClose} style={{ background:'rgba(255,255,255,0.06)', border:'none', borderRadius:8, padding:'7px 12px', color:'#475569', cursor:'pointer', fontSize:13 }}>✕</button>
+        </div>
+
+        {/* Legenda dos blocos */}
+        <div style={{ padding:'12px 22px', borderBottom:'1px solid rgba(255,255,255,0.05)', display:'flex', gap:12, flexWrap:'wrap' }}>
+          {Object.entries(FUND_BLOCOS).map(([k,b]) => (
+            <div key={k} style={{ display:'flex', alignItems:'center', gap:6, padding:'4px 10px', borderRadius:20, background:b.bg, border:`1px solid ${b.border}` }}>
+              <div style={{ width:7, height:7, borderRadius:'50%', background:b.cor, flexShrink:0 }} />
+              <div>
+                <span style={{ fontSize:10, fontWeight:700, color:b.cor }}>{b.label}</span>
+                <span style={{ fontSize:9, color:b.cor, opacity:0.7, marginLeft:5 }}>{b.desc}</span>
+              </div>
+            </div>
+          ))}
+          <div style={{ display:'flex', alignItems:'center', gap:6, padding:'4px 10px', borderRadius:20, background:'rgba(234,179,8,0.1)', border:'1px solid rgba(234,179,8,0.25)' }}>
+            <div style={{ width:7, height:7, borderRadius:'50%', background:'#EAB308' }} />
+            <span style={{ fontSize:10, fontWeight:700, color:'#EAB308' }}>Densidade</span>
+            <span style={{ fontSize:9, color:'#EAB308', opacity:0.7, marginLeft:2 }}>calculada automaticamente</span>
+          </div>
+        </div>
+
+        {/* Planilha */}
+        {loading ? (
+          <div style={{ padding:'40px', textAlign:'center', color:'#334155' }}>Carregando...</div>
+        ) : (
+          <div style={{ padding:'16px 22px 24px' }}>
+            {/* Cabeçalho colunas */}
+            <div style={{ display:'grid', gridTemplateColumns:'60px 1fr 1fr 1fr 1fr 80px 1fr', gap:6, marginBottom:6, padding:'0 2px' }}>
+              {['Sem','Volume','Intensidade','Frequência','Recuperação','Densidade','Notas'].map(h => (
+                <div key={h} style={{ fontSize:9, fontWeight:700, color:'#334155', textTransform:'uppercase', letterSpacing:0.8, padding:'4px 6px' }}>{h}</div>
+              ))}
+            </div>
+
+            {/* Linhas de semanas */}
+            <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+              {semanas.map((s, i) => {
+                const dens = calcDensidade(s.intensidade, s.recuperacao)
+                return (
+                  <div key={i} style={{ display:'grid', gridTemplateColumns:'60px 1fr 1fr 1fr 1fr 80px 1fr', gap:6, padding:'6px 2px', borderRadius:8, background: i%2===0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
+                    {/* Semana */}
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, color:'#60A5FA', background:'rgba(96,165,250,0.1)', borderRadius:6, padding:'6px' }}>
+                      S{s.semana_num}
+                    </div>
+                    {/* Volume */}
+                    <div style={{ border:`1px solid ${FUND_BLOCOS.volume.border}`, borderRadius:6, background:FUND_BLOCOS.volume.bg }}>
+                      <input style={inp} placeholder="ex: 16 séries · 3x/sem"
+                        value={s.volume||''} onChange={e=>updateSemana(i,'volume',e.target.value)} />
+                    </div>
+                    {/* Intensidade */}
+                    <div style={{ border:`1px solid ${FUND_BLOCOS.intensidade.border}`, borderRadius:6, background:FUND_BLOCOS.intensidade.bg }}>
+                      <input style={inp} placeholder="ex: 75% 1RM · PSE 7"
+                        value={s.intensidade||''} onChange={e=>updateSemana(i,'intensidade',e.target.value)} />
+                    </div>
+                    {/* Frequência */}
+                    <div style={{ border:`1px solid ${FUND_BLOCOS.frequencia.border}`, borderRadius:6, background:FUND_BLOCOS.frequencia.bg }}>
+                      <input style={inp} placeholder="ex: 4x · 2x/grupo"
+                        value={s.frequencia||''} onChange={e=>updateSemana(i,'frequencia',e.target.value)} />
+                    </div>
+                    {/* Recuperação */}
+                    <div style={{ border:`1px solid ${FUND_BLOCOS.recuperacao.border}`, borderRadius:6, background:FUND_BLOCOS.recuperacao.bg }}>
+                      <input style={inp} placeholder="ex: 2 dias · 8h sono"
+                        value={s.recuperacao||''} onChange={e=>updateSemana(i,'recuperacao',e.target.value)} />
+                    </div>
+                    {/* Densidade calculada */}
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:700, color:dens.cor, background:`${dens.cor}15`, border:`1px solid ${dens.cor}30`, borderRadius:6, padding:'4px' }}>
+                      {dens.label}
+                    </div>
+                    {/* Notas */}
+                    <div style={{ border:'1px solid rgba(255,255,255,0.07)', borderRadius:6, background:'rgba(255,255,255,0.03)' }}>
+                      <input style={inp} placeholder="observações..."
+                        value={s.notas||''} onChange={e=>updateSemana(i,'notas',e.target.value)} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div style={{ marginTop:16, fontSize:11, color:'#334155', textAlign:'center' }}>
+              Densidade calculada a partir da relação Intensidade ÷ Recuperação. Preencha ambos os campos com valores numéricos para ativar.
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── TabPlanejamento — lista de alunos com acesso direto ao Planner ────────────
 function TabPlanejamento({ students, navigate, session }) {
-  const [search, setSearch]   = useState('')
+  const [search,      setSearch]      = useState('')
   const [mensalAluno, setMensalAluno] = useState(null)
+  const [fundAluno,   setFundAluno]   = useState(null)
 
-  const filtered = students.filter(s =>
-    s.name.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = students.filter(s => s.name.toLowerCase().includes(search.toLowerCase()))
 
   return (
     <div>
-      <div style={{ marginBottom:24 }}>
-        <h1 style={{ fontSize:26, fontWeight:800, color:'#0C3251', letterSpacing:'-0.5px', marginBottom:4, textShadow:'0 1px 3px rgba(255,255,255,0.5)' }}>
-          Planejamento
-        </h1>
-        <p style={{ fontSize:13, color:'#0C4A6E', fontWeight:600 }}>
-          Gerencie macrociclos e mesociclos de cada aluno
-        </p>
+      {/* Header */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20, flexWrap:'wrap', gap:12 }}>
+        <div>
+          <h1 style={{ fontSize:26, fontWeight:800, color:'#0C3251', letterSpacing:'-0.5px', marginBottom:3, textShadow:'0 1px 3px rgba(255,255,255,0.5)' }}>Planejamento</h1>
+          <p style={{ fontSize:13, color:'#0C4A6E', fontWeight:500 }}>{students.length} aluno{students.length!==1?'s':''} · macrociclos, carga e fundamentos</p>
+        </div>
+        {/* Legenda graus de intensidade */}
+        <div style={{ display:'flex', gap:6, alignItems:'center', background:'rgba(255,255,255,0.55)', backdropFilter:'blur(8px)', borderRadius:10, padding:'8px 14px', border:'1px solid rgba(255,255,255,0.8)', flexWrap:'wrap' }}>
+          {Object.entries(GRAUS).map(([k,g]) => (
+            <div key={k} style={{ display:'flex', alignItems:'center', gap:4 }}>
+              <div style={{ width:8, height:8, borderRadius:'50%', background:g.cor }} />
+              <span style={{ fontSize:9, color:'#64748B', fontWeight:600 }}>{g.label}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Busca */}
-      <div style={{ marginBottom:18, background:'rgba(255,255,255,0.55)', borderRadius:12, border:'1px solid rgba(255,255,255,0.8)', backdropFilter:'blur(8px)', padding:'10px 14px', display:'flex', alignItems:'center', gap:10 }}>
+      <div style={{ marginBottom:14, background:'rgba(255,255,255,0.55)', borderRadius:12, border:'1px solid rgba(255,255,255,0.8)', backdropFilter:'blur(8px)', padding:'10px 14px', display:'flex', alignItems:'center', gap:10 }}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="#94A3B8"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-        <input placeholder="Buscar aluno..." value={search} onChange={e => setSearch(e.target.value)}
+        <input placeholder="Buscar aluno..." value={search} onChange={e=>setSearch(e.target.value)}
           style={{ flex:1, background:'none', border:'none', outline:'none', fontSize:13, color:'#0D1B2A', fontFamily:'inherit' }} />
       </div>
 
-      {/* Lista de alunos */}
+      {/* Lista */}
       {filtered.length === 0 ? (
         <div style={{ textAlign:'center', padding:'60px 20px', color:'#0C4A6E', opacity:0.4 }}>
           <div style={{ fontSize:36, marginBottom:10 }}>📋</div>
           <div style={{ fontSize:15, fontWeight:700 }}>Nenhum aluno encontrado</div>
         </div>
       ) : (
-        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+        <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
           {filtered.map(st => {
-            const g = GOAL[st.goal]
+            const g   = GOAL[st.goal]
+            const cor = g?.accent || '#64748B'
             return (
-              <div key={st.id}
-                style={{ background:'rgba(255,255,255,0.65)', backdropFilter:'blur(8px)', borderRadius:14, border:'1.5px solid rgba(255,255,255,0.85)', padding:'14px 18px', display:'flex', alignItems:'center', gap:14, boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
-                {/* Avatar inicial */}
-                <div style={{ width:42, height:42, borderRadius:12, background: g ? g.accent+'20' : '#E2E8F0', border:`1.5px solid ${g ? g.accent+'40' : '#E2E8F0'}`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                  <span style={{ fontSize:16, fontWeight:800, color: g ? g.accent : '#64748B' }}>
-                    {st.name.charAt(0).toUpperCase()}
-                  </span>
+              <div key={st.id} style={{ background:'rgba(255,255,255,0.68)', backdropFilter:'blur(10px)', borderRadius:14, border:'1.5px solid rgba(255,255,255,0.9)', padding:'12px 16px', display:'flex', alignItems:'center', gap:12, boxShadow:'0 2px 10px rgba(12,50,81,0.07)' }}>
+                {/* Avatar */}
+                <div style={{ width:40, height:40, borderRadius:10, background:`${cor}18`, border:`1.5px solid ${cor}35`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                  <span style={{ fontSize:15, fontWeight:800, color:cor }}>{st.name.charAt(0).toUpperCase()}</span>
                 </div>
                 {/* Info */}
                 <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:14, fontWeight:800, color:'#0C3251', marginBottom:2 }}>{st.name}</div>
-                  <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                    {st.goal && (
-                      <span style={{ fontSize:10, fontWeight:700, color: g ? g.accent : '#64748B' }}>{st.goal}</span>
-                    )}
-                    {st.level && (
-                      <span style={{ fontSize:10, color:'#94A3B8' }}>· {st.level}</span>
-                    )}
-                    {st.age && (
-                      <span style={{ fontSize:10, color:'#94A3B8' }}>· {st.age} anos</span>
-                    )}
+                  <div style={{ fontSize:14, fontWeight:700, color:'#0C3251', marginBottom:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{st.name}</div>
+                  <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                    {st.goal  && <span style={{ fontSize:10, fontWeight:700, color:cor }}>{st.goal}</span>}
+                    {st.level && <span style={{ fontSize:10, color:'#94A3B8' }}>· {st.level}</span>}
+                    {st.age   && <span style={{ fontSize:10, color:'#94A3B8' }}>· {st.age} anos</span>}
                   </div>
                 </div>
-                {/* Botão planner */}
-                <div style={{ display:'flex', gap:6, flexShrink:0 }}>
-                  <button onClick={() => setMensalAluno(st)}
-                    title="Grade Mensal"
-                    style={{ padding:'9px 12px', borderRadius:10, border:'1.5px solid rgba(59,130,246,0.4)', cursor:'pointer', background:'rgba(59,130,246,0.1)', color:'#60A5FA', fontWeight:700, fontSize:12, fontFamily:'inherit', display:'flex', alignItems:'center', gap:5 }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 6h2v2H3zm0 4h2v2H3zm0 4h2v2H3zm4-8h14v2H7zm0 4h14v2H7zm0 4h14v2H7z"/></svg>
-                    Grade
+                {/* Ações */}
+                <div style={{ display:'flex', gap:5, flexShrink:0 }}>
+                  <button onClick={() => setMensalAluno(st)} title="Diário de Carga"
+                    style={{ padding:'7px 11px', borderRadius:9, border:'1.5px solid rgba(34,197,94,0.35)', cursor:'pointer', background:'rgba(34,197,94,0.08)', color:'#16A34A', fontWeight:700, fontSize:11, fontFamily:'inherit', display:'flex', alignItems:'center', gap:4 }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+                    Carga
+                  </button>
+                  <button onClick={() => setFundAluno(st)} title="Planilha de Fundamentos"
+                    style={{ padding:'7px 11px', borderRadius:9, border:'1.5px solid rgba(168,85,247,0.35)', cursor:'pointer', background:'rgba(168,85,247,0.08)', color:'#9333EA', fontWeight:700, fontSize:11, fontFamily:'inherit', display:'flex', alignItems:'center', gap:4 }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h18v2H3zm0 4h18v2H3zm0 4h18v2H3zm0 4h18v2H3zm0 4h18v2H3z"/></svg>
+                    Fundamentos
                   </button>
                   <button onClick={() => navigate('planner', { studentId: st.id })}
-                    style={{ padding:'9px 14px', borderRadius:10, border:'none', cursor:'pointer', background:'linear-gradient(135deg,#3B82F6,#1D4ED8)', color:'#fff', fontWeight:700, fontSize:12, fontFamily:'inherit', display:'flex', alignItems:'center', gap:5 }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
+                    style={{ padding:'7px 13px', borderRadius:9, border:'none', cursor:'pointer', background:'linear-gradient(135deg,#3B82F6,#1D4ED8)', color:'#fff', fontWeight:700, fontSize:11, fontFamily:'inherit', display:'flex', alignItems:'center', gap:4, boxShadow:'0 2px 8px rgba(59,130,246,0.3)' }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
                     Planejar
                   </button>
                 </div>
@@ -2864,13 +3031,8 @@ function TabPlanejamento({ students, navigate, session }) {
         </div>
       )}
 
-      {mensalAluno && (
-        <MensalModal
-          student={mensalAluno}
-          teacherId={session?.user?.id}
-          onClose={() => setMensalAluno(null)}
-        />
-      )}
+      {mensalAluno && <MensalModal student={mensalAluno} teacherId={session?.user?.id} onClose={() => setMensalAluno(null)} />}
+      {fundAluno   && <FundamentosModal student={fundAluno} teacherId={session?.user?.id} onClose={() => setFundAluno(null)} />}
     </div>
   )
 }
