@@ -769,67 +769,269 @@ function ExerciseSearch({ onSelect, suggestedTypes, ageGroup }) {
 
 // ── Template Modal ─────────────────────────────────────────────────────────────
 function TemplateModal({ student, ageGroup, semAcademia, onApply, onClose }) {
-  const goal      = student?.goal  || ''
-  const sport     = student?.sport || ''
-  const suggested = getTemplate(goal, ageGroup, sport, semAcademia)
-  const keys      = Object.keys(T)
-  const initKey   = keys.find(k => T[k] === suggested) || 'massa'
-  const [selected,    setSelected]    = useState(initKey)
-  const [showSemAcad, setShowSemAcad] = useState(semAcademia)
-  const tpl         = T[selected]
-  const visibleKeys = keys.filter(k => showSemAcad ? T[k].semAcademia : !T[k].semAcademia)
+  const [dias,     setDias]     = useState(3)
+  const [academia, setAcademia] = useState(!semAcademia)
+  const [anamnese, setAnamnese] = useState(null)
+  const [fundSem,  setFundSem]  = useState(null)
+  const [loading,  setLoading]  = useState(true)
+  const [preview,  setPreview]  = useState(null)
+
+  useEffect(() => {
+    const load = async () => {
+      const [{ data: an }, { data: fs }] = await Promise.all([
+        supabase.from('anamnese').select('*').eq('student_id', student?.id).single(),
+        supabase.from('fundamentos_semana').select('*').eq('student_id', student?.id).order('semana_num').limit(1),
+      ])
+      setAnamnese(an || null)
+      setFundSem(fs?.[0] || null)
+      setLoading(false)
+    }
+    if (student?.id) load()
+    else setLoading(false)
+  }, [student?.id])
+
+  // ── Gerador inteligente de estrutura ────────────────────────────────────────
+  const gerar = () => {
+    const goal    = student?.goal  || 'Saúde e Bem-Estar'
+    const nivel   = student?.level || 'Iniciante'
+    const age     = parseInt(student?.age) || 25
+    const lims    = anamnese?.limitacoes || []
+    const prefs   = anamnese?.preferencias || []
+    const voltando = anamnese?.experiencia === 'voltando'
+
+    // Parâmetros base por objetivo
+    const PARAMS = {
+      'Ganho de Massa':       { sets:[3,4], reps:'8–12',  rest:'1min30s', intensidade:'70–80% 1RM' },
+      'Força e Performance':  { sets:[4,5], reps:'4–6',   rest:'3min',    intensidade:'82–90% 1RM' },
+      'Emagrecimento':        { sets:[3,4], reps:'12–15', rest:'45s',     intensidade:'60–70% 1RM' },
+      'Condicionamento':      { sets:[3,4], reps:'12–15', rest:'1min',    intensidade:'65–75% 1RM' },
+      'Saúde e Bem-Estar':    { sets:[2,3], reps:'12–15', rest:'1min',    intensidade:'60–70% 1RM' },
+      'Iniciação Esportiva':  { sets:[2,3], reps:'12–15', rest:'1min',    intensidade:'Peso corporal/leve' },
+    }
+    // Se voltando, reduz volume/intensidade
+    const p = { ...(PARAMS[goal] || PARAMS['Saúde e Bem-Estar']) }
+    if (voltando) { p.sets = [p.sets[0]-1, p.sets[0]]; p.intensidade = '60–65% 1RM (readaptação)' }
+
+    // Filtro de exercícios por limitações
+    const hasLim = (parts) => parts.some(pt => lims.some(l => l.includes(pt)))
+    const skipOmbro   = hasLim(['ombro'])
+    const skipJoelho  = hasLim(['joelho'])
+    const skipColuna  = hasLim(['coluna'])
+    const skipPunho   = hasLim(['punho'])
+
+    // Exercícios base por grupo (academia vs sem academia)
+    const EX = {
+      Peito:    academia ? [
+        !skipOmbro && !skipPunho ? { name:'Supino Reto',        type:'Musculação', sets:p.sets[1], reps:p.reps, rest:p.rest } : null,
+        !skipOmbro ? { name:'Supino Inclinado Halteres', type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest } : null,
+        !skipOmbro ? { name:'Crucifixo',                 type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest } : null,
+      ] : [
+        !skipOmbro ? { name:'Flexão de Braço',  type:'Funcional', sets:p.sets[0], reps:p.reps, rest:p.rest } : null,
+        !skipOmbro ? { name:'Flexão Inclinada', type:'Funcional', sets:p.sets[0], reps:p.reps, rest:p.rest } : null,
+      ],
+      Costas:   academia ? [
+        !skipPunho ? { name:'Remada Curvada',      type:'Musculação', sets:p.sets[1], reps:p.reps, rest:p.rest } : null,
+        !skipPunho ? { name:'Puxada Frente',        type:'Musculação', sets:p.sets[1], reps:p.reps, rest:p.rest } : null,
+        !skipColuna ? { name:'Hiperextensão',       type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest } : null,
+      ] : [
+        { name:'Remada com Elástico', type:'Funcional', sets:p.sets[0], reps:p.reps, rest:p.rest },
+        { name:'Superman',            type:'Funcional', sets:p.sets[0], reps:'15',   rest:'45s' },
+      ],
+      Ombro:    !skipOmbro ? (academia ? [
+        { name:'Desenvolvimento Máquina', type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest },
+        { name:'Elevação Lateral',        type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest },
+      ] : [
+        { name:'Elevação Lateral Halteres', type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest },
+      ]) : [],
+      Quadríceps: !skipJoelho ? (academia ? [
+        !skipColuna ? { name:'Agachamento Livre', type:'Musculação', sets:p.sets[1], reps:p.reps, rest:p.rest } : null,
+        { name:'Leg Press 45°',      type:'Musculação', sets:p.sets[1], reps:p.reps, rest:p.rest },
+        { name:'Cadeira Extensora',  type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest },
+      ] : [
+        !skipColuna ? { name:'Agachamento Livre', type:'Funcional', sets:p.sets[1], reps:p.reps, rest:p.rest } : null,
+        { name:'Avanço',            type:'Funcional', sets:p.sets[0], reps:p.reps, rest:p.rest },
+      ]) : [],
+      Posterior: academia ? [
+        !skipColuna ? { name:'Stiff',         type:'Musculação', sets:p.sets[1], reps:p.reps, rest:p.rest } : null,
+        { name:'Mesa Flexora',  type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest },
+      ] : [
+        !skipColuna ? { name:'Stiff Halteres', type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest } : null,
+        { name:'Elevação Pélvica', type:'Funcional', sets:p.sets[0], reps:p.reps, rest:p.rest },
+      ],
+      Bíceps:   !skipPunho ? [
+        { name:'Rosca Direta',    type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest },
+        { name:'Rosca Martelo',   type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest },
+      ] : [],
+      Tríceps:  !skipPunho ? [
+        { name:'Tríceps Polia',   type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest },
+        { name:'Tríceps Testa',   type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest },
+      ] : [],
+      Core: [
+        { name:'Abdominal Crunch', type:'Funcional', sets:p.sets[0], reps:'15–20', rest:'45s' },
+        { name:'Prancha',          type:'Funcional', sets:3,         reps:'30–45s', rest:'45s' },
+      ],
+    }
+
+    // Filtra nulls
+    Object.keys(EX).forEach(k => { EX[k] = (EX[k]||[]).filter(Boolean) })
+
+    // Monta divisão por dias
+    let splits = []
+    if (dias <= 2) {
+      splits = [
+        { name:'Treino A', dow:'Seg', focus:'Full Body', exs: [...(EX.Peito||[]).slice(0,1), ...(EX.Costas||[]).slice(0,1), ...(EX.Quadríceps||[]).slice(0,1), ...(EX.Core||[]).slice(0,1)] },
+        { name:'Treino B', dow:'Qui', focus:'Full Body', exs: [...(EX.Ombro||[]).slice(0,1), ...(EX.Posterior||[]).slice(0,1), ...(EX.Bíceps||[]).slice(0,1), ...(EX.Tríceps||[]).slice(0,1), ...(EX.Core||[]).slice(0,1)] },
+      ]
+    } else if (dias === 3) {
+      splits = [
+        { name:'Treino A', dow:'Seg', focus:'Peito + Tríceps + Core',    exs: [...(EX.Peito||[]), ...(EX.Tríceps||[]), ...(EX.Core||[]).slice(0,1)] },
+        { name:'Treino B', dow:'Qua', focus:'Costas + Bíceps',           exs: [...(EX.Costas||[]), ...(EX.Bíceps||[])] },
+        { name:'Treino C', dow:'Sex', focus:'Pernas + Ombro + Core',     exs: [...(EX.Quadríceps||[]), ...(EX.Posterior||[]), ...(EX.Ombro||[]).slice(0,1), ...(EX.Core||[]).slice(0,1)] },
+      ]
+    } else if (dias === 4) {
+      splits = [
+        { name:'Treino A', dow:'Seg', focus:'Upper A — Peito + Bíceps',  exs: [...(EX.Peito||[]), ...(EX.Bíceps||[])] },
+        { name:'Treino B', dow:'Ter', focus:'Lower A — Quadríceps',      exs: [...(EX.Quadríceps||[]), ...(EX.Core||[]).slice(0,1)] },
+        { name:'Treino C', dow:'Qui', focus:'Upper B — Costas + Tríceps',exs: [...(EX.Costas||[]), ...(EX.Ombro||[]).slice(0,1), ...(EX.Tríceps||[])] },
+        { name:'Treino D', dow:'Sex', focus:'Lower B — Posterior',       exs: [...(EX.Posterior||[]), ...(EX.Core||[])] },
+      ]
+    } else {
+      splits = [
+        { name:'Treino A', dow:'Seg', focus:'Peito + Tríceps',           exs: [...(EX.Peito||[]), ...(EX.Tríceps||[])] },
+        { name:'Treino B', dow:'Ter', focus:'Costas + Bíceps',           exs: [...(EX.Costas||[]), ...(EX.Bíceps||[])] },
+        { name:'Treino C', dow:'Qua', focus:'Pernas — Quadríceps',       exs: [...(EX.Quadríceps||[]), ...(EX.Core||[]).slice(0,1)] },
+        { name:'Treino D', dow:'Qui', focus:'Ombro + Core',              exs: [...(EX.Ombro||[]), ...(EX.Core||[])] },
+        { name:'Treino E', dow:'Sex', focus:'Pernas — Posterior',        exs: [...(EX.Posterior||[]), ...(EX.Core||[]).slice(0,1)] },
+      ].slice(0, dias)
+    }
+
+    // Limpa exercícios vazios
+    splits = splits.map(sp => ({ ...sp, exs: (sp.exs||[]).filter(Boolean) })).filter(sp => sp.exs.length > 0)
+
+    setPreview({ splits, params: p })
+  }
+
+  useEffect(() => { if (!loading) gerar() }, [loading, dias, academia])
+
+  const apply = () => {
+    if (!preview) return
+    onApply(preview.splits.map(sp => ({
+      name: sp.name, focus: sp.focus, day_of_week: sp.dow,
+      exercises: sp.exs.map((ex,i) => ({ ...ex, order_index: i, tip: '' })),
+    })))
+    onClose()
+  }
+
+  const goal = student?.goal || ''
+  const lims = anamnese?.limitacoes || []
 
   return (
-    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:16 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background:'rgba(14,9,0,0.97)', borderRadius:20, padding:24, width:'100%', maxWidth:560, maxHeight:'90vh', overflowY:'auto', border:`1px solid ${V.border}` }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
-          <div>
-            <div style={{ fontSize:16, fontWeight:700, color:V.text }}>Gerar Estrutura do Treino</div>
-            <div style={{ fontSize:11, color:V.textSub, marginTop:2 }}>Selecione um template e personalize depois</div>
-          </div>
-          <button onClick={onClose} style={{ background:'none', border:'none', color:V.textSub, cursor:'pointer', fontSize:18 }}>×</button>
-        </div>
-        <div style={{ display:'flex', gap:6, marginBottom:18, background:'rgba(217,119,6,0.04)', borderRadius:10, padding:4 }}>
-          <button onClick={() => { setShowSemAcad(false); setSelected('massa') }}
-            style={{ flex:1, padding:'8px', borderRadius:8, border:'none', background: !showSemAcad ? `linear-gradient(135deg,${V.accent},#B45309)` : 'transparent', color: !showSemAcad ? '#431C00' : V.textSub, fontWeight:700, fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>
-            🏋️ Com Academia
-          </button>
-          <button onClick={() => { setShowSemAcad(true); setSelected('funcional_casa') }}
-            style={{ flex:1, padding:'8px', borderRadius:8, border:'none', background: showSemAcad ? 'linear-gradient(135deg,#34D399,#059669)' : 'transparent', color: showSemAcad ? '#fff' : V.textSub, fontWeight:700, fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>
-            🏠 Sem Academia
-          </button>
-        </div>
-        <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:18 }}>
-          {visibleKeys.map(key => (
-            <div key={key} onClick={() => setSelected(key)}
-              style={{ padding:'10px 14px', borderRadius:10, border:`1px solid ${selected===key ? T[key].color+'60' : V.borderLight}`, background: selected===key ? T[key].color+'10' : 'transparent', cursor:'pointer', display:'flex', alignItems:'center', gap:10 }}>
-              <div style={{ width:10, height:10, borderRadius:'50%', background:T[key].color, flexShrink:0 }} />
-              <span style={{ fontSize:13, fontWeight: selected===key ? 700 : 400, color: selected===key ? T[key].color : V.textSub }}>{T[key].label}</span>
-              {T[key] === suggested && <span style={{ fontSize:9, background:'rgba(52,211,153,0.12)', color:'#34D399', border:'1px solid rgba(52,211,153,0.2)', borderRadius:20, padding:'1px 7px', marginLeft:'auto' }}>Sugerido</span>}
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.65)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:16 }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:V.bgBase, borderRadius:18, width:'100%', maxWidth:620, maxHeight:'90vh', overflowY:'auto', border:`1px solid ${V.border}`, boxShadow:'0 24px 60px rgba(0,0,0,0.5)' }}>
+
+        {/* Header */}
+        <div style={{ padding:'18px 20px', borderBottom:`1px solid ${V.border}`, display:'flex', alignItems:'center', gap:10 }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:15, fontWeight:800, color:V.text }}>Gerar Estrutura de Treino</div>
+            <div style={{ fontSize:11, color:V.textSub, marginTop:2 }}>
+              {goal} · {student?.level} · {student?.age ? `${student.age} anos` : ''}
+              {anamnese?.experiencia === 'voltando' && <span style={{ color:'#FBBF24', marginLeft:6 }}>· Voltando após pausa</span>}
             </div>
-          ))}
-        </div>
-        {tpl && (
-          <div style={{ background:'rgba(217,119,6,0.04)', borderRadius:12, padding:14, marginBottom:18 }}>
-            <div style={{ fontSize:10, color:V.textMuted, fontWeight:700, letterSpacing:1, textTransform:'uppercase', marginBottom:10 }}>Preview — {tpl.days.length} dias</div>
-            {tpl.days.map((day, i) => (
-              <div key={i} style={{ marginBottom:8, padding:'8px 12px', borderRadius:8, background:'rgba(217,119,6,0.04)', border:`1px solid ${V.borderLight}` }}>
-                <div style={{ fontSize:12, fontWeight:700, color:V.text, marginBottom:2 }}>{day.name} <span style={{ color:V.textSub, fontWeight:400 }}>— {day.day_of_week}</span></div>
-                <div style={{ fontSize:10, color:V.textMuted }}>{day.exercises.length} exercícios · {day.focus}</div>
-              </div>
-            ))}
           </div>
-        )}
-        <div style={{ display:'flex', gap:8 }}>
-          <button onClick={() => onApply(tpl)} style={{ ...ss.btn(V.accent), flex:1, padding:'12px' }}>Aplicar Template</button>
-          <button onClick={onClose} style={ss.outlineBtn}>Cancelar</button>
+          <button onClick={onClose} style={{ background:V.accentFaint, border:'none', borderRadius:8, padding:'5px 10px', color:V.textSub, cursor:'pointer', fontSize:13 }}>✕</button>
+        </div>
+
+        <div style={{ padding:'18px 20px' }}>
+          {/* Limitações ativas */}
+          {lims.length > 0 && (
+            <div style={{ marginBottom:14, padding:'10px 14px', background:'rgba(248,113,113,0.08)', border:'1px solid rgba(248,113,113,0.2)', borderRadius:10, fontSize:11, color:'#F87171' }}>
+              ⚠ Limitações detectadas na anamnese: {lims.map(l => l.replace(/_/g,' ')).join(', ')} — exercícios ajustados automaticamente.
+            </div>
+          )}
+
+          {/* Configurações */}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:18 }}>
+            <div>
+              <div style={{ fontSize:11, color:V.textSub, fontWeight:700, textTransform:'uppercase', letterSpacing:0.8, marginBottom:8 }}>Dias por semana</div>
+              <div style={{ display:'flex', gap:5 }}>
+                {[2,3,4,5].map(d => (
+                  <button key={d} onClick={() => setDias(d)}
+                    style={{ flex:1, padding:'8px 0', borderRadius:8, border:`1.5px solid ${dias===d ? V.accent : V.border}`, background: dias===d ? `${V.accent}18` : V.accentFaint, color: dias===d ? V.accent : V.textSub, fontWeight:700, fontSize:13, cursor:'pointer', fontFamily:'inherit' }}>
+                    {d}x
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:V.textSub, fontWeight:700, textTransform:'uppercase', letterSpacing:0.8, marginBottom:8 }}>Equipamento</div>
+              <div style={{ display:'flex', gap:5 }}>
+                {[{v:true,l:'Com Academia'},{v:false,l:'Sem Academia'}].map(({v,l}) => (
+                  <button key={String(v)} onClick={() => setAcademia(v)}
+                    style={{ flex:1, padding:'8px 6px', borderRadius:8, border:`1.5px solid ${academia===v ? V.accent : V.border}`, background: academia===v ? `${V.accent}18` : V.accentFaint, color: academia===v ? V.accent : V.textSub, fontWeight:700, fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Parâmetros calculados */}
+          {preview && (
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:6, marginBottom:18 }}>
+              {[
+                { label:'Séries',      val:`${preview.params.sets[0]}–${preview.params.sets[1]}` },
+                { label:'Reps',        val:preview.params.reps },
+                { label:'Descanso',    val:preview.params.rest },
+                { label:'Intensidade', val:preview.params.intensidade },
+              ].map(({label,val}) => (
+                <div key={label} style={{ background:V.accentFaint, borderRadius:8, padding:'8px 10px', border:`1px solid ${V.border}`, textAlign:'center' }}>
+                  <div style={{ fontSize:9, color:V.textDim, textTransform:'uppercase', letterSpacing:0.8, marginBottom:3 }}>{label}</div>
+                  <div style={{ fontSize:11, fontWeight:700, color:V.accent }}>{val}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Preview da divisão */}
+          {loading ? (
+            <div style={{ textAlign:'center', padding:'30px', color:V.textSub }}>Carregando dados do aluno...</div>
+          ) : preview ? (
+            <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:18 }}>
+              <div style={{ fontSize:11, color:V.textSub, fontWeight:700, textTransform:'uppercase', letterSpacing:0.8, marginBottom:4 }}>Divisão gerada</div>
+              {preview.splits.map((sp,i) => (
+                <div key={i} style={{ background:V.accentFaint, border:`1px solid ${V.border}`, borderRadius:10, padding:'10px 14px' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+                    <span style={{ fontSize:10, background:`${V.accent}18`, color:V.accent, padding:'2px 8px', borderRadius:20, fontWeight:700 }}>{sp.dow}</span>
+                    <span style={{ fontSize:12, fontWeight:700, color:V.text }}>{sp.name}</span>
+                    <span style={{ fontSize:10, color:V.textSub }}>— {sp.focus}</span>
+                  </div>
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:4 }}>
+                    {sp.exs.map((ex,j) => (
+                      <span key={j} style={{ fontSize:10, color:V.textSub, background:'rgba(255,255,255,0.05)', padding:'2px 8px', borderRadius:20, border:`1px solid ${V.borderLight}` }}>
+                        {ex.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <div style={{ display:'flex', gap:8 }}>
+            <button onClick={apply} style={{ flex:1, padding:'13px', borderRadius:12, border:'none', cursor:'pointer', background:`linear-gradient(135deg,${V.accent},${V.accentDark||V.accent})`, color:'#fff', fontWeight:800, fontSize:14, fontFamily:'inherit' }}>
+              Aplicar Estrutura
+            </button>
+            <button onClick={gerar} style={{ padding:'13px 16px', borderRadius:12, border:`1px solid ${V.border}`, background:V.accentFaint, color:V.textSub, fontSize:13, cursor:'pointer', fontFamily:'inherit' }}>
+              ↺
+            </button>
+          </div>
         </div>
       </div>
     </div>
   )
 }
 
-// ── NoEquipmentSection ─────────────────────────────────────────────────────────
+
 function NoEquipmentSection({ onAddExercise }) {
   const [open, setOpen] = useState(false)
   const QUICK = [
