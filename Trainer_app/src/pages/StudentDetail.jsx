@@ -1972,6 +1972,196 @@ function ProgressTab({ progress, exLogs, showProgressForm, setShowProgressForm, 
   )
 }
 
+
+// ── AnamneseTab ───────────────────────────────────────────────────────────────
+const LIMITACOES_OPTS = [
+  { id:'ombro_esq',  label:'Ombro Esq.' }, { id:'ombro_dir',  label:'Ombro Dir.' },
+  { id:'joelho_esq', label:'Joelho Esq.' }, { id:'joelho_dir', label:'Joelho Dir.' },
+  { id:'coluna_lom', label:'Coluna Lombar' }, { id:'coluna_cer', label:'Coluna Cervical' },
+  { id:'quadril',    label:'Quadril' },     { id:'tornozelo_esq', label:'Tornozelo Esq.' },
+  { id:'tornozelo_dir', label:'Tornozelo Dir.' }, { id:'cotovelo_esq', label:'Cotovelo Esq.' },
+  { id:'cotovelo_dir', label:'Cotovelo Dir.' }, { id:'punho_esq', label:'Punho Esq.' },
+  { id:'punho_dir',  label:'Punho Dir.' }, { id:'quadriceps',  label:'Quadríceps' },
+  { id:'posterior',  label:'Posterior Coxa' }, { id:'tornozelo', label:'Tornozelo' },
+]
+
+const EXPERIENCIA_OPTS = [
+  { id:'nunca',    label:'Nunca treinou' },
+  { id:'menos1',   label:'< 1 ano' },
+  { id:'1a2',      label:'1–2 anos' },
+  { id:'3a5',      label:'3–5 anos' },
+  { id:'5mais',    label:'5+ anos' },
+  { id:'voltando', label:'Voltando após pausa' },
+]
+
+const PAUSA_OPTS = [
+  { id:'1a3m',    label:'1–3 meses' },
+  { id:'3a6m',    label:'3–6 meses' },
+  { id:'6a12m',   label:'6–12 meses' },
+  { id:'mais1ano',label:'Mais de 1 ano' },
+]
+
+const PREFERENCIAS_OPTS = [
+  { id:'musculacao',    label:'Musculação' },
+  { id:'cardio',        label:'Cardio' },
+  { id:'aparelhos',     label:'Aparelhos/Máquinas' },
+  { id:'pesos_livres',  label:'Pesos Livres' },
+  { id:'funcional',     label:'Funcional' },
+  { id:'hiit',          label:'HIIT' },
+  { id:'alongamento',   label:'Alongamento/Mobilidade' },
+  { id:'natacao',       label:'Natação' },
+  { id:'outdoor',       label:'Ao ar livre' },
+]
+
+const SAUDE_OPTS = [
+  { id:'hipertensao',  label:'Hipertensão' },
+  { id:'diabetes',     label:'Diabetes' },
+  { id:'cardiopatia',  label:'Cardiopatia' },
+  { id:'asma',         label:'Asma/Respiratório' },
+  { id:'osteoporose',  label:'Osteoporose' },
+  { id:'artrite',      label:'Artrite/Artrose' },
+  { id:'herniadisco',  label:'Hérnia de Disco' },
+  { id:'gestante',     label:'Gestante' },
+]
+
+function Chip({ label, selected, onClick, color }) {
+  const cor = color || '#60A5FA'
+  return (
+    <button onClick={onClick} style={{
+      padding:'6px 12px', borderRadius:20, fontSize:11, fontWeight:600,
+      cursor:'pointer', border:`1.5px solid ${selected ? cor : 'rgba(255,255,255,0.1)'}`,
+      background: selected ? `${cor}20` : 'rgba(255,255,255,0.04)',
+      color: selected ? cor : '#475569', transition:'all 0.15s', fontFamily:'inherit',
+    }}>{label}</button>
+  )
+}
+
+function AnamneseTab({ studentId, teacherId, s }) {
+  const [data,    setData]    = useState(null)
+  const [saving,  setSaving]  = useState(false)
+  const [saved,   setSaved]   = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    supabase.from('anamnese').select('*').eq('student_id', studentId).single()
+      .then(({ data: d }) => {
+        setData(d || {
+          limitacoes:[], limitacao_detalhe:'', experiencia:'', tempo_pausa:'',
+          preferencias:[], condicoes_saude:[], historico:'',
+        })
+        setLoading(false)
+      })
+  }, [studentId])
+
+  const toggle = (field, val) => setData(p => {
+    const arr = p[field] || []
+    return { ...p, [field]: arr.includes(val) ? arr.filter(x=>x!==val) : [...arr, val] }
+  })
+
+  const set1 = (field, val) => setData(p => ({ ...p, [field]: p[field]===val ? '' : val }))
+
+  const save = async () => {
+    setSaving(true)
+    await supabase.from('anamnese').upsert([{
+      student_id: studentId, teacher_id: teacherId, ...data, updated_at: new Date().toISOString(),
+    }], { onConflict: 'student_id' })
+    setSaving(false); setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  if (loading) return <div style={{ padding:30, textAlign:'center', color:'#334155' }}>Carregando...</div>
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:18 }}>
+
+      {/* ── LIMITAÇÕES ── */}
+      <div style={s.card}>
+        <div style={{ fontSize:13, fontWeight:800, color:'#E2E8F0', marginBottom:4 }}>Limitações Físicas</div>
+        <div style={{ fontSize:11, color:'#475569', marginBottom:12 }}>Selecione todas as regiões com dor, lesão ou restrição</div>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:10 }}>
+          {LIMITACOES_OPTS.map(o => (
+            <Chip key={o.id} label={o.label} color="#F87171"
+              selected={(data.limitacoes||[]).includes(o.id)}
+              onClick={() => toggle('limitacoes', o.id)} />
+          ))}
+        </div>
+        {(data.limitacoes||[]).length > 0 && (
+          <div>
+            <div style={{ fontSize:10, color:'#64748B', marginBottom:4, textTransform:'uppercase', letterSpacing:0.8 }}>Detalhe (opcional)</div>
+            <input value={data.limitacao_detalhe||''} onChange={e=>setData(p=>({...p,limitacao_detalhe:e.target.value}))}
+              placeholder="Ex: dor no ombro esquerdo ao elevar acima da cabeça..."
+              style={{ width:'100%', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'8px 12px', color:'#E2E8F0', fontSize:12, outline:'none', boxSizing:'border-box', fontFamily:'inherit' }} />
+          </div>
+        )}
+      </div>
+
+      {/* ── EXPERIÊNCIA ── */}
+      <div style={s.card}>
+        <div style={{ fontSize:13, fontWeight:800, color:'#E2E8F0', marginBottom:4 }}>Experiência de Academia</div>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:10 }}>
+          {EXPERIENCIA_OPTS.map(o => (
+            <Chip key={o.id} label={o.label} color="#60A5FA"
+              selected={data.experiencia===o.id}
+              onClick={() => set1('experiencia', o.id)} />
+          ))}
+        </div>
+        {data.experiencia === 'voltando' && (
+          <>
+            <div style={{ fontSize:11, color:'#475569', marginBottom:6 }}>Quanto tempo afastado?</div>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+              {PAUSA_OPTS.map(o => (
+                <Chip key={o.id} label={o.label} color="#FBBF24"
+                  selected={data.tempo_pausa===o.id}
+                  onClick={() => set1('tempo_pausa', o.id)} />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── PREFERÊNCIAS ── */}
+      <div style={s.card}>
+        <div style={{ fontSize:13, fontWeight:800, color:'#E2E8F0', marginBottom:4 }}>Preferências de Treino</div>
+        <div style={{ fontSize:11, color:'#475569', marginBottom:12 }}>O que o aluno prefere ou gosta de fazer</div>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+          {PREFERENCIAS_OPTS.map(o => (
+            <Chip key={o.id} label={o.label} color="#34D399"
+              selected={(data.preferencias||[]).includes(o.id)}
+              onClick={() => toggle('preferencias', o.id)} />
+          ))}
+        </div>
+      </div>
+
+      {/* ── SAÚDE ── */}
+      <div style={s.card}>
+        <div style={{ fontSize:13, fontWeight:800, color:'#E2E8F0', marginBottom:4 }}>Condições de Saúde</div>
+        <div style={{ fontSize:11, color:'#475569', marginBottom:12 }}>Marque o que for relevante</div>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+          {SAUDE_OPTS.map(o => (
+            <Chip key={o.id} label={o.label} color="#FBBF24"
+              selected={(data.condicoes_saude||[]).includes(o.id)}
+              onClick={() => toggle('condicoes_saude', o.id)} />
+          ))}
+        </div>
+      </div>
+
+      {/* ── HISTÓRICO LIVRE ── */}
+      <div style={s.card}>
+        <div style={{ fontSize:13, fontWeight:800, color:'#E2E8F0', marginBottom:8 }}>Observações e Histórico</div>
+        <textarea value={data.historico||''} onChange={e=>setData(p=>({...p,historico:e.target.value}))}
+          placeholder="Anotações livres: histórico de treinos, cirurgias, medicamentos, metas específicas, comportamento..."
+          style={{ width:'100%', minHeight:80, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'10px 12px', color:'#E2E8F0', fontSize:12, outline:'none', resize:'vertical', boxSizing:'border-box', fontFamily:'inherit', lineHeight:1.6 }} />
+      </div>
+
+      {/* ── SALVAR ── */}
+      <button onClick={save} disabled={saving}
+        style={{ padding:'12px', borderRadius:12, border:'none', cursor:'pointer', background: saved ? 'rgba(52,211,153,0.2)' : 'linear-gradient(135deg,#3B82F6,#1D4ED8)', color: saved ? '#34D399' : '#fff', fontWeight:800, fontSize:14, fontFamily:'inherit', transition:'all 0.2s' }}>
+        {saving ? 'Salvando...' : saved ? '✓ Anamnese Salva' : 'Salvar Anamnese'}
+      </button>
+    </div>
+  )
+}
+
 export default function StudentDetail({ navigate, studentId }) {
   const [student, setStudent] = useState(null)
   const [plans, setPlans] = useState([])
@@ -2284,16 +2474,9 @@ export default function StudentDetail({ navigate, studentId }) {
 
         {/* Avaliação movida para WorkoutEditor */}
 
-        {/* NOTES TAB */}
+        {/* NOTES TAB — Anamnese + observações */}
         {tab === 'notes' && (
-          <div style={s.card}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#94A3B8', marginBottom: 8 }}>Observações do Aluno</div>
-            {editing ? null : (
-              student.notes
-                ? <div style={{ fontSize: 14, color: '#CBD5E1', lineHeight: 1.7 }}>{student.notes}</div>
-                : <div style={{ color: '#334155', fontSize: 14 }}>Nenhuma observação registrada. Clique em "Editar Perfil" para adicionar.</div>
-            )}
-          </div>
+          <AnamneseTab studentId={studentId} teacherId={student.teacher_id} s={s} />
         )}
       </div>
     </div>
