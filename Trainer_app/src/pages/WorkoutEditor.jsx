@@ -778,12 +778,25 @@ function TemplateModal({ student, ageGroup, semAcademia, onApply, onClose }) {
 
   useEffect(() => {
     const load = async () => {
-      const [{ data: an }, { data: fs }] = await Promise.all([
+      // Fetch anamnese + mesociclo ativo em paralelo
+      const [{ data: an }, macRes] = await Promise.all([
         supabase.from('anamnese').select('*').eq('student_id', student?.id).single(),
-        supabase.from('fundamentos_semana').select('*').eq('student_id', student?.id).order('semana_num').limit(1),
+        supabase.from('macrociclos').select('id,data_inicio,semanas_total').eq('student_id', student?.id).order('created_at', { ascending: false }).limit(1),
       ])
       setAnamnese(an || null)
-      setFundSem(fs?.[0] || null)
+
+      // Descobrir mesociclo atual pelo macrociclo mais recente
+      const mac = macRes.data?.[0]
+      if (mac?.data_inicio) {
+        const semAtual = Math.max(1, Math.min(
+          Math.floor((new Date() - new Date(mac.data_inicio)) / (7*24*3600*1000)) + 1,
+          mac.semanas_total
+        ))
+        const { data: mesos } = await supabase.from('mesociclos')
+          .select('*').eq('macrociclo_id', mac.id)
+          .lte('semana_inicio', semAtual).gte('semana_fim', semAtual).limit(1)
+        setFundSem(mesos?.[0] || null)
+      }
       setLoading(false)
     }
     if (student?.id) load()
@@ -799,7 +812,7 @@ function TemplateModal({ student, ageGroup, semAcademia, onApply, onClose }) {
     const prefs   = anamnese?.preferencias || []
     const voltando = anamnese?.experiencia === 'voltando'
 
-    // Parâmetros base por objetivo
+    // Parâmetros: usa mesociclo ativo se disponível, senão usa defaults por objetivo
     const PARAMS = {
       'Ganho de Massa':       { sets:[3,4], reps:'8–12',  rest:'1min30s', intensidade:'70–80% 1RM' },
       'Força e Performance':  { sets:[4,5], reps:'4–6',   rest:'3min',    intensidade:'82–90% 1RM' },
@@ -808,9 +821,19 @@ function TemplateModal({ student, ageGroup, semAcademia, onApply, onClose }) {
       'Saúde e Bem-Estar':    { sets:[2,3], reps:'12–15', rest:'1min',    intensidade:'60–70% 1RM' },
       'Iniciação Esportiva':  { sets:[2,3], reps:'12–15', rest:'1min',    intensidade:'Peso corporal/leve' },
     }
-    // Se voltando, reduz volume/intensidade
-    const p = { ...(PARAMS[goal] || PARAMS['Saúde e Bem-Estar']) }
-    if (voltando) { p.sets = [p.sets[0]-1, p.sets[0]]; p.intensidade = '60–65% 1RM (readaptação)' }
+    const base = PARAMS[goal] || PARAMS['Saúde e Bem-Estar']
+    // Sobrescreve com dados do mesociclo se existirem
+    const p = {
+      sets: fundSem?.ref_sets_min && fundSem?.ref_sets_max
+        ? [fundSem.ref_sets_min, fundSem.ref_sets_max]
+        : base.sets,
+      reps: fundSem?.ref_reps_min && fundSem?.ref_reps_max
+        ? `${fundSem.ref_reps_min}–${fundSem.ref_reps_max}`
+        : base.reps,
+      rest: fundSem?.ref_descanso || base.rest,
+      intensidade: fundSem?.ref_intensidade || base.intensidade,
+    }
+    if (voltando) { p.sets = [Math.max(1,p.sets[0]-1), p.sets[0]]; p.intensidade = '60–65% 1RM (readaptação)' }
 
     // Filtro de exercícios por limitações
     const hasLim = (parts) => parts.some(pt => lims.some(l => l.includes(pt)))
@@ -915,10 +938,16 @@ function TemplateModal({ student, ageGroup, semAcademia, onApply, onClose }) {
 
   const apply = () => {
     if (!preview) return
-    onApply(preview.splits.map(sp => ({
-      name: sp.name, focus: sp.focus, day_of_week: sp.dow,
-      exercises: sp.exs.map((ex,i) => ({ ...ex, order_index: i, tip: '' })),
-    })))
+    onApply({
+      days: preview.splits.map(sp => ({
+        name: sp.name, focus: sp.focus, day_of_week: sp.dow,
+        exercises: sp.exs.map((ex, i) => ({
+          name: ex.name, sets: ex.sets, reps: ex.reps,
+          rest: ex.rest, type: ex.type || 'Musculação',
+          tip: '', order_index: i,
+        })),
+      }))
+    })
     onClose()
   }
 
