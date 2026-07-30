@@ -1973,21 +1973,42 @@ function ProgressTab({ progress, exLogs, showProgressForm, setShowProgressForm, 
 }
 
 
-// ── AnamneseTab ───────────────────────────────────────────────────────────────
+// ── AnamneseTab — PAR-Q + Anamnese do Personal (ACSM) ───────────────────────
+
+// ── Camada 1: PAR-Q ──────────────────────────────────────────────────────────
+const PARQ_PERGUNTAS = [
+  { id:'cardiaco',    texto:'Médico já disse que você tem algum problema no coração?' },
+  { id:'dor_peito',  texto:'Você sente dor no peito ao realizar atividade física?' },
+  { id:'tontura',    texto:'Já perdeu o equilíbrio ou a consciência por tontura recentemente?' },
+  { id:'osseo',      texto:'Tem problema ósseo ou articular que piora com exercício?' },
+  { id:'medicamento',texto:'Usa medicamento para pressão arterial ou problema cardíaco?' },
+  { id:'gestante',   texto:'Está grávida ou deu à luz nos últimos 3 meses?' },
+  { id:'outra_razao',texto:'Existe outra razão física pela qual não deveria praticar atividade física?' },
+]
+
+// ── Camada 2: Anamnese do Personal ───────────────────────────────────────────
 const LIMITACOES_OPTS = [
-  { id:'ombro_esq',  label:'Ombro Esq.' }, { id:'ombro_dir',  label:'Ombro Dir.' },
-  { id:'joelho_esq', label:'Joelho Esq.' }, { id:'joelho_dir', label:'Joelho Dir.' },
-  { id:'coluna_lom', label:'Coluna Lombar' }, { id:'coluna_cer', label:'Coluna Cervical' },
-  { id:'quadril',    label:'Quadril' },     { id:'tornozelo_esq', label:'Tornozelo Esq.' },
-  { id:'tornozelo_dir', label:'Tornozelo Dir.' }, { id:'cotovelo_esq', label:'Cotovelo Esq.' },
-  { id:'cotovelo_dir', label:'Cotovelo Dir.' }, { id:'punho_esq', label:'Punho Esq.' },
-  { id:'punho_dir',  label:'Punho Dir.' }, { id:'quadriceps',  label:'Quadríceps' },
-  { id:'posterior',  label:'Posterior Coxa' }, { id:'tornozelo', label:'Tornozelo' },
+  { id:'nenhuma',       label:'Nenhuma' },
+  { id:'ombro_esq',     label:'Ombro Esq.' },
+  { id:'ombro_dir',     label:'Ombro Dir.' },
+  { id:'joelho_esq',    label:'Joelho Esq.' },
+  { id:'joelho_dir',    label:'Joelho Dir.' },
+  { id:'coluna_lom',    label:'Coluna Lombar' },
+  { id:'coluna_cer',    label:'Coluna Cervical' },
+  { id:'quadril',       label:'Quadril' },
+  { id:'tornozelo_esq', label:'Tornozelo Esq.' },
+  { id:'tornozelo_dir', label:'Tornozelo Dir.' },
+  { id:'cotovelo_esq',  label:'Cotovelo Esq.' },
+  { id:'cotovelo_dir',  label:'Cotovelo Dir.' },
+  { id:'punho_esq',     label:'Punho Esq.' },
+  { id:'punho_dir',     label:'Punho Dir.' },
+  { id:'quadriceps',    label:'Quadríceps' },
+  { id:'posterior',     label:'Posterior Coxa' },
 ]
 
 const EXPERIENCIA_OPTS = [
   { id:'nunca',    label:'Nunca treinou' },
-  { id:'menos1',   label:'< 1 ano' },
+  { id:'menos1',   label:'Menos de 1 ano' },
   { id:'1a2',      label:'1–2 anos' },
   { id:'3a5',      label:'3–5 anos' },
   { id:'5mais',    label:'5+ anos' },
@@ -1995,13 +2016,14 @@ const EXPERIENCIA_OPTS = [
 ]
 
 const PAUSA_OPTS = [
-  { id:'1a3m',    label:'1–3 meses' },
-  { id:'3a6m',    label:'3–6 meses' },
-  { id:'6a12m',   label:'6–12 meses' },
-  { id:'mais1ano',label:'Mais de 1 ano' },
+  { id:'1a3m',     label:'1–3 meses' },
+  { id:'3a6m',     label:'3–6 meses' },
+  { id:'6a12m',    label:'6–12 meses' },
+  { id:'mais1ano', label:'Mais de 1 ano' },
 ]
 
 const PREFERENCIAS_OPTS = [
+  { id:'nenhuma',       label:'Nenhuma preferência' },
   { id:'musculacao',    label:'Musculação' },
   { id:'cardio',        label:'Cardio' },
   { id:'aparelhos',     label:'Aparelhos/Máquinas' },
@@ -2014,6 +2036,7 @@ const PREFERENCIAS_OPTS = [
 ]
 
 const SAUDE_OPTS = [
+  { id:'nenhuma',      label:'Nenhuma' },
   { id:'hipertensao',  label:'Hipertensão' },
   { id:'diabetes',     label:'Diabetes' },
   { id:'cardiopatia',  label:'Cardiopatia' },
@@ -2021,18 +2044,27 @@ const SAUDE_OPTS = [
   { id:'osteoporose',  label:'Osteoporose' },
   { id:'artrite',      label:'Artrite/Artrose' },
   { id:'herniadisco',  label:'Hérnia de Disco' },
-  { id:'gestante',     label:'Gestante' },
 ]
 
-function Chip({ label, selected, onClick, color }) {
-  const cor = color || '#60A5FA'
+function Chip({ label, selected, onClick, color, warn }) {
+  const cor = warn ? '#F87171' : (color || '#60A5FA')
   return (
     <button onClick={onClick} style={{
-      padding:'6px 12px', borderRadius:20, fontSize:11, fontWeight:600,
-      cursor:'pointer', border:`1.5px solid ${selected ? cor : 'rgba(255,255,255,0.1)'}`,
-      background: selected ? `${cor}20` : 'rgba(255,255,255,0.04)',
-      color: selected ? cor : '#475569', transition:'all 0.15s', fontFamily:'inherit',
+      padding:'6px 13px', borderRadius:20, fontSize:11, fontWeight:600,
+      cursor:'pointer', fontFamily:'inherit',
+      border:`1.5px solid ${selected ? cor : 'rgba(255,255,255,0.1)'}`,
+      background: selected ? `${cor}22` : 'rgba(255,255,255,0.04)',
+      color: selected ? cor : '#475569', transition:'all 0.15s',
     }}>{label}</button>
+  )
+}
+
+function SecLabel({ title, sub }) {
+  return (
+    <div style={{ marginBottom:10 }}>
+      <div style={{ fontSize:13, fontWeight:800, color:'#E2E8F0' }}>{title}</div>
+      {sub && <div style={{ fontSize:11, color:'#475569', marginTop:2 }}>{sub}</div>}
+    </div>
   )
 }
 
@@ -2042,72 +2074,125 @@ function AnamneseTab({ studentId, teacherId, s }) {
   const [saved,   setSaved]   = useState(false)
   const [loading, setLoading] = useState(true)
 
+  const EMPTY = {
+    // PAR-Q
+    parq: {},
+    // Anamnese
+    limitacoes: [], limitacao_detalhe: '',
+    experiencia: '', tempo_pausa: '',
+    preferencias: [], condicoes_saude: [],
+    historico: '',
+  }
+
   useEffect(() => {
     supabase.from('anamnese').select('*').eq('student_id', studentId).single()
-      .then(({ data: d }) => {
-        setData(d || {
-          limitacoes:[], limitacao_detalhe:'', experiencia:'', tempo_pausa:'',
-          preferencias:[], condicoes_saude:[], historico:'',
-        })
-        setLoading(false)
-      })
+      .then(({ data: d }) => { setData(d ? { ...EMPTY, ...d } : EMPTY); setLoading(false) })
   }, [studentId])
 
-  const toggle = (field, val) => setData(p => {
+  // Toggle array — se clicar em "nenhuma", limpa tudo e coloca só nenhuma
+  const toggleArr = (field, val) => setData(p => {
     const arr = p[field] || []
-    return { ...p, [field]: arr.includes(val) ? arr.filter(x=>x!==val) : [...arr, val] }
+    if (val === 'nenhuma') return { ...p, [field]: arr.includes('nenhuma') ? [] : ['nenhuma'] }
+    const sem = arr.filter(x => x !== 'nenhuma')
+    return { ...p, [field]: sem.includes(val) ? sem.filter(x=>x!==val) : [...sem, val] }
   })
+
+  const toggleParq = (id) => setData(p => ({
+    ...p, parq: { ...p.parq, [id]: !p.parq?.[id] }
+  }))
 
   const set1 = (field, val) => setData(p => ({ ...p, [field]: p[field]===val ? '' : val }))
 
   const save = async () => {
     setSaving(true)
     await supabase.from('anamnese').upsert([{
-      student_id: studentId, teacher_id: teacherId, ...data, updated_at: new Date().toISOString(),
+      student_id: studentId, teacher_id: teacherId,
+      ...data, updated_at: new Date().toISOString(),
     }], { onConflict: 'student_id' })
     setSaving(false); setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+    setTimeout(() => setSaved(false), 2500)
   }
 
   if (loading) return <div style={{ padding:30, textAlign:'center', color:'#334155' }}>Carregando...</div>
 
-  return (
-    <div style={{ display:'flex', flexDirection:'column', gap:18 }}>
+  const parqPositivos = PARQ_PERGUNTAS.filter(q => data.parq?.[q.id])
+  const alerta = parqPositivos.length > 0
 
-      {/* ── LIMITAÇÕES ── */}
+  const inp = { width:'100%', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'9px 12px', color:'#E2E8F0', fontSize:12, outline:'none', boxSizing:'border-box', fontFamily:'inherit' }
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+
+      {/* ══ CAMADA 1: PAR-Q ══════════════════════════════════════════════════ */}
+      <div style={{ ...s.card, borderColor: alerta ? 'rgba(248,113,113,0.35)' : undefined }}>
+        <SecLabel
+          title="PAR-Q — Prontidão para Atividade Física"
+          sub="Instrumento validado pelo ACSM. Marque SIM nas perguntas que se aplicam ao aluno."
+        />
+
+        {alerta && (
+          <div style={{ marginBottom:12, padding:'10px 14px', background:'rgba(248,113,113,0.1)', border:'1px solid rgba(248,113,113,0.3)', borderRadius:10, fontSize:12, color:'#F87171', lineHeight:1.6 }}>
+            ⚠ {parqPositivos.length} resposta(s) positiva(s). Recomendado encaminhamento médico antes do início do programa.
+          </div>
+        )}
+
+        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          {PARQ_PERGUNTAS.map(q => {
+            const sim = !!data.parq?.[q.id]
+            return (
+              <div key={q.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 14px', borderRadius:10, background: sim ? 'rgba(248,113,113,0.07)' : 'rgba(255,255,255,0.03)', border:`1px solid ${sim ? 'rgba(248,113,113,0.25)' : 'rgba(255,255,255,0.07)'}` }}>
+                <div style={{ flex:1, fontSize:12, color: sim ? '#F87171' : '#CBD5E1', lineHeight:1.5 }}>{q.texto}</div>
+                <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+                  <button onClick={() => { if (sim) toggleParq(q.id) }}
+                    style={{ padding:'5px 12px', borderRadius:20, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit', border:`1.5px solid ${!sim ? 'rgba(52,211,153,0.4)' : 'rgba(255,255,255,0.1)'}`, background: !sim ? 'rgba(52,211,153,0.12)' : 'rgba(255,255,255,0.04)', color: !sim ? '#34D399' : '#475569' }}>
+                    Não
+                  </button>
+                  <button onClick={() => { if (!sim) toggleParq(q.id) }}
+                    style={{ padding:'5px 12px', borderRadius:20, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit', border:`1.5px solid ${sim ? 'rgba(248,113,113,0.4)' : 'rgba(255,255,255,0.1)'}`, background: sim ? 'rgba(248,113,113,0.12)' : 'rgba(255,255,255,0.04)', color: sim ? '#F87171' : '#475569' }}>
+                    Sim
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ══ CAMADA 2: ANAMNESE DO PERSONAL ══════════════════════════════════ */}
+
+      {/* Limitações físicas */}
       <div style={s.card}>
-        <div style={{ fontSize:13, fontWeight:800, color:'#E2E8F0', marginBottom:4 }}>Limitações Físicas</div>
-        <div style={{ fontSize:11, color:'#475569', marginBottom:12 }}>Selecione todas as regiões com dor, lesão ou restrição</div>
-        <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:10 }}>
+        <SecLabel title="Limitações Físicas" sub="Regiões com dor, lesão ou restrição de movimento" />
+        <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom: (data.limitacoes||[]).some(l=>l!=='nenhuma') ? 10 : 0 }}>
           {LIMITACOES_OPTS.map(o => (
-            <Chip key={o.id} label={o.label} color="#F87171"
+            <Chip key={o.id} label={o.label}
+              color={o.id==='nenhuma' ? '#34D399' : '#F87171'}
               selected={(data.limitacoes||[]).includes(o.id)}
-              onClick={() => toggle('limitacoes', o.id)} />
+              onClick={() => toggleArr('limitacoes', o.id)} />
           ))}
         </div>
-        {(data.limitacoes||[]).length > 0 && (
-          <div>
-            <div style={{ fontSize:10, color:'#64748B', marginBottom:4, textTransform:'uppercase', letterSpacing:0.8 }}>Detalhe (opcional)</div>
-            <input value={data.limitacao_detalhe||''} onChange={e=>setData(p=>({...p,limitacao_detalhe:e.target.value}))}
-              placeholder="Ex: dor no ombro esquerdo ao elevar acima da cabeça..."
-              style={{ width:'100%', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'8px 12px', color:'#E2E8F0', fontSize:12, outline:'none', boxSizing:'border-box', fontFamily:'inherit' }} />
+        {(data.limitacoes||[]).some(l => l!=='nenhuma') && (
+          <div style={{ marginTop:8 }}>
+            <div style={{ fontSize:10, color:'#64748B', marginBottom:4, textTransform:'uppercase', letterSpacing:0.8 }}>Descreva a limitação</div>
+            <input style={inp} placeholder="Ex: dor no ombro esquerdo ao elevar acima da cabeça..."
+              value={data.limitacao_detalhe||''} onChange={e=>setData(p=>({...p,limitacao_detalhe:e.target.value}))} />
           </div>
         )}
       </div>
 
-      {/* ── EXPERIÊNCIA ── */}
+      {/* Experiência */}
       <div style={s.card}>
-        <div style={{ fontSize:13, fontWeight:800, color:'#E2E8F0', marginBottom:4 }}>Experiência de Academia</div>
-        <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:10 }}>
+        <SecLabel title="Experiência de Academia" />
+        <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom: data.experiencia==='voltando' ? 10 : 0 }}>
           {EXPERIENCIA_OPTS.map(o => (
             <Chip key={o.id} label={o.label} color="#60A5FA"
               selected={data.experiencia===o.id}
               onClick={() => set1('experiencia', o.id)} />
           ))}
         </div>
-        {data.experiencia === 'voltando' && (
+        {data.experiencia==='voltando' && (
           <>
-            <div style={{ fontSize:11, color:'#475569', marginBottom:6 }}>Quanto tempo afastado?</div>
+            <div style={{ fontSize:11, color:'#475569', marginBottom:6 }}>Tempo afastado:</div>
             <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
               {PAUSA_OPTS.map(o => (
                 <Chip key={o.id} label={o.label} color="#FBBF24"
@@ -2119,48 +2204,51 @@ function AnamneseTab({ studentId, teacherId, s }) {
         )}
       </div>
 
-      {/* ── PREFERÊNCIAS ── */}
+      {/* Preferências */}
       <div style={s.card}>
-        <div style={{ fontSize:13, fontWeight:800, color:'#E2E8F0', marginBottom:4 }}>Preferências de Treino</div>
-        <div style={{ fontSize:11, color:'#475569', marginBottom:12 }}>O que o aluno prefere ou gosta de fazer</div>
+        <SecLabel title="Preferências de Treino" sub="O que o aluno prefere ou gosta de fazer" />
         <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
           {PREFERENCIAS_OPTS.map(o => (
-            <Chip key={o.id} label={o.label} color="#34D399"
+            <Chip key={o.id} label={o.label}
+              color={o.id==='nenhuma' ? '#94A3B8' : '#34D399'}
               selected={(data.preferencias||[]).includes(o.id)}
-              onClick={() => toggle('preferencias', o.id)} />
+              onClick={() => toggleArr('preferencias', o.id)} />
           ))}
         </div>
       </div>
 
-      {/* ── SAÚDE ── */}
+      {/* Condições de saúde */}
       <div style={s.card}>
-        <div style={{ fontSize:13, fontWeight:800, color:'#E2E8F0', marginBottom:4 }}>Condições de Saúde</div>
-        <div style={{ fontSize:11, color:'#475569', marginBottom:12 }}>Marque o que for relevante</div>
+        <SecLabel title="Condições de Saúde" sub="Marque o que for relevante" />
         <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
           {SAUDE_OPTS.map(o => (
-            <Chip key={o.id} label={o.label} color="#FBBF24"
+            <Chip key={o.id} label={o.label}
+              color={o.id==='nenhuma' ? '#34D399' : '#FBBF24'}
               selected={(data.condicoes_saude||[]).includes(o.id)}
-              onClick={() => toggle('condicoes_saude', o.id)} />
+              onClick={() => toggleArr('condicoes_saude', o.id)} />
           ))}
         </div>
       </div>
 
-      {/* ── HISTÓRICO LIVRE ── */}
+      {/* Histórico livre */}
       <div style={s.card}>
-        <div style={{ fontSize:13, fontWeight:800, color:'#E2E8F0', marginBottom:8 }}>Observações e Histórico</div>
+        <SecLabel title="Observações e Histórico Livre" />
         <textarea value={data.historico||''} onChange={e=>setData(p=>({...p,historico:e.target.value}))}
-          placeholder="Anotações livres: histórico de treinos, cirurgias, medicamentos, metas específicas, comportamento..."
-          style={{ width:'100%', minHeight:80, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'10px 12px', color:'#E2E8F0', fontSize:12, outline:'none', resize:'vertical', boxSizing:'border-box', fontFamily:'inherit', lineHeight:1.6 }} />
+          placeholder="Cirurgias, medicamentos, metas específicas, comportamento, outras informações relevantes..."
+          style={{ ...inp, minHeight:75, resize:'vertical', lineHeight:1.6 }} />
       </div>
 
-      {/* ── SALVAR ── */}
+      {/* Salvar */}
       <button onClick={save} disabled={saving}
-        style={{ padding:'12px', borderRadius:12, border:'none', cursor:'pointer', background: saved ? 'rgba(52,211,153,0.2)' : 'linear-gradient(135deg,#3B82F6,#1D4ED8)', color: saved ? '#34D399' : '#fff', fontWeight:800, fontSize:14, fontFamily:'inherit', transition:'all 0.2s' }}>
+        style={{ padding:'13px', borderRadius:12, border:'none', cursor:'pointer', fontWeight:800, fontSize:14, fontFamily:'inherit', transition:'all 0.2s',
+          background: saved ? 'rgba(52,211,153,0.2)' : 'linear-gradient(135deg,#3B82F6,#1D4ED8)',
+          color: saved ? '#34D399' : '#fff' }}>
         {saving ? 'Salvando...' : saved ? '✓ Anamnese Salva' : 'Salvar Anamnese'}
       </button>
     </div>
   )
 }
+
 
 export default function StudentDetail({ navigate, studentId }) {
   const [student, setStudent] = useState(null)
