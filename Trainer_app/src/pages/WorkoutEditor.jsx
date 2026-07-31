@@ -769,23 +769,60 @@ function ExerciseSearch({ onSelect, suggestedTypes, ageGroup }) {
 
 // ── Template Modal ─────────────────────────────────────────────────────────────
 function TemplateModal({ student, ageGroup, semAcademia, onApply, onClose }) {
-  const [dias,     setDias]     = useState(3)
-  const [academia, setAcademia] = useState(!semAcademia)
-  const [anamnese, setAnamnese] = useState(null)
-  const [fundSem,  setFundSem]  = useState(null)
-  const [loading,  setLoading]  = useState(true)
-  const [preview,  setPreview]  = useState(null)
+  const [dias,       setDias]       = useState(3)
+  const [academia,   setAcademia]   = useState(!semAcademia)
+  const [divisao,    setDivisao]    = useState('')
+  const [enfoque,    setEnfoque]    = useState([])
+  const [evitar,     setEvitar]     = useState([])
+  const [anamnese,   setAnamnese]   = useState(null)
+  const [fundSem,    setFundSem]    = useState(null)
+  const [loading,    setLoading]    = useState(true)
+  const [preview,    setPreview]    = useState(null)
+
+  // ── Grupos musculares ──────────────────────────────────────────────────────
+  const GRUPOS = [
+    { id:'Peito',      icon:'💪' },
+    { id:'Costas',     icon:'🔙' },
+    { id:'Ombro',      icon:'🏋️' },
+    { id:'Bíceps',     icon:'💪' },
+    { id:'Tríceps',    icon:'💪' },
+    { id:'Quadríceps', icon:'🦵' },
+    { id:'Posterior',  icon:'🦵' },
+    { id:'Glúteo',     icon:'🍑' },
+    { id:'Panturrilha',icon:'🦶' },
+    { id:'Core',       icon:'🎯' },
+    { id:'Abdômen',    icon:'⬜' },
+  ]
+
+  // ── Divisões disponíveis por nº de dias ────────────────────────────────────
+  const DIVISOES = {
+    2: [
+      { id:'full_ab',   label:'Full Body A/B',         desc:'Dois treinos completos alternados' },
+    ],
+    3: [
+      { id:'abc',       label:'ABC',                   desc:'Cada dia um grupo principal' },
+      { id:'push_pull_legs', label:'Push / Pull / Legs', desc:'Empurrar · Puxar · Pernas' },
+      { id:'full_3',    label:'Full Body 3x',          desc:'Três treinos completos diferentes' },
+    ],
+    4: [
+      { id:'upper_lower', label:'Upper / Lower',       desc:'Superior e inferior alternados (2+2)' },
+      { id:'push_pull_legs_4', label:'PPL + Full Body', desc:'Push · Pull · Legs · Full Body' },
+      { id:'abcd',      label:'ABCD',                  desc:'Quatro treinos com grupos distintos' },
+    ],
+    5: [
+      { id:'ppl_5',     label:'PPL + Upper + Lower',   desc:'Push · Pull · Legs + Superior · Inferior' },
+      { id:'abcde',     label:'ABCDE',                 desc:'Cinco treinos com grupos distintos' },
+      { id:'upper_lower_5', label:'Upper / Lower 5x',  desc:'Superior e inferior com mais frequência' },
+    ],
+  }
 
   useEffect(() => {
     const load = async () => {
-      // Fetch anamnese + mesociclo ativo em paralelo
       const [{ data: an }, macRes] = await Promise.all([
         supabase.from('anamnese').select('*').eq('student_id', student?.id).single(),
         supabase.from('macrociclos').select('id,data_inicio,semanas_total').eq('student_id', student?.id).order('created_at', { ascending: false }).limit(1),
       ])
       setAnamnese(an || null)
-
-      // Descobrir mesociclo atual pelo macrociclo mais recente
       const mac = macRes.data?.[0]
       if (mac?.data_inicio) {
         const semAtual = Math.max(1, Math.min(
@@ -797,144 +834,231 @@ function TemplateModal({ student, ageGroup, semAcademia, onApply, onClose }) {
           .lte('semana_inicio', semAtual).gte('semana_fim', semAtual).limit(1)
         setFundSem(mesos?.[0] || null)
       }
+      // Auto-selecionar primeira divisão disponível
+      const divs = DIVISOES[3]
+      if (divs?.length) setDivisao(divs[0].id)
       setLoading(false)
     }
     if (student?.id) load()
     else setLoading(false)
   }, [student?.id])
 
-  // ── Gerador inteligente de estrutura ────────────────────────────────────────
+  useEffect(() => {
+    const divs = DIVISOES[dias]
+    if (divs?.length && !divs.find(d => d.id === divisao)) setDivisao(divs[0].id)
+  }, [dias])
+
+  const toggleGrupo = (arr, setArr, id) => {
+    setArr(p => p.includes(id) ? p.filter(x => x!==id) : [...p, id])
+  }
+
+  // ── Gerador de estrutura ───────────────────────────────────────────────────
   const gerar = () => {
-    const goal    = student?.goal  || 'Saúde e Bem-Estar'
-    const nivel   = student?.level || 'Iniciante'
-    const age     = parseInt(student?.age) || 25
-    const lims    = anamnese?.limitacoes || []
-    const prefs   = anamnese?.preferencias || []
+    const goal     = student?.goal  || 'Saúde e Bem-Estar'
+    const nivel    = student?.level || 'Iniciante'
+    const lims     = anamnese?.limitacoes || []
     const voltando = anamnese?.experiencia === 'voltando'
 
-    // Parâmetros: usa mesociclo ativo se disponível, senão usa defaults por objetivo
+    // Parâmetros — mesociclo tem prioridade
     const PARAMS = {
       'Ganho de Massa':       { sets:[3,4], reps:'8–12',  rest:'1min30s', intensidade:'70–80% 1RM' },
       'Força e Performance':  { sets:[4,5], reps:'4–6',   rest:'3min',    intensidade:'82–90% 1RM' },
       'Emagrecimento':        { sets:[3,4], reps:'12–15', rest:'45s',     intensidade:'60–70% 1RM' },
       'Condicionamento':      { sets:[3,4], reps:'12–15', rest:'1min',    intensidade:'65–75% 1RM' },
       'Saúde e Bem-Estar':    { sets:[2,3], reps:'12–15', rest:'1min',    intensidade:'60–70% 1RM' },
-      'Iniciação Esportiva':  { sets:[2,3], reps:'12–15', rest:'1min',    intensidade:'Peso corporal/leve' },
+      'Iniciação Esportiva':  { sets:[2,3], reps:'12–15', rest:'1min',    intensidade:'Peso corporal' },
     }
     const base = PARAMS[goal] || PARAMS['Saúde e Bem-Estar']
-    // Sobrescreve com dados do mesociclo se existirem
     const p = {
-      sets: fundSem?.ref_sets_min && fundSem?.ref_sets_max
-        ? [fundSem.ref_sets_min, fundSem.ref_sets_max]
-        : base.sets,
-      reps: fundSem?.ref_reps_min && fundSem?.ref_reps_max
-        ? `${fundSem.ref_reps_min}–${fundSem.ref_reps_max}`
-        : base.reps,
+      sets: fundSem?.ref_sets_min ? [fundSem.ref_sets_min, fundSem.ref_sets_max] : base.sets,
+      reps: fundSem?.ref_reps_min ? `${fundSem.ref_reps_min}–${fundSem.ref_reps_max}` : base.reps,
       rest: fundSem?.ref_descanso || base.rest,
       intensidade: fundSem?.ref_intensidade || base.intensidade,
     }
     if (voltando) { p.sets = [Math.max(1,p.sets[0]-1), p.sets[0]]; p.intensidade = '60–65% 1RM (readaptação)' }
 
-    // Filtro de exercícios por limitações
+    // Filtros
     const hasLim = (parts) => parts.some(pt => lims.some(l => l.includes(pt)))
-    const skipOmbro   = hasLim(['ombro'])
-    const skipJoelho  = hasLim(['joelho'])
-    const skipColuna  = hasLim(['coluna'])
-    const skipPunho   = hasLim(['punho'])
+    const skipOmbro  = hasLim(['ombro'])
+    const skipJoelho = hasLim(['joelho'])
+    const skipColuna = hasLim(['coluna'])
+    const skipPunho  = hasLim(['punho'])
 
-    // Exercícios base por grupo (academia vs sem academia)
-    const EX = {
-      Peito:    academia ? [
-        !skipOmbro && !skipPunho ? { name:'Supino Reto',        type:'Musculação', sets:p.sets[1], reps:p.reps, rest:p.rest } : null,
-        !skipOmbro ? { name:'Supino Inclinado Halteres', type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest } : null,
-        !skipOmbro ? { name:'Crucifixo',                 type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest } : null,
-      ] : [
-        !skipOmbro ? { name:'Flexão de Braço',  type:'Funcional', sets:p.sets[0], reps:p.reps, rest:p.rest } : null,
-        !skipOmbro ? { name:'Flexão Inclinada', type:'Funcional', sets:p.sets[0], reps:p.reps, rest:p.rest } : null,
-      ],
-      Costas:   academia ? [
-        !skipPunho ? { name:'Remada Curvada',      type:'Musculação', sets:p.sets[1], reps:p.reps, rest:p.rest } : null,
-        !skipPunho ? { name:'Puxada Frente',        type:'Musculação', sets:p.sets[1], reps:p.reps, rest:p.rest } : null,
-        !skipColuna ? { name:'Hiperextensão',       type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest } : null,
-      ] : [
-        { name:'Remada com Elástico', type:'Funcional', sets:p.sets[0], reps:p.reps, rest:p.rest },
-        { name:'Superman',            type:'Funcional', sets:p.sets[0], reps:'15',   rest:'45s' },
-      ],
-      Ombro:    !skipOmbro ? (academia ? [
-        { name:'Desenvolvimento Máquina', type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest },
-        { name:'Elevação Lateral',        type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest },
-      ] : [
-        { name:'Elevação Lateral Halteres', type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest },
-      ]) : [],
-      Quadríceps: !skipJoelho ? (academia ? [
-        !skipColuna ? { name:'Agachamento Livre', type:'Musculação', sets:p.sets[1], reps:p.reps, rest:p.rest } : null,
-        { name:'Leg Press 45°',      type:'Musculação', sets:p.sets[1], reps:p.reps, rest:p.rest },
-        { name:'Cadeira Extensora',  type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest },
-      ] : [
-        !skipColuna ? { name:'Agachamento Livre', type:'Funcional', sets:p.sets[1], reps:p.reps, rest:p.rest } : null,
-        { name:'Avanço',            type:'Funcional', sets:p.sets[0], reps:p.reps, rest:p.rest },
-      ]) : [],
-      Posterior: academia ? [
-        !skipColuna ? { name:'Stiff',         type:'Musculação', sets:p.sets[1], reps:p.reps, rest:p.rest } : null,
-        { name:'Mesa Flexora',  type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest },
-      ] : [
-        !skipColuna ? { name:'Stiff Halteres', type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest } : null,
-        { name:'Elevação Pélvica', type:'Funcional', sets:p.sets[0], reps:p.reps, rest:p.rest },
-      ],
-      Bíceps:   !skipPunho ? [
-        { name:'Rosca Direta',    type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest },
-        { name:'Rosca Martelo',   type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest },
-      ] : [],
-      Tríceps:  !skipPunho ? [
-        { name:'Tríceps Polia',   type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest },
-        { name:'Tríceps Testa',   type:'Musculação', sets:p.sets[0], reps:p.reps, rest:p.rest },
-      ] : [],
-      Core: [
-        { name:'Abdominal Crunch', type:'Funcional', sets:p.sets[0], reps:'15–20', rest:'45s' },
-        { name:'Prancha',          type:'Funcional', sets:3,         reps:'30–45s', rest:'45s' },
-      ],
+    // Séries extras para grupos em enfoque
+    const setsFor = (grupo) => {
+      const base_s = enfoque.includes(grupo) ? p.sets[1] + 1 : p.sets[1]
+      return evitar.includes(grupo) ? 0 : base_s
     }
 
-    // Filtra nulls
-    Object.keys(EX).forEach(k => { EX[k] = (EX[k]||[]).filter(Boolean) })
+    // Banco de exercícios por grupo
+    const EX = (grupo, list) => {
+      if (evitar.includes(grupo)) return []
+      const extra = enfoque.includes(grupo)
+      const exs = list.map((e,i) => ({
+        ...e, sets: extra && i === 0 ? p.sets[1] + 1 : p.sets[extra ? 1 : 0],
+        reps: p.reps, rest: p.rest
+      }))
+      return extra ? exs : exs.slice(0, 2)
+    }
 
-    // Monta divisão por dias
+    const getPeito = () => !skipOmbro && !skipPunho ? EX('Peito', academia ? [
+      { name:'Supino Reto',              type:'Musculação' },
+      { name:'Supino Inclinado Halteres',type:'Musculação' },
+      { name:'Crucifixo',                type:'Musculação' },
+    ] : [
+      { name:'Flexão de Braço',          type:'Funcional' },
+      { name:'Flexão Inclinada',         type:'Funcional' },
+    ]) : []
+
+    const getCostas = () => !skipPunho ? EX('Costas', academia ? [
+      { name:'Remada Curvada',           type:'Musculação' },
+      { name:'Puxada Frente',            type:'Musculação' },
+      { name:'Remada Unilateral',        type:'Musculação' },
+    ] : [
+      { name:'Remada com Elástico',      type:'Funcional' },
+      { name:'Superman',                 type:'Funcional' },
+    ]) : []
+
+    const getOmbro = () => !skipOmbro ? EX('Ombro', academia ? [
+      { name:'Desenvolvimento Máquina',  type:'Musculação' },
+      { name:'Elevação Lateral',         type:'Musculação' },
+      { name:'Face Pull',                type:'Musculação' },
+    ] : [
+      { name:'Elevação Lateral Halteres',type:'Musculação' },
+      { name:'Desenvolvimento Halteres', type:'Musculação' },
+    ]) : []
+
+    const getBiceps = () => !skipPunho ? EX('Bíceps', [
+      { name:'Rosca Direta',             type:'Musculação' },
+      { name:'Rosca Martelo',            type:'Musculação' },
+      { name:'Rosca Concentrada',        type:'Musculação' },
+    ]) : []
+
+    const getTriceps = () => !skipPunho ? EX('Tríceps', academia ? [
+      { name:'Tríceps Polia Alta',       type:'Musculação' },
+      { name:'Tríceps Testa',            type:'Musculação' },
+      { name:'Mergulho entre Bancos',    type:'Funcional' },
+    ] : [
+      { name:'Tríceps no Solo',          type:'Funcional' },
+      { name:'Mergulho entre Bancos',    type:'Funcional' },
+    ]) : []
+
+    const getQuad = () => !skipJoelho ? EX('Quadríceps', academia ? [
+      !skipColuna ? { name:'Agachamento Livre',   type:'Musculação' } : null,
+      { name:'Leg Press 45°',            type:'Musculação' },
+      { name:'Cadeira Extensora',        type:'Musculação' },
+    ].filter(Boolean) : [
+      !skipColuna ? { name:'Agachamento Livre',   type:'Funcional' } : null,
+      { name:'Avanço',                   type:'Funcional' },
+    ].filter(Boolean)) : []
+
+    const getPost = () => EX('Posterior', academia ? [
+      !skipColuna ? { name:'Stiff',      type:'Musculação' } : null,
+      { name:'Mesa Flexora',             type:'Musculação' },
+    ].filter(Boolean) : [
+      { name:'Stiff Halteres',           type:'Musculação' },
+      { name:'Elevação Pélvica',         type:'Funcional' },
+    ])
+
+    const getGluteo = () => EX('Glúteo', academia ? [
+      { name:'Hip Thrust',               type:'Musculação' },
+      { name:'Abdução Máquina',          type:'Musculação' },
+    ] : [
+      { name:'Elevação Pélvica',         type:'Funcional' },
+      { name:'Agachamento Sumô',         type:'Funcional' },
+    ])
+
+    const getCore = () => EX('Core', [
+      { name:'Abdominal Crunch',         type:'Funcional', reps:'15–20', rest:'45s' },
+      { name:'Prancha',                  type:'Funcional', reps:'30–45s', rest:'45s' },
+      { name:'Abdominal Bicicleta',      type:'Funcional', reps:'20',    rest:'45s' },
+    ])
+
+    const getPant = () => EX('Panturrilha', academia ? [
+      { name:'Elevação de Panturrilha em Pé', type:'Musculação' },
+    ] : [
+      { name:'Elevação de Panturrilha',       type:'Funcional' },
+    ])
+
+    // Monta divisão
     let splits = []
-    if (dias <= 2) {
+    const div = divisao
+
+    if (div === 'full_ab') {
       splits = [
-        { name:'Treino A', dow:'Seg', focus:'Full Body', exs: [...(EX.Peito||[]).slice(0,1), ...(EX.Costas||[]).slice(0,1), ...(EX.Quadríceps||[]).slice(0,1), ...(EX.Core||[]).slice(0,1)] },
-        { name:'Treino B', dow:'Qui', focus:'Full Body', exs: [...(EX.Ombro||[]).slice(0,1), ...(EX.Posterior||[]).slice(0,1), ...(EX.Bíceps||[]).slice(0,1), ...(EX.Tríceps||[]).slice(0,1), ...(EX.Core||[]).slice(0,1)] },
+        { name:'Treino A', dow:'Seg', focus:'Full Body', exs:[...getPeito().slice(0,1), ...getCostas().slice(0,1), ...getQuad().slice(0,1), ...getOmbro().slice(0,1), ...getCore().slice(0,1)] },
+        { name:'Treino B', dow:'Qui', focus:'Full Body', exs:[...getPeito().slice(1,2), ...getCostas().slice(1,2), ...getPost().slice(0,1), ...getBiceps().slice(0,1), ...getTriceps().slice(0,1), ...getCore().slice(0,1)] },
       ]
-    } else if (dias === 3) {
+    } else if (div === 'abc') {
       splits = [
-        { name:'Treino A', dow:'Seg', focus:'Peito + Tríceps + Core',    exs: [...(EX.Peito||[]), ...(EX.Tríceps||[]), ...(EX.Core||[]).slice(0,1)] },
-        { name:'Treino B', dow:'Qua', focus:'Costas + Bíceps',           exs: [...(EX.Costas||[]), ...(EX.Bíceps||[])] },
-        { name:'Treino C', dow:'Sex', focus:'Pernas + Ombro + Core',     exs: [...(EX.Quadríceps||[]), ...(EX.Posterior||[]), ...(EX.Ombro||[]).slice(0,1), ...(EX.Core||[]).slice(0,1)] },
+        { name:'Treino A', dow:'Seg', focus:'Peito + Tríceps',        exs:[...getPeito(), ...getTriceps(), ...getCore().slice(0,1)] },
+        { name:'Treino B', dow:'Qua', focus:'Costas + Bíceps',        exs:[...getCostas(), ...getBiceps()] },
+        { name:'Treino C', dow:'Sex', focus:'Pernas + Ombro',         exs:[...getQuad(), ...getPost(), ...getGluteo().slice(0,1), ...getOmbro().slice(0,1), ...getPant()] },
       ]
-    } else if (dias === 4) {
+    } else if (div === 'push_pull_legs') {
       splits = [
-        { name:'Treino A', dow:'Seg', focus:'Upper A — Peito + Bíceps',  exs: [...(EX.Peito||[]), ...(EX.Bíceps||[])] },
-        { name:'Treino B', dow:'Ter', focus:'Lower A — Quadríceps',      exs: [...(EX.Quadríceps||[]), ...(EX.Core||[]).slice(0,1)] },
-        { name:'Treino C', dow:'Qui', focus:'Upper B — Costas + Tríceps',exs: [...(EX.Costas||[]), ...(EX.Ombro||[]).slice(0,1), ...(EX.Tríceps||[])] },
-        { name:'Treino D', dow:'Sex', focus:'Lower B — Posterior',       exs: [...(EX.Posterior||[]), ...(EX.Core||[])] },
+        { name:'Push',     dow:'Seg', focus:'Empurrar — Peito + Ombro + Tríceps', exs:[...getPeito(), ...getOmbro(), ...getTriceps()] },
+        { name:'Pull',     dow:'Qua', focus:'Puxar — Costas + Bíceps',            exs:[...getCostas(), ...getBiceps()] },
+        { name:'Legs',     dow:'Sex', focus:'Pernas — Quad + Post + Glúteo',      exs:[...getQuad(), ...getPost(), ...getGluteo(), ...getPant(), ...getCore().slice(0,1)] },
       ]
-    } else {
+    } else if (div === 'full_3') {
       splits = [
-        { name:'Treino A', dow:'Seg', focus:'Peito + Tríceps',           exs: [...(EX.Peito||[]), ...(EX.Tríceps||[])] },
-        { name:'Treino B', dow:'Ter', focus:'Costas + Bíceps',           exs: [...(EX.Costas||[]), ...(EX.Bíceps||[])] },
-        { name:'Treino C', dow:'Qua', focus:'Pernas — Quadríceps',       exs: [...(EX.Quadríceps||[]), ...(EX.Core||[]).slice(0,1)] },
-        { name:'Treino D', dow:'Qui', focus:'Ombro + Core',              exs: [...(EX.Ombro||[]), ...(EX.Core||[])] },
-        { name:'Treino E', dow:'Sex', focus:'Pernas — Posterior',        exs: [...(EX.Posterior||[]), ...(EX.Core||[]).slice(0,1)] },
-      ].slice(0, dias)
+        { name:'Treino A', dow:'Seg', focus:'Full Body A', exs:[...getPeito().slice(0,1), ...getCostas().slice(0,1), ...getQuad().slice(0,1), ...getBiceps().slice(0,1), ...getCore().slice(0,1)] },
+        { name:'Treino B', dow:'Qua', focus:'Full Body B', exs:[...getPeito().slice(1,2), ...getCostas().slice(1,2), ...getPost().slice(0,1), ...getTriceps().slice(0,1), ...getCore().slice(0,1)] },
+        { name:'Treino C', dow:'Sex', focus:'Full Body C', exs:[...getOmbro(), ...getGluteo().slice(0,1), ...getQuad().slice(1,2), ...getPant(), ...getCore().slice(1,2)] },
+      ]
+    } else if (div === 'upper_lower') {
+      splits = [
+        { name:'Upper A',  dow:'Seg', focus:'Superior A — Peito + Costas',        exs:[...getPeito(), ...getCostas()] },
+        { name:'Lower A',  dow:'Ter', focus:'Inferior A — Quadríceps',            exs:[...getQuad(), ...getGluteo().slice(0,1), ...getCore().slice(0,1)] },
+        { name:'Upper B',  dow:'Qui', focus:'Superior B — Ombro + Bíceps + Tríceps', exs:[...getOmbro(), ...getBiceps(), ...getTriceps()] },
+        { name:'Lower B',  dow:'Sex', focus:'Inferior B — Posterior + Panturrilha', exs:[...getPost(), ...getGluteo(), ...getPant(), ...getCore().slice(0,1)] },
+      ]
+    } else if (div === 'push_pull_legs_4') {
+      splits = [
+        { name:'Push',     dow:'Seg', focus:'Empurrar',      exs:[...getPeito(), ...getOmbro(), ...getTriceps()] },
+        { name:'Pull',     dow:'Ter', focus:'Puxar',         exs:[...getCostas(), ...getBiceps()] },
+        { name:'Legs',     dow:'Qui', focus:'Pernas',        exs:[...getQuad(), ...getPost(), ...getGluteo(), ...getPant()] },
+        { name:'Full Body',dow:'Sex', focus:'Corpo Inteiro', exs:[...getPeito().slice(0,1), ...getCostas().slice(0,1), ...getQuad().slice(0,1), ...getOmbro().slice(0,1), ...getCore()] },
+      ]
+    } else if (div === 'abcd') {
+      splits = [
+        { name:'Treino A', dow:'Seg', focus:'Peito + Tríceps',          exs:[...getPeito(), ...getTriceps(), ...getCore().slice(0,1)] },
+        { name:'Treino B', dow:'Ter', focus:'Costas + Bíceps',          exs:[...getCostas(), ...getBiceps()] },
+        { name:'Treino C', dow:'Qui', focus:'Ombro + Core',             exs:[...getOmbro(), ...getCore()] },
+        { name:'Treino D', dow:'Sex', focus:'Pernas — Quad + Post',     exs:[...getQuad(), ...getPost(), ...getGluteo(), ...getPant()] },
+      ]
+    } else if (div === 'ppl_5') {
+      splits = [
+        { name:'Push A',   dow:'Seg', focus:'Empurrar A',    exs:[...getPeito(), ...getOmbro().slice(0,1), ...getTriceps()] },
+        { name:'Pull A',   dow:'Ter', focus:'Puxar A',       exs:[...getCostas(), ...getBiceps()] },
+        { name:'Legs A',   dow:'Qua', focus:'Pernas A',      exs:[...getQuad(), ...getGluteo().slice(0,1), ...getPant()] },
+        { name:'Upper',    dow:'Qui', focus:'Superior B',    exs:[...getPeito().slice(1,2), ...getCostas().slice(1,2), ...getOmbro().slice(1,2), ...getBiceps().slice(0,1), ...getTriceps().slice(0,1)] },
+        { name:'Lower',    dow:'Sex', focus:'Inferior B',    exs:[...getPost(), ...getGluteo(), ...getPant(), ...getCore()] },
+      ]
+    } else if (div === 'abcde') {
+      splits = [
+        { name:'Treino A', dow:'Seg', focus:'Peito',          exs:[...getPeito(), ...getCore().slice(0,1)] },
+        { name:'Treino B', dow:'Ter', focus:'Costas',         exs:[...getCostas()] },
+        { name:'Treino C', dow:'Qua', focus:'Pernas',         exs:[...getQuad(), ...getPost(), ...getGluteo(), ...getPant()] },
+        { name:'Treino D', dow:'Qui', focus:'Ombro + Tríceps',exs:[...getOmbro(), ...getTriceps()] },
+        { name:'Treino E', dow:'Sex', focus:'Bíceps + Core',  exs:[...getBiceps(), ...getCore()] },
+      ]
+    } else if (div === 'upper_lower_5') {
+      splits = [
+        { name:'Upper A',  dow:'Seg', focus:'Superior A',   exs:[...getPeito(), ...getCostas()] },
+        { name:'Lower A',  dow:'Ter', focus:'Inferior A',   exs:[...getQuad(), ...getGluteo(), ...getPant()] },
+        { name:'Upper B',  dow:'Qua', focus:'Superior B',   exs:[...getOmbro(), ...getBiceps(), ...getTriceps()] },
+        { name:'Lower B',  dow:'Qui', focus:'Inferior B',   exs:[...getPost(), ...getGluteo(), ...getPant(), ...getCore().slice(0,1)] },
+        { name:'Upper C',  dow:'Sex', focus:'Superior C',   exs:[...getPeito().slice(1,2), ...getCostas().slice(1,2), ...getOmbro().slice(1,2), ...getCore()] },
+      ]
     }
 
-    // Limpa exercícios vazios
-    splits = splits.map(sp => ({ ...sp, exs: (sp.exs||[]).filter(Boolean) })).filter(sp => sp.exs.length > 0)
-
+    splits = splits.map(sp => ({ ...sp, exs:(sp.exs||[]).filter(Boolean) })).filter(sp => sp.exs.length > 0)
     setPreview({ splits, params: p })
   }
 
-  useEffect(() => { if (!loading) gerar() }, [loading, dias, academia])
+  useEffect(() => { if (!loading) gerar() }, [loading, dias, academia, divisao, enfoque, evitar])
 
   const apply = () => {
     if (!preview) return
@@ -954,34 +1078,49 @@ function TemplateModal({ student, ageGroup, semAcademia, onApply, onClose }) {
   const goal = student?.goal || ''
   const lims = anamnese?.limitacoes || []
 
+  // ── UI helpers ─────────────────────────────────────────────────────────────
+  const ChipSm = ({ label, selected, onClick, color }) => {
+    const cor = color || V.accent
+    return (
+      <button onClick={onClick} style={{ padding:'5px 11px', borderRadius:20, fontSize:11, fontWeight:600, cursor:'pointer', fontFamily:'inherit',
+        border:`1.5px solid ${selected ? cor : V.border}`,
+        background: selected ? `${cor}20` : V.accentFaint,
+        color: selected ? cor : V.textSub, transition:'all 0.12s' }}>
+        {label}
+      </button>
+    )
+  }
+
   return (
     <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.65)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:16 }}>
-      <div onClick={e=>e.stopPropagation()} style={{ background:V.bgBase, borderRadius:18, width:'100%', maxWidth:620, maxHeight:'90vh', overflowY:'auto', border:`1px solid ${V.border}`, boxShadow:'0 24px 60px rgba(0,0,0,0.5)' }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:V.bgBase, borderRadius:18, width:'100%', maxWidth:640, maxHeight:'92vh', overflowY:'auto', border:`1px solid ${V.border}`, boxShadow:'0 24px 60px rgba(0,0,0,0.5)' }}>
 
         {/* Header */}
-        <div style={{ padding:'18px 20px', borderBottom:`1px solid ${V.border}`, display:'flex', alignItems:'center', gap:10 }}>
+        <div style={{ padding:'16px 20px', borderBottom:`1px solid ${V.border}`, display:'flex', alignItems:'center', gap:10, position:'sticky', top:0, background:V.bgBase, zIndex:10 }}>
           <div style={{ flex:1 }}>
             <div style={{ fontSize:15, fontWeight:800, color:V.text }}>Gerar Estrutura de Treino</div>
             <div style={{ fontSize:11, color:V.textSub, marginTop:2 }}>
-              {goal} · {student?.level} · {student?.age ? `${student.age} anos` : ''}
-              {anamnese?.experiencia === 'voltando' && <span style={{ color:'#FBBF24', marginLeft:6 }}>· Voltando após pausa</span>}
+              {goal} · {student?.level}
+              {anamnese?.experiencia==='voltando' && <span style={{ color:'#FBBF24', marginLeft:6 }}>· Voltando após pausa</span>}
+              {fundSem && <span style={{ color:'#34D399', marginLeft:6 }}>· {fundSem.nome}</span>}
             </div>
           </div>
           <button onClick={onClose} style={{ background:V.accentFaint, border:'none', borderRadius:8, padding:'5px 10px', color:V.textSub, cursor:'pointer', fontSize:13 }}>✕</button>
         </div>
 
-        <div style={{ padding:'18px 20px' }}>
-          {/* Limitações ativas */}
-          {lims.length > 0 && (
-            <div style={{ marginBottom:14, padding:'10px 14px', background:'rgba(248,113,113,0.08)', border:'1px solid rgba(248,113,113,0.2)', borderRadius:10, fontSize:11, color:'#F87171' }}>
-              ⚠ Limitações detectadas na anamnese: {lims.map(l => l.replace(/_/g,' ')).join(', ')} — exercícios ajustados automaticamente.
+        <div style={{ padding:'16px 20px', display:'flex', flexDirection:'column', gap:16 }}>
+
+          {/* Limitações detectadas */}
+          {lims.length > 0 && !lims.includes('nenhuma') && (
+            <div style={{ padding:'9px 13px', background:'rgba(248,113,113,0.08)', border:`1px solid rgba(248,113,113,0.2)`, borderRadius:10, fontSize:11, color:'#F87171' }}>
+              ⚠ Limitações: {lims.map(l=>l.replace(/_/g,' ')).join(', ')} — exercícios ajustados automaticamente.
             </div>
           )}
 
-          {/* Configurações */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:18 }}>
+          {/* Dias + Academia */}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
             <div>
-              <div style={{ fontSize:11, color:V.textSub, fontWeight:700, textTransform:'uppercase', letterSpacing:0.8, marginBottom:8 }}>Dias por semana</div>
+              <div style={{ fontSize:10, color:V.textSub, fontWeight:700, textTransform:'uppercase', letterSpacing:0.8, marginBottom:7 }}>Dias por semana</div>
               <div style={{ display:'flex', gap:5 }}>
                 {[2,3,4,5].map(d => (
                   <button key={d} onClick={() => setDias(d)}
@@ -992,9 +1131,9 @@ function TemplateModal({ student, ageGroup, semAcademia, onApply, onClose }) {
               </div>
             </div>
             <div>
-              <div style={{ fontSize:11, color:V.textSub, fontWeight:700, textTransform:'uppercase', letterSpacing:0.8, marginBottom:8 }}>Equipamento</div>
+              <div style={{ fontSize:10, color:V.textSub, fontWeight:700, textTransform:'uppercase', letterSpacing:0.8, marginBottom:7 }}>Equipamento</div>
               <div style={{ display:'flex', gap:5 }}>
-                {[{v:true,l:'Com Academia'},{v:false,l:'Sem Academia'}].map(({v,l}) => (
+                {[{v:true,l:'Academia'},{v:false,l:'Sem Academia'}].map(({v,l}) => (
                   <button key={String(v)} onClick={() => setAcademia(v)}
                     style={{ flex:1, padding:'8px 6px', borderRadius:8, border:`1.5px solid ${academia===v ? V.accent : V.border}`, background: academia===v ? `${V.accent}18` : V.accentFaint, color: academia===v ? V.accent : V.textSub, fontWeight:700, fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>
                     {l}
@@ -1004,9 +1143,54 @@ function TemplateModal({ student, ageGroup, semAcademia, onApply, onClose }) {
             </div>
           </div>
 
+          {/* Divisão preferida */}
+          <div>
+            <div style={{ fontSize:10, color:V.textSub, fontWeight:700, textTransform:'uppercase', letterSpacing:0.8, marginBottom:7 }}>Divisão de Treino</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+              {(DIVISOES[dias]||[]).map(d => (
+                <div key={d.id} onClick={() => setDivisao(d.id)}
+                  style={{ padding:'9px 13px', borderRadius:9, border:`1.5px solid ${divisao===d.id ? V.accent : V.border}`, background: divisao===d.id ? `${V.accent}12` : V.accentFaint, cursor:'pointer', display:'flex', alignItems:'center', gap:10 }}>
+                  <div style={{ width:8, height:8, borderRadius:'50%', background: divisao===d.id ? V.accent : V.borderStrong, flexShrink:0 }} />
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:12, fontWeight:700, color: divisao===d.id ? V.accent : V.text }}>{d.label}</div>
+                    <div style={{ fontSize:10, color:V.textDim }}>{d.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Grupos em enfoque */}
+          <div>
+            <div style={{ fontSize:10, color:V.textSub, fontWeight:700, textTransform:'uppercase', letterSpacing:0.8, marginBottom:7 }}>
+              Grupos em Enfoque <span style={{ opacity:0.5, fontWeight:500 }}>— receberão mais volume</span>
+            </div>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+              {GRUPOS.filter(g => !evitar.includes(g.id)).map(g => (
+                <ChipSm key={g.id} label={g.id} color="#F59E0B"
+                  selected={enfoque.includes(g.id)}
+                  onClick={() => toggleGrupo(enfoque, setEnfoque, g.id)} />
+              ))}
+            </div>
+          </div>
+
+          {/* Grupos a evitar */}
+          <div>
+            <div style={{ fontSize:10, color:V.textSub, fontWeight:700, textTransform:'uppercase', letterSpacing:0.8, marginBottom:7 }}>
+              Grupos a Evitar <span style={{ opacity:0.5, fontWeight:500 }}>— prescrição médica ou preferência</span>
+            </div>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+              {GRUPOS.filter(g => !enfoque.includes(g.id)).map(g => (
+                <ChipSm key={g.id} label={g.id} color="#F87171"
+                  selected={evitar.includes(g.id)}
+                  onClick={() => toggleGrupo(evitar, setEvitar, g.id)} />
+              ))}
+            </div>
+          </div>
+
           {/* Parâmetros calculados */}
           {preview && (
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:6, marginBottom:18 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:6 }}>
               {[
                 { label:'Séries',      val:`${preview.params.sets[0]}–${preview.params.sets[1]}` },
                 { label:'Reps',        val:preview.params.reps },
@@ -1021,23 +1205,25 @@ function TemplateModal({ student, ageGroup, semAcademia, onApply, onClose }) {
             </div>
           )}
 
-          {/* Preview da divisão */}
+          {/* Preview */}
           {loading ? (
-            <div style={{ textAlign:'center', padding:'30px', color:V.textSub }}>Carregando dados do aluno...</div>
+            <div style={{ textAlign:'center', padding:'20px', color:V.textSub }}>Carregando...</div>
           ) : preview ? (
-            <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:18 }}>
-              <div style={{ fontSize:11, color:V.textSub, fontWeight:700, textTransform:'uppercase', letterSpacing:0.8, marginBottom:4 }}>Divisão gerada</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+              <div style={{ fontSize:10, color:V.textSub, fontWeight:700, textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>
+                Divisão gerada — {preview.splits.length} treino{preview.splits.length!==1?'s':''}
+              </div>
               {preview.splits.map((sp,i) => (
-                <div key={i} style={{ background:V.accentFaint, border:`1px solid ${V.border}`, borderRadius:10, padding:'10px 14px' }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
-                    <span style={{ fontSize:10, background:`${V.accent}18`, color:V.accent, padding:'2px 8px', borderRadius:20, fontWeight:700 }}>{sp.dow}</span>
+                <div key={i} style={{ background:V.accentFaint, border:`1px solid ${V.border}`, borderRadius:9, padding:'9px 13px' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:5 }}>
+                    <span style={{ fontSize:10, background:`${V.accent}18`, color:V.accent, padding:'2px 8px', borderRadius:20, fontWeight:700, flexShrink:0 }}>{sp.dow}</span>
                     <span style={{ fontSize:12, fontWeight:700, color:V.text }}>{sp.name}</span>
                     <span style={{ fontSize:10, color:V.textSub }}>— {sp.focus}</span>
                   </div>
                   <div style={{ display:'flex', flexWrap:'wrap', gap:4 }}>
                     {sp.exs.map((ex,j) => (
-                      <span key={j} style={{ fontSize:10, color:V.textSub, background:'rgba(255,255,255,0.05)', padding:'2px 8px', borderRadius:20, border:`1px solid ${V.borderLight}` }}>
-                        {ex.name}
+                      <span key={j} style={{ fontSize:10, color: enfoque.includes(ex._grupo||'') ? '#F59E0B' : V.textSub, background:'rgba(255,255,255,0.05)', padding:'2px 8px', borderRadius:20, border:`1px solid ${V.borderLight}` }}>
+                        {ex.name} {ex.sets && ex.sets > (preview.params.sets[1]) ? '⭐' : ''}
                       </span>
                     ))}
                   </div>
@@ -1046,11 +1232,12 @@ function TemplateModal({ student, ageGroup, semAcademia, onApply, onClose }) {
             </div>
           ) : null}
 
+          {/* Botões */}
           <div style={{ display:'flex', gap:8 }}>
             <button onClick={apply} style={{ flex:1, padding:'13px', borderRadius:12, border:'none', cursor:'pointer', background:`linear-gradient(135deg,${V.accent},${V.accentDark||V.accent})`, color:'#fff', fontWeight:800, fontSize:14, fontFamily:'inherit' }}>
               Aplicar Estrutura
             </button>
-            <button onClick={gerar} style={{ padding:'13px 16px', borderRadius:12, border:`1px solid ${V.border}`, background:V.accentFaint, color:V.textSub, fontSize:13, cursor:'pointer', fontFamily:'inherit' }}>
+            <button onClick={gerar} title="Regenerar" style={{ padding:'13px 16px', borderRadius:12, border:`1px solid ${V.border}`, background:V.accentFaint, color:V.textSub, fontSize:16, cursor:'pointer', fontFamily:'inherit' }}>
               ↺
             </button>
           </div>
@@ -1059,7 +1246,6 @@ function TemplateModal({ student, ageGroup, semAcademia, onApply, onClose }) {
     </div>
   )
 }
-
 
 function NoEquipmentSection({ onAddExercise }) {
   const [open, setOpen] = useState(false)
