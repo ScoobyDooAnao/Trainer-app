@@ -2,21 +2,41 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../supabase'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
+// ── Design tokens StudentDetail ──────────────────────────────────────────────
+const C = {
+  bg:      '#080F1A',
+  surface: '#0D1117',
+  surface2:'#111827',
+  border:  'rgba(255,255,255,0.07)',
+  text:    '#E2E8F0',
+  textSub: '#64748B',
+  textDim: '#334155',
+  blue:    '#3B82F6',
+  green:   '#22C55E',
+  amber:   '#F59E0B',
+}
 const s = {
-  wrap: { minHeight: '100vh', background: '#080B12', padding: '24px 20px' },
-  inner: { maxWidth: 800, margin: '0 auto' },
-  back: { background: 'none', border: 'none', color: '#475569', fontSize: 14, cursor: 'pointer', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 6 },
-  header: { background: 'linear-gradient(135deg,#0f2027,#203a43)', borderRadius: 20, padding: 24, marginBottom: 20, border: '1px solid rgba(52,211,153,0.15)' },
-  tabs: { display: 'flex', gap: 8, marginBottom: 20 },
-  tab: (active, isEval) => ({ flex: 1, padding: '12px 8px', borderRadius: 10, border: isEval && !active ? '1px solid rgba(99,102,241,0.25)' : 'none', background: active ? (isEval ? 'linear-gradient(135deg,#6366F1,#8B5CF6)' : 'linear-gradient(135deg,#34D399,#059669)') : (isEval ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.05)'), color: active ? '#fff' : (isEval ? '#818CF8' : '#64748B'), fontWeight: 700, fontSize: 13, cursor: 'pointer', boxShadow: active && isEval ? '0 4px 16px rgba(99,102,241,0.4)' : 'none' }),
-  card: { background: '#0D1117', borderRadius: 16, padding: 20, border: '1px solid rgba(255,255,255,0.07)', marginBottom: 12 },
-  label: { fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 },
-  val: { fontSize: 15, fontWeight: 700, color: '#fff' },
-  input: { width: '100%', background: '#161B27', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '10px 12px', color: '#E2E8F0', fontSize: 14, outline: 'none', marginBottom: 10 },
-  select: { width: '100%', background: '#161B27', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '10px 12px', color: '#E2E8F0', fontSize: 14, outline: 'none', marginBottom: 10 },
-  btn: (color = '#34D399') => ({ background: `linear-gradient(135deg,${color},${color}99)`, border: 'none', borderRadius: 8, padding: '10px 16px', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }),
-  outlineBtn: { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '10px 16px', color: '#94A3B8', fontWeight: 600, fontSize: 13, cursor: 'pointer' },
-  shareBox: { background: 'rgba(0,201,255,0.08)', border: '1px solid rgba(0,201,255,0.25)', borderRadius: 10, padding: '12px 16px', fontSize: 12, color: '#7DD3FC', wordBreak: 'break-all', marginTop: 12 },
+  wrap:  { minHeight:'100vh', background:C.bg, fontFamily:"'DM Sans','Segoe UI',sans-serif" },
+  inner: { maxWidth:780, margin:'0 auto', padding:'22px 16px' },
+  back:  { background:'none', border:'none', color:C.textSub, fontSize:13, cursor:'pointer', marginBottom:18, display:'flex', alignItems:'center', gap:5, fontFamily:'inherit', fontWeight:600 },
+  header:{ background:C.surface, borderRadius:16, padding:'18px 22px', marginBottom:14, border:`1px solid ${C.border}` },
+  tabs:  { display:'flex', gap:4, marginBottom:14, background:C.surface, borderRadius:12, padding:4, border:`1px solid ${C.border}` },
+  tab:   (active) => ({
+    flex:1, padding:'10px 6px', borderRadius:9, border:'none',
+    background: active ? C.blue : 'transparent',
+    color: active ? '#fff' : C.textSub,
+    fontWeight:700, fontSize:12, cursor:'pointer', fontFamily:'inherit',
+    boxShadow: active ? '0 2px 10px rgba(59,130,246,0.4)' : 'none',
+    transition:'all 0.15s', whiteSpace:'nowrap',
+  }),
+  card:  { background:C.surface, borderRadius:14, padding:'16px 18px', border:`1px solid ${C.border}`, marginBottom:10 },
+  label: { fontSize:10, color:C.textSub, textTransform:'uppercase', letterSpacing:1, marginBottom:3, display:'block' },
+  val:   { fontSize:15, fontWeight:700, color:C.text },
+  input: { width:'100%', background:C.surface2, border:`1px solid ${C.border}`, borderRadius:9, padding:'10px 13px', color:C.text, fontSize:13, outline:'none', marginBottom:10, boxSizing:'border-box', fontFamily:'inherit' },
+  select:{ width:'100%', background:C.surface2, border:`1px solid ${C.border}`, borderRadius:9, padding:'10px 13px', color:C.text, fontSize:13, outline:'none', marginBottom:10, boxSizing:'border-box', fontFamily:'inherit' },
+  btn:   (color='#22C55E') => ({ background:color, border:'none', borderRadius:9, padding:'10px 18px', color:'#fff', fontWeight:700, fontSize:13, cursor:'pointer', fontFamily:'inherit' }),
+  outlineBtn: { background:'transparent', border:`1px solid ${C.border}`, borderRadius:9, padding:'10px 18px', color:C.textSub, fontWeight:600, fontSize:13, cursor:'pointer', fontFamily:'inherit' },
+  shareBox: { background:'rgba(59,130,246,0.07)', border:'1px solid rgba(59,130,246,0.18)', borderRadius:9, padding:'10px 14px', fontSize:12, color:'#93C5FD', wordBreak:'break-all', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 },
 }
 
 const GOALS  = ['Iniciação Esportiva', 'Desenvolvimento Atlético', 'Treinamento Competitivo', 'Saúde e Bem-Estar', 'Condicionamento', 'Ganho de Massa', 'Emagrecimento', 'Força e Performance']
@@ -1865,7 +1885,7 @@ function ProgressTab({ progress, exLogs, showProgressForm, setShowProgressForm, 
             {label}
           </button>
         ))}
-        <button style={{ ...s.btn(), marginLeft:'auto' }} onClick={() => setShowProgressForm(!showProgressForm)}>
+        <button style={{ ...s.btn(C.green), marginLeft:'auto' }} onClick={() => setShowProgressForm(!showProgressForm)}>
           + Registrar Evolução
         </button>
       </div>
@@ -1886,7 +1906,7 @@ function ProgressTab({ progress, exLogs, showProgressForm, setShowProgressForm, 
               <textarea style={{ ...s.input, minHeight:60, resize:'vertical' }} value={newProgress.notes} onChange={e => setNewProgress(x => ({ ...x, notes: e.target.value }))} placeholder="Ex: Aluno relatou cansaço, aumentou carga no supino..." />
             </div>
           </div>
-          <button style={s.btn()} onClick={addProgress} disabled={saving}>{saving ? 'Salvando...' : 'Salvar Registro'}</button>
+          <button style={s.btn(C.green)} onClick={addProgress} disabled={saving}>{saving ? 'Salvando...' : 'Salvar Registro'}</button>
         </div>
       )}
 
@@ -2401,21 +2421,21 @@ export default function StudentDetail({ navigate, studentId }) {
         <div style={s.header}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
             <div>
-              <div style={{ fontSize: 10, color: '#34D399', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 }}>Perfil do Aluno</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: '#fff' }}>{student.name}</div>
-              <div style={{ fontSize: 13, color: '#475569' }}>{student.goal} · {student.level}</div>
+              <div style={{ fontSize: 10, color: C.blue, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 }}>Perfil do Aluno</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: C.text }}>{student.name}</div>
+              <div style={{ fontSize: 13, color: C.textSub }}>{student.goal} · {student.level}</div>
             </div>
-            <button style={s.outlineBtn} onClick={() => setEditing(!editing)}>{editing ? 'Cancelar' : '✏️ Editar Perfil'}</button>
+            <button style={s.outlineBtn} onClick={() => setEditing(!editing)}>{editing ? 'Cancelar' : 'Editar Perfil'}</button>
           </div>
 
           {editing ? (
             <>
               <EditFormFields form={form} setForm={setForm} student={student} />
               <div style={{ display:'flex', gap:8, marginTop:16 }}>
-                <button onClick={saveStudent} disabled={saving} style={{ flex:1, padding:'13px', borderRadius:12, border:'none', background:'linear-gradient(135deg,#34D399,#059669)', color:'#022c22', fontWeight:800, fontSize:14, cursor:'pointer' }}>
+                <button onClick={saveStudent} disabled={saving} style={{ flex:1, padding:'13px', borderRadius:12, border:'none', background:C.green, color:'#fff', fontWeight:800, fontSize:14, cursor:'pointer' }}>
                   {saving ? 'Salvando...' : '✓ Salvar Alterações'}
                 </button>
-                <button onClick={() => setEditing(false)} style={{ padding:'13px 18px', borderRadius:12, border:'1px solid rgba(255,255,255,0.1)', background:'transparent', color:'#64748B', fontWeight:600, fontSize:13, cursor:'pointer' }}>
+                <button onClick={() => setEditing(false)} style={{ padding:'13px 18px', borderRadius:12, border:`1px solid ${C.border}`, background:'transparent', color:C.textSub, fontWeight:600, fontSize:13, cursor:'pointer' }}>
                   Cancelar
                 </button>
               </div>
@@ -2423,7 +2443,7 @@ export default function StudentDetail({ navigate, studentId }) {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
               {[['Idade', `${student.age || '—'} anos`], ['Peso', `${student.weight || '—'} kg`], ['Altura', `${student.height || '—'} cm`], ['IMC', imc]].map(([l, v]) => (
-                <div key={l} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: '10px 14px' }}>
+                <div key={l} style={{ background: C.surface2, borderRadius: 10, padding: '10px 14px', border: `1px solid ${C.border}` }}>
                   <div style={s.label}>{l}</div>
                   <div style={s.val}>{v}</div>
                 </div>
@@ -2433,17 +2453,17 @@ export default function StudentDetail({ navigate, studentId }) {
           {/* Share links */}
           <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div>
-              <div style={{ fontSize: 11, color: '#475569', marginBottom: 4 }}>🎮 Link do <strong>aluno</strong> — para o atleta ver e registrar o treino:</div>
+              <div style={{ fontSize: 11, color: '#475569', marginBottom: 4 }}>Link do <strong>aluno</strong> — para o atleta ver e registrar o treino:</div>
               <div style={s.shareBox} onClick={() => { navigator.clipboard.writeText(shareLink); alert('Link do aluno copiado!') }}>
-                {shareLink} <span style={{ color: '#34D399', marginLeft: 8, cursor: 'pointer' }}>📋 Copiar</span>
+                {shareLink} <span style={{ color: '#34D399', marginLeft: 8, cursor: 'pointer' }}>Copiar</span>
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 11, color: '#475569', marginBottom: 4 }}>👨‍👩‍👧 Link do <strong>responsável</strong> — para o pai/mãe acompanhar a evolução:</div>
+              <div style={{ fontSize: 11, color: '#475569', marginBottom: 4 }}>Link do <strong>responsável</strong> — para o pai/mãe acompanhar a evolução:</div>
               <div style={{ ...s.shareBox, borderColor: 'rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.05)' }}
                 onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/parent/${studentId}`); alert('Link do responsável copiado!') }}>
                 {window.location.origin}/parent/{studentId}
-                <span style={{ color: '#FBBF24', marginLeft: 8, cursor: 'pointer' }}>📋 Copiar</span>
+                <span style={{ color: '#FBBF24', marginLeft: 8, cursor: 'pointer' }}>Copiar</span>
               </div>
             </div>
           </div>
@@ -2452,7 +2472,7 @@ export default function StudentDetail({ navigate, studentId }) {
         {/* Tabs */}
         <div style={s.tabs}>
           {[['plans', 'Treinos'], ['progress', 'Evolução'], ['metas', 'Metas'], ['notes', 'Obs.']].map(([id, label]) => (
-            <button key={id} style={s.tab(tab === id, false)} onClick={() => setTab(id)}>{label}</button>
+            <button key={id} style={s.tab(tab === id)} onClick={() => setTab(id)}>{label}</button>
           ))}
         </div>
 
@@ -2461,12 +2481,12 @@ export default function StudentDetail({ navigate, studentId }) {
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <button onClick={() => navigate('planner', { studentId })}
-                style={{ padding:'8px 16px', borderRadius:10, border:'1px solid rgba(96,165,250,0.3)', background:'rgba(96,165,250,0.08)', color:'#60A5FA', fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:6, fontFamily:'inherit' }}>
-                📋 Periodização
+                style={{ padding:'9px 16px', borderRadius:9, border:`1px solid ${C.border}`, background:C.surface2, color:C.blue, fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:6, fontFamily:'inherit' }}>
+                Periodização
               </button>
-              <button style={s.btn()} onClick={createPlan}>+ Criar Plano de Treino</button>
+              <button style={s.btn(C.green)} onClick={createPlan}>+ Criar Plano de Treino</button>
             </div>
-            {plans.length === 0 && <div style={{ textAlign: 'center', padding: 60, color: '#334155' }}>Nenhum plano criado ainda</div>}
+            {plans.length === 0 && <div style={{ textAlign:'center', padding:60, color:C.textDim }}>Nenhum plano criado ainda</div>}
             {plans.map(plan => (
               <div key={plan.id} style={{ ...s.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                 <div>
@@ -2478,7 +2498,7 @@ export default function StudentDetail({ navigate, studentId }) {
                   <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>{plan.title}</div>
                   <div style={{ fontSize: 12, color: '#475569' }}>Criado em {new Date(plan.created_at).toLocaleDateString('pt-BR')}</div>
                 </div>
-                <button style={s.btn('#00C9FF')} onClick={() => navigate('workout-editor', { studentId, planId: plan.id })}>
+                <button style={s.btn(C.blue)} onClick={() => navigate('workout-editor', { studentId, planId: plan.id })}>
                   ✏️ Editar Treino
                 </button>
                 <button style={{ ...s.outlineBtn, fontSize: 12 }} onClick={() => setDuplicarPlan(plan)}>
