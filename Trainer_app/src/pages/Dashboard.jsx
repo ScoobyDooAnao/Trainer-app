@@ -2355,161 +2355,269 @@ function Sep({ title }) {
 }
 
 function NovoAlunoModal({ onSave, onClose, teacherId }) {
-  const [form, setForm] = useState({
-    name: '', age: '', weight: '', height: '',
-    goal: 'Iniciação Esportiva', level: 'Iniciante', notes: '',
-    sport: '', sport_position: '', experience_years: '',
-    guardian_name: '', guardian_phone: '',
+  const [step,     setStep]     = useState('plano')   // plano | form
+  const [plano,    setPlano]    = useState('')
+  const [token,    setToken]    = useState('')
+  const [copied,   setCopied]   = useState(false)
+  const [saving,   setSaving]   = useState(false)
+  const [form,     setForm]     = useState({
+    name:'', age:'', weight:'', height:'',
+    profissao:'', tipo_trabalho:'',
+    historico_saude:'', historico_familiar:'',
+    horas_sono:'', qualidade_sono:'',
+    alimentacao:'', alcool_cigarro:'',
+    motivacao_inicio:'',
+    experiencia:'', limitacoes_desc:'',
+    objetivo_estetico:'', dias_disponiveis:'',
+    horario_preferido:'', local_treino:'',
+    goal:'', level:'', sport:'', guardian_name:'', guardian_phone:'',
   })
-  const [saving, setSaving] = useState(false)
-  const f   = (field, val) => setForm(prev => ({ ...prev, [field]: val }))
-  const inp = { width: '100%', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '10px 12px', color: '#0D1B2A', fontSize: 14, outline: 'none', boxSizing: 'border-box' }
-  const lbl = { fontSize: 11, color: '#64748B', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6, display: 'block', marginTop: 14 }
-  // Sep defined at module level
 
-  // Preview LTAD em tempo real
-  const previewAge  = parseInt(form.age) || null
-  const previewLTAD = calcLTAD(previewAge, parseInt(form.experience_years) || 0, form.sport)
+  const f = (k,v) => setForm(p => ({ ...p, [k]: v }))
+
+  // Gera token ao selecionar Aperfeiçoamento Físico
+  const selecionarPlano = async (p) => {
+    setPlano(p)
+    if (p === 'academia' || p === 'ambos') {
+      // Gera token no banco
+      const { data } = await supabase.from('anamnese_tokens').insert([{
+        teacher_id: teacherId, plano: p, status: 'pendente',
+      }]).select('token').single()
+      if (data) setToken(data.token)
+    }
+    setStep('form')
+  }
+
+  const copyLink = () => {
+    const url = `${window.location.origin}/novo/${token}`
+    navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2500)
+  }
 
   const save = async () => {
     if (!form.name.trim()) return
     setSaving(true)
-    await supabase.from('students').insert([{
-      teacher_id:       teacherId,
-      name:             form.name.trim(),
-      age:              +form.age              || null,
-      weight:           +form.weight           || null,
-      height:           +form.height           || null,
-      goal:             form.goal,
-      level:            form.level,
-      notes:            form.notes             || null,
-      sport:            form.sport === 'custom' ? (form.sport_custom||'outro') : (form.sport || null),
-      sport_position:   form.sport_position    || null,
-      experience_years: +form.experience_years || null,
-      guardian_name:    form.guardian_name     || null,
-      guardian_phone:   form.guardian_phone    || null,
-    }])
-    setSaving(false); onSave(); onClose()
+
+    // Cria o aluno
+    const { data: aluno } = await supabase.from('students').insert([{
+      teacher_id: teacherId,
+      name: form.name, age: +form.age || null,
+      weight: +form.weight || null, height: +form.height || null,
+      goal: form.goal || null, level: form.level || null,
+      sport: plano === 'escolinha' || plano === 'ambos' ? form.sport : null,
+      guardian_name: form.guardian_name || null, guardian_phone: form.guardian_phone || null,
+      plano: plano,
+    }]).select().single()
+
+    // Cria anamnese se for academia ou ambos
+    if (aluno && (plano === 'academia' || plano === 'ambos')) {
+      await supabase.from('anamnese').upsert([{
+        student_id: aluno.id, teacher_id: teacherId,
+        profissao: form.profissao, tipo_trabalho: form.tipo_trabalho,
+        historico_saude: form.historico_saude, historico_familiar: form.historico_familiar,
+        horas_sono: form.horas_sono, qualidade_sono: form.qualidade_sono,
+        alimentacao: form.alimentacao, alcool_cigarro: form.alcool_cigarro,
+        motivacao_inicio: form.motivacao_inicio,
+        historico: form.experiencia,
+        limitacao_detalhe: form.limitacoes_desc,
+        objetivo_estetico: form.objetivo_estetico,
+        dias_disponiveis: form.dias_disponiveis,
+        horario_preferido: form.horario_preferido,
+        local_treino: form.local_treino,
+      }], { onConflict: 'student_id' })
+
+      // Vincula token ao aluno
+      if (token) {
+        await supabase.from('anamnese_tokens').update({ student_id: aluno.id, status: 'respondido', respondido_em: new Date().toISOString() }).eq('token', token)
+      }
+    }
+
+    setSaving(false)
+    onSave()
+    onClose()
   }
 
+  const inp = { width:'100%', background:'#0D1117', border:'1px solid rgba(255,255,255,0.08)', borderRadius:9, padding:'10px 13px', color:'#E2E8F0', fontSize:13, outline:'none', boxSizing:'border-box', fontFamily:'inherit', marginBottom:10 }
+  const lbl = { fontSize:10, color:'#64748B', fontWeight:700, textTransform:'uppercase', letterSpacing:0.8, marginBottom:4, display:'block' }
+  const sec = (t) => (
+    <div style={{ display:'flex', alignItems:'center', gap:10, margin:'16px 0 12px' }}>
+      <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.07)' }} />
+      <span style={{ fontSize:10, color:'#475569', fontWeight:700, textTransform:'uppercase', letterSpacing:1.2, whiteSpace:'nowrap' }}>{t}</span>
+      <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.07)' }} />
+    </div>
+  )
+
   return (
-    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100, padding:20 }}>
-      <div onClick={e=>e.stopPropagation()} className="db-modal-inner" style={{ background:'#fff', borderRadius:20, padding:28, width:'100%', maxWidth:500, maxHeight:'92vh', overflowY:'auto' }}>
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.65)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:16 }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:'#080F1A', borderRadius:20, width:'100%', maxWidth:520, maxHeight:'92vh', overflowY:'auto', border:'1px solid rgba(255,255,255,0.08)', boxShadow:'0 24px 60px rgba(0,0,0,0.6)' }}>
 
-        {/* Header */}
-        <div style={{ fontSize:19, fontWeight:900, color:'#0D1B2A', marginBottom:2 }}>Cadastrar Aluno</div>
-        <div style={{ fontSize:13, color:'#64748B', marginBottom:20 }}>Preencha os dados do aluno e do responsável</div>
+        {/* ── STEP: Seleção de plano ── */}
+        {step === 'plano' && (
+          <div style={{ padding:32 }}>
+            <div style={{ fontSize:20, fontWeight:800, color:'#E2E8F0', marginBottom:6 }}>Novo Aluno</div>
+            <div style={{ fontSize:13, color:'#475569', marginBottom:28 }}>Selecione o tipo de programa</div>
 
-        {/* ── Dados pessoais ── */}
-        <Sep title="Dados Pessoais" />
-        <label style={lbl}>Nome completo</label>
-        <input style={inp} type="text" placeholder="Ex: João Silva" value={form.name} onChange={e=>f('name',e.target.value)} />
-
-        <div className="db-grid-2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-          <div>
-            <label style={lbl}>Idade</label>
-            <input style={inp} type="number" placeholder="Ex: 13" value={form.age} onChange={e=>f('age',e.target.value)} />
-          </div>
-          <div>
-            <label style={lbl}>Altura (cm)</label>
-            <input style={inp} type="number" placeholder="Ex: 165" value={form.height} onChange={e=>f('height',e.target.value)} />
-          </div>
-        </div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-          <div>
-            <label style={lbl}>Peso (kg)</label>
-            <input style={inp} type="number" placeholder="Ex: 55" value={form.weight} onChange={e=>f('weight',e.target.value)} />
-          </div>
-          <div>
-            <label style={lbl}>Nível</label>
-            <select style={inp} value={form.level} onChange={e=>f('level',e.target.value)}>
-              {LEVELS.map(l => <option key={l}>{l}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <label style={lbl}>Objetivo</label>
-        <select style={inp} value={form.goal} onChange={e=>f('goal',e.target.value)}>
-          <optgroup label="— Esportivo (infantojuvenil)">
-            {['Iniciação Esportiva','Desenvolvimento Atlético','Treinamento Competitivo'].map(g=><option key={g}>{g}</option>)}
-          </optgroup>
-          <optgroup label="— Saúde e Bem-Estar">
-            {['Saúde e Bem-Estar','Condicionamento'].map(g=><option key={g}>{g}</option>)}
-          </optgroup>
-          <optgroup label="— Estética / Força">
-            {['Ganho de Massa','Emagrecimento','Força e Performance'].map(g=><option key={g}>{g}</option>)}
-          </optgroup>
-        </select>
-
-        {/* ── Esporte ── */}
-        <Sep title="Esporte" />
-        <label style={lbl}>Modalidade principal</label>
-        <select style={inp} value={form.sport} onChange={e=>f('sport',e.target.value)}>
-          <option value="">Selecionar...</option>
-          {SPORTS.map(s=>(
-            <option key={s.id} value={s.id}>{s.label}</option>
-          ))}
-        </select>
-        {form.sport === 'custom' && (
-          <input style={{ ...inp, marginTop:8 }} type="text" placeholder="Qual esporte? Ex: Remo, Rugby, Padel..."
-            value={form.sport_custom||''} onChange={e=>f('sport_custom',e.target.value)} />
-        )}
-
-        <div className="db-grid-2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-          <div>
-            <label style={lbl}>Posição / Especialidade</label>
-            <input style={inp} type="text" placeholder="Ex: Meia, Goleiro..." value={form.sport_position} onChange={e=>f('sport_position',e.target.value)} />
-          </div>
-          <div>
-            <label style={lbl}>Anos de experiência</label>
-            <input style={inp} type="number" placeholder="Ex: 2" min="0" value={form.experience_years} onChange={e=>f('experience_years',e.target.value)} />
-          </div>
-        </div>
-
-        {/* LTAD preview em tempo real */}
-        {previewLTAD && (
-          <div style={{ marginTop:12, padding:'10px 14px', borderRadius:10, background: previewLTAD.bg, border:`1px solid ${previewLTAD.cor}33`, display:'flex', alignItems:'center', gap:10 }}>
-            <span style={{ width:12, height:12, borderRadius:"50%", background:previewLTAD?.cor, display:"inline-block" }} />
-            <div>
-              <div style={{ fontSize:12, fontWeight:800, color: previewLTAD.cor }}>Fase LTAD: {previewLTAD.fase}</div>
-              <div style={{ fontSize:11, color:'#64748B' }}>{previewLTAD.desc}</div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10 }}>
+              {[
+                { id:'academia', label:'Aperfeiçoamento Físico', cor:'#3B82F6', desc:'Academia, funcional, cardio' },
+                { id:'ambos',    label:'Ambos',                  cor:'#A855F7', desc:'Academia + Escolinha' },
+                { id:'escolinha',label:'Escolinha',              cor:'#22C55E', desc:'Esporte infantil e juvenil' },
+              ].map(p => (
+                <button key={p.id} onClick={() => selecionarPlano(p.id)}
+                  style={{ padding:'20px 12px', borderRadius:14, border:`2px solid ${p.cor}30`, background:`${p.cor}0D`, cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:8, fontFamily:'inherit', transition:'all 0.15s' }}>
+                  <div style={{ width:36, height:36, borderRadius:10, background:p.cor, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+                  </div>
+                  <div style={{ fontSize:12, fontWeight:700, color:p.cor, textAlign:'center', lineHeight:1.3 }}>{p.label}</div>
+                  <div style={{ fontSize:10, color:'#475569', textAlign:'center' }}>{p.desc}</div>
+                </button>
+              ))}
             </div>
           </div>
         )}
 
-        {/* ── Responsável — apenas para menores de 18 anos ── */}
-        <Sep title="Responsável" />
-        <div className="db-grid-2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+        {/* ── STEP: Formulário ── */}
+        {step === 'form' && (
           <div>
-            <label style={lbl}>Nome do responsável</label>
-            <input style={inp} type="text" placeholder="Ex: Maria Silva" value={form.guardian_name} onChange={e=>f('guardian_name',e.target.value)} />
+            {/* Header fixo */}
+            <div style={{ padding:'18px 22px', borderBottom:'1px solid rgba(255,255,255,0.07)', display:'flex', alignItems:'center', gap:10, position:'sticky', top:0, background:'#080F1A', zIndex:10 }}>
+              <button onClick={() => setStep('plano')} style={{ background:'none', border:'none', color:'#475569', cursor:'pointer', fontSize:18, lineHeight:1 }}>‹</button>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:15, fontWeight:800, color:'#E2E8F0' }}>
+                  {plano==='academia'?'Aperfeiçoamento Físico':plano==='escolinha'?'Escolinha':'Ambos'}
+                </div>
+              </div>
+              {/* Link token para academia/ambos */}
+              {token && (
+                <button onClick={copyLink}
+                  style={{ padding:'7px 14px', borderRadius:9, border:'1px solid rgba(59,130,246,0.35)', background: copied ? 'rgba(52,211,153,0.12)' : 'rgba(59,130,246,0.1)', color: copied ? '#34D399' : '#60A5FA', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:5, flexShrink:0 }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                  {copied ? 'Copiado!' : 'Copiar link da anamnese'}
+                </button>
+              )}
+            </div>
+
+            <div style={{ padding:'18px 22px' }}>
+
+              {/* ── Dados básicos ── */}
+              {sec('Dados Pessoais')}
+              <div>
+                <label style={lbl}>Nome completo *</label>
+                <input style={inp} placeholder="Ex: João Silva" value={form.name} onChange={e=>f('name',e.target.value)} />
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
+                <div><label style={lbl}>Idade</label><input style={inp} type="number" placeholder="Anos" value={form.age} onChange={e=>f('age',e.target.value)} /></div>
+                <div><label style={lbl}>Peso (kg)</label><input style={inp} type="number" placeholder="Ex: 75" value={form.weight} onChange={e=>f('weight',e.target.value)} /></div>
+                <div><label style={lbl}>Altura (cm)</label><input style={inp} type="number" placeholder="Ex: 175" value={form.height} onChange={e=>f('height',e.target.value)} /></div>
+              </div>
+
+              {(plano === 'academia' || plano === 'ambos') && (<>
+                {sec('Quem é Você')}
+
+                <label style={lbl}>Profissão e tipo de trabalho</label>
+                <input style={inp} placeholder="Ex: Vendedor — fico em pé o dia todo" value={form.profissao} onChange={e=>f('profissao',e.target.value)} />
+
+                <label style={lbl}>Histórico de saúde</label>
+                <input style={inp} placeholder="Condições, cirurgias, medicamentos contínuos (ou 'Nenhum')" value={form.historico_saude} onChange={e=>f('historico_saude',e.target.value)} />
+
+                <label style={lbl}>Histórico familiar</label>
+                <input style={inp} placeholder="Pai/mãe/irmão com problema cardíaco, diabetes, hipertensão?" value={form.historico_familiar} onChange={e=>f('historico_familiar',e.target.value)} />
+
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                  <div><label style={lbl}>Horas de sono por noite</label><input style={inp} placeholder="Ex: 6–7 horas" value={form.horas_sono} onChange={e=>f('horas_sono',e.target.value)} /></div>
+                  <div>
+                    <label style={lbl}>Qualidade do sono</label>
+                    <select style={inp} value={form.qualidade_sono} onChange={e=>f('qualidade_sono',e.target.value)}>
+                      <option value="">Selecione</option>
+                      {['Ótima','Boa','Regular','Ruim'].map(o=><option key={o}>{o}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <label style={lbl}>Como descreve sua alimentação hoje</label>
+                <input style={inp} placeholder="Quantas refeições, come bem, come mal, sem tempo..." value={form.alimentacao} onChange={e=>f('alimentacao',e.target.value)} />
+
+                <label style={lbl}>Uso de álcool, cigarro ou fumaça em geral</label>
+                <input style={inp} placeholder="Ex: Bebo socialmente nos fins de semana / Não fumo" value={form.alcool_cigarro} onChange={e=>f('alcool_cigarro',e.target.value)} />
+
+                <label style={lbl}>O que te fez decidir começar agora?</label>
+                <textarea style={{ ...inp, minHeight:65, resize:'vertical', lineHeight:1.6 }} placeholder="Conta um pouco sobre o que motivou essa decisão..." value={form.motivacao_inicio} onChange={e=>f('motivacao_inicio',e.target.value)} />
+
+                {sec('O Que Você Quer')}
+
+                <label style={lbl}>Experiência com exercício físico</label>
+                <input style={inp} placeholder="Já praticou? O quê, por quanto tempo, por que parou?" value={form.experiencia} onChange={e=>f('experiencia',e.target.value)} />
+
+                <label style={lbl}>Limitação física ou dor recorrente</label>
+                <input style={inp} placeholder="Joelho, ombro, coluna... (ou 'Nenhuma')" value={form.limitacoes_desc} onChange={e=>f('limitacoes_desc',e.target.value)} />
+
+                <label style={lbl}>Objetivo e estética que almeja</label>
+                <textarea style={{ ...inp, minHeight:65, resize:'vertical', lineHeight:1.6 }} placeholder="Quando imagina o corpo que quer ter, como ele é? Seja específico." value={form.objetivo_estetico} onChange={e=>f('objetivo_estetico',e.target.value)} />
+
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                  <div><label style={lbl}>Dias disponíveis para treinar</label><input style={inp} placeholder="Ex: 3x / semana" value={form.dias_disponiveis} onChange={e=>f('dias_disponiveis',e.target.value)} /></div>
+                  <div>
+                    <label style={lbl}>Horário preferido</label>
+                    <select style={inp} value={form.horario_preferido} onChange={e=>f('horario_preferido',e.target.value)}>
+                      <option value="">Selecione</option>
+                      {['Manhã','Tarde','Noite','Qualquer'].map(o=><option key={o}>{o}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <label style={lbl}>Onde prefere treinar</label>
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:10 }}>
+                  {['Academia','Ao ar livre','Em casa','Sem preferência'].map(o => (
+                    <button key={o} onClick={() => f('local_treino', form.local_treino===o?'':o)}
+                      style={{ padding:'6px 13px', borderRadius:20, fontSize:11, fontWeight:600, cursor:'pointer', fontFamily:'inherit', border:`1.5px solid ${form.local_treino===o?'#3B82F6':'rgba(255,255,255,0.1)'}`, background:form.local_treino===o?'rgba(59,130,246,0.15)':'rgba(255,255,255,0.04)', color:form.local_treino===o?'#60A5FA':'#475569' }}>
+                      {o}
+                    </button>
+                  ))}
+                </div>
+
+                <label style={lbl}>Objetivo geral</label>
+                <select style={inp} value={form.goal} onChange={e=>f('goal',e.target.value)}>
+                  <option value="">Selecione</option>
+                  {['Ganho de Massa','Emagrecimento','Força e Performance','Condicionamento','Saúde e Bem-Estar'].map(o=><option key={o}>{o}</option>)}
+                </select>
+
+                <label style={lbl}>Nível</label>
+                <select style={inp} value={form.level} onChange={e=>f('level',e.target.value)}>
+                  <option value="">Selecione</option>
+                  {['Iniciante','Intermediário','Avançado'].map(o=><option key={o}>{o}</option>)}
+                </select>
+              </>)}
+
+              {(plano === 'escolinha' || plano === 'ambos') && (<>
+                {sec('Dados da Escolinha')}
+                <label style={lbl}>Modalidade</label>
+                <select style={inp} value={form.sport} onChange={e=>f('sport',e.target.value)}>
+                  <option value="">Selecione</option>
+                  {SPORTS.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+                </select>
+                <label style={lbl}>Nome do responsável</label>
+                <input style={inp} placeholder="Ex: Maria Silva" value={form.guardian_name} onChange={e=>f('guardian_name',e.target.value)} />
+                <label style={lbl}>WhatsApp do responsável</label>
+                <input style={inp} placeholder="(41) 99999-9999" value={form.guardian_phone} onChange={e=>f('guardian_phone',e.target.value)} />
+              </>)}
+
+              <div style={{ display:'flex', gap:8, marginTop:18 }}>
+                <button onClick={save} disabled={saving||!form.name.trim()}
+                  style={{ flex:1, padding:'13px', borderRadius:12, border:'none', cursor: form.name.trim()?'pointer':'default', background: form.name.trim()?'#3B82F6':'rgba(255,255,255,0.06)', color: form.name.trim()?'#fff':'#334155', fontWeight:800, fontSize:14, fontFamily:'inherit' }}>
+                  {saving?'Salvando...':'Criar Aluno'}
+                </button>
+                <button onClick={onClose} style={{ padding:'13px 18px', borderRadius:12, border:'1px solid rgba(255,255,255,0.08)', background:'transparent', color:'#475569', fontWeight:600, fontSize:13, cursor:'pointer', fontFamily:'inherit' }}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
           </div>
-          {previewAge && previewAge < 18 ? (
-            <div>
-              <label style={lbl}>WhatsApp do responsável</label>
-              <input style={inp} type="text" placeholder="Ex: (41) 99999-9999" value={form.guardian_phone} onChange={e=>f('guardian_phone',e.target.value)} />
-            </div>
-          ) : (
-            <div style={{ display:'flex', alignItems:'center', padding:'10px 12px', borderRadius:8, background:'rgba(0,0,0,0.03)', border:'1px dashed #E2E8F0', fontSize:12, color:'#94A3B8' }}>
-              WhatsApp disponível para menores de 18 anos
-            </div>
-          )}
-        </div>
-
-        {/* ── Observações ── */}
-        <Sep title="Observações" />
-        <label style={lbl}>Lesões, restrições ou observações</label>
-        <textarea style={{ ...inp, minHeight:65, resize:'vertical' }} placeholder="Ex: Histórico de entorse no tornozelo direito..." value={form.notes} onChange={e=>f('notes',e.target.value)} />
-
-        <button onClick={save} disabled={saving||!form.name.trim()} style={{ width:'100%', background: form.name.trim() ? 'linear-gradient(135deg,#F5C842,#D97706)' : '#F1F5F9', border:'none', borderRadius:10, padding:14, color: form.name.trim() ? '#431C00' : '#94A3B8', fontWeight:800, fontSize:15, cursor: form.name.trim() ? 'pointer' : 'default', marginTop:22 }}>
-          {saving ? 'Salvando...' : 'Cadastrar Aluno'}
-        </button>
-        <button onClick={onClose} style={{ width:'100%', background:'rgba(0,0,0,0.04)', border:'1px solid #E2E8F0', borderRadius:10, padding:12, color:'#64748B', fontWeight:600, fontSize:14, cursor:'pointer', marginTop:8 }}>Cancelar</button>
+        )}
       </div>
     </div>
   )
 }
-
 // ── DASHBOARD ──────────────────────────────────────────────────────────────
 // ── Mobile CSS injection ──────────────────────────────────────────────────────
 function DashboardMobileCSS() {
