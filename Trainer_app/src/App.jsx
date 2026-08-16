@@ -8,35 +8,29 @@ import StudentView from './pages/StudentView'
 import ParentView from './pages/ParentView'
 import TeacherProfile from './pages/TeacherProfile'
 import Planner from './pages/Planner'
+import AnamnesePublica from './pages/AnamnesePublica'
 
 export default function App() {
-  const [session, setSession]   = useState(null)
-  const [loading, setLoading]   = useState(true)
-  const [page, setPage]         = useState('dashboard')
+  const [session,    setSession]    = useState(null)
+  const [loading,    setLoading]    = useState(true)
+  const [page,       setPage]       = useState('dashboard')
   const [pageParams, setPageParams] = useState({})
 
+  const path = window.location.pathname
+
   useEffect(() => {
-    const path = window.location.pathname
-
-    // Rotas públicas — não precisam de sessão, carregam imediatamente
-    const matchView   = path.match(/^\/view\/(.+)$/)
-    const matchParent = path.match(/^\/parent\/(.+)$/)
-
-    if (matchView) {
-      setPage('student-view')
-      setPageParams({ id: matchView[1] })
-      setLoading(false)  // libera imediatamente, sem esperar sessão
+    // Rotas públicas — libera sem sessão
+    if (path.startsWith('/novo/')  ||
+        path.startsWith('/view/')  ||
+        path.startsWith('/parent/')) {
+      const matchView   = path.match(/^\/view\/(.+)$/)
+      const matchParent = path.match(/^\/parent\/(.+)$/)
+      if (matchView)   { setPage('student-view'); setPageParams({ id: matchView[1] }) }
+      if (matchParent) { setPage('parent-view');  setPageParams({ id: matchParent[1] }) }
+      setLoading(false)
       return
     }
 
-    if (matchParent) {
-      setPage('parent-view')
-      setPageParams({ id: matchParent[1] })
-      setLoading(false)  // libera imediatamente, sem esperar sessão
-      return
-    }
-
-    // Rotas do professor — precisam de sessão
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setLoading(false)
@@ -45,17 +39,16 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       setSession(session)
     })
-
     return () => subscription.unsubscribe()
   }, [])
 
-  const navigate = (name, params = {}) => {
-    setPage(name)
-    setPageParams(params)
-  }
+  const navigate = (name, params = {}) => { setPage(name); setPageParams(params) }
+
+  // ── Rotas públicas — render direto, sem auth ──────────────────────────────
+  if (path.startsWith('/novo/')) return <AnamnesePublica token={path.split('/novo/')[1]} />
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#080B12', color: '#34D399', fontSize: 18 }}>
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', background:'#080B12', color:'#3B82F6', fontSize:16, fontFamily:"'DM Sans',sans-serif" }}>
       Carregando...
     </div>
   )
@@ -70,7 +63,7 @@ export default function App() {
       {page === 'student-detail'  && <StudentDetail navigate={navigate} studentId={pageParams.id} />}
       {page === 'workout-editor'  && <WorkoutEditor navigate={navigate} studentId={pageParams.studentId} planId={pageParams.planId} />}
       {page === 'teacher-profile' && <TeacherProfile navigate={navigate} session={session} />}
-      {page === 'planner' && <Planner navigate={navigate} studentId={pageParams.studentId} />}
+      {page === 'planner'         && <Planner navigate={navigate} studentId={pageParams.studentId} />}
     </>
   )
 }
