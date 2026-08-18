@@ -3145,8 +3145,85 @@ function TabPlanejamento({ students, navigate, session }) {
   )
 }
 
+
+// ── NotificacoesPanel ─────────────────────────────────────────────────────────
+function NotificacoesPanel({ notifs, onClose, onMarkRead, onConfirm, navigate }) {
+  const naoLidas = notifs.filter(n => !n.lida).length
+
+  const fmtTime = (d) => {
+    const diff = Date.now() - new Date(d)
+    const min  = Math.floor(diff / 60000)
+    const h    = Math.floor(min / 60)
+    const days = Math.floor(h / 24)
+    if (min < 1)   return 'agora'
+    if (min < 60)  return `${min}min atras`
+    if (h < 24)    return `${h}h atras`
+    return `${days}d atras`
+  }
+
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:500, display:'flex', justifyContent:'flex-end' }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:420, height:'100%', background:'#0D1117', borderLeft:'1px solid rgba(255,255,255,0.07)', display:'flex', flexDirection:'column' }}>
+        {/* Header */}
+        <div style={{ padding:'18px 20px', borderBottom:'1px solid rgba(255,255,255,0.07)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <div>
+            <div style={{ fontSize:16, fontWeight:800, color:'#E2E8F0' }}>Notificacoes</div>
+            {naoLidas > 0 && <div style={{ fontSize:11, color:'#FBBF24' }}>{naoLidas} nao lida{naoLidas>1?'s':''}</div>}
+          </div>
+          <div style={{ display:'flex', gap:8 }}>
+            {naoLidas > 0 && (
+              <button onClick={onMarkRead} style={{ fontSize:11, color:'#64748B', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:8, padding:'5px 10px', cursor:'pointer', fontFamily:'inherit' }}>
+                Marcar todas como lidas
+              </button>
+            )}
+            <button onClick={onClose} style={{ background:'rgba(255,255,255,0.05)', border:'none', borderRadius:8, padding:'5px 10px', color:'#64748B', cursor:'pointer', fontSize:15 }}>✕</button>
+          </div>
+        </div>
+
+        {/* Lista */}
+        <div style={{ flex:1, overflowY:'auto' }}>
+          {notifs.length === 0 ? (
+            <div style={{ textAlign:'center', padding:'60px 20px', color:'#334155' }}>
+              <div style={{ fontSize:32, marginBottom:10, opacity:0.4 }}>—</div>
+              <div style={{ fontSize:14 }}>Nenhuma notificacao ainda</div>
+            </div>
+          ) : notifs.map(n => (
+            <div key={n.id} style={{ padding:'16px 20px', borderBottom:'1px solid rgba(255,255,255,0.05)', background: n.lida ? 'transparent' : 'rgba(251,191,36,0.04)' }}>
+              <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
+                {/* Indicador */}
+                <div style={{ width:8, height:8, borderRadius:'50%', background: n.lida ? '#334155' : '#FBBF24', flexShrink:0, marginTop:5 }} />
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:'#E2E8F0', marginBottom:3 }}>{n.titulo}</div>
+                  {n.corpo && <div style={{ fontSize:12, color:'#64748B', lineHeight:1.6, marginBottom:8 }}>{n.corpo}</div>}
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                    <div style={{ fontSize:10, color:'#334155' }}>{fmtTime(n.data)}</div>
+                    {n.tipo === 'nova_anamnese' && n.payload?.student_id && (
+                      <div style={{ display:'flex', gap:6 }}>
+                        <button onClick={() => { navigate('student-detail', { id: n.payload.student_id }); onClose() }}
+                          style={{ fontSize:11, fontWeight:700, color:'#60A5FA', background:'rgba(59,130,246,0.1)', border:'1px solid rgba(59,130,246,0.25)', borderRadius:8, padding:'4px 10px', cursor:'pointer', fontFamily:'inherit' }}>
+                          Ver respostas
+                        </button>
+                        <button onClick={() => onConfirm(n)}
+                          style={{ fontSize:11, fontWeight:700, color:'#22C55E', background:'rgba(34,197,94,0.1)', border:'1px solid rgba(34,197,94,0.25)', borderRadius:8, padding:'4px 10px', cursor:'pointer', fontFamily:'inherit' }}>
+                          Confirmar aluno
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Dashboard({ navigate, session }) {
   const [nav, setNav]             = useState('alunos')
+  const [notifs,      setNotifs]      = useState([])
+  const [showNotifs,  setShowNotifs]  = useState(false)
   const [students, setStudents]   = useState([])
   const [workouts, setWorkouts]   = useState([])
   const [showModal, setShowModal] = useState(false)
@@ -3154,7 +3231,14 @@ export default function Dashboard({ navigate, session }) {
   const [filter, setFilter]       = useState('Todos')
   const [loading, setLoading]     = useState(true)
 
-  useEffect(() => { fetchAll() }, [])
+  useEffect(() => { fetchAll(); fetchNotifs() }, [])
+
+  const fetchNotifs = async () => {
+    const { data } = await supabase.from('notificacoes')
+      .select('*').eq('teacher_id', session.user.id)
+      .order('data', { ascending: false }).limit(20)
+    setNotifs(data || [])
+  }
 
   const fetchAll = async () => {
     setLoading(true)
@@ -3278,6 +3362,20 @@ export default function Dashboard({ navigate, session }) {
     setLoading(false)
   }
 
+  const markRead = async () => {
+    await supabase.from('notificacoes').update({ lida: true })
+      .eq('teacher_id', session.user.id).eq('lida', false)
+    setNotifs(p => p.map(n => ({ ...n, lida: true })))
+  }
+
+  const confirmarAluno = async (notif) => {
+    await supabase.from('students').update({ status: 'ativo' })
+      .eq('id', notif.payload?.student_id)
+    await supabase.from('notificacoes').update({ lida: true }).eq('id', notif.id)
+    setNotifs(p => p.map(n => n.id === notif.id ? { ...n, lida: true } : n))
+    fetchAll()
+  }
+
   const logout = async () => { await supabase.auth.signOut(); window.location.reload() }
 
   const filtered = students.filter(s => {
@@ -3304,10 +3402,17 @@ export default function Dashboard({ navigate, session }) {
           <div style={{ padding: '26px 18px 12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ width: 40, height: 40, borderRadius: 11, background: 'linear-gradient(135deg,#34D399,#059669)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 3px 12px rgba(52,211,153,0.35)' }}><svg width='18' height='18' viewBox='0 0 24 24' fill='white'><path d='M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29l-1.43-1.43z'/></svg></div>
-              <div>
+              <div style={{ flex:1 }}>
                 <div style={{ fontSize: 15, fontWeight: 800, color: '#FFF', letterSpacing: '-0.3px' }}>TrainerApp</div>
                 <div style={{ fontSize: 10, color: '#BEE3F8', fontWeight: 500 }}>Gestão de Alunos</div>
               </div>
+              <button onClick={() => { setShowNotifs(true); markRead() }}
+                style={{ position:'relative', background:'none', border:'none', cursor:'pointer', padding:4, flexShrink:0 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#FBBF24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+                {notifs.filter(n=>!n.lida).length > 0 && (
+                  <span style={{ position:'absolute', top:2, right:2, width:8, height:8, borderRadius:'50%', background:'#EF4444', border:'2px solid rgba(0,0,0,0.3)' }}/>
+                )}
+              </button>
             </div>
           </div>
           <WaveDivider />
@@ -3417,6 +3522,15 @@ export default function Dashboard({ navigate, session }) {
       </main>
 
       {showModal && <NovoAlunoModal teacherId={session.user.id} onSave={fetchAll} onClose={() => setShowModal(false)} />}
+      {showNotifs && (
+        <NotificacoesPanel
+          notifs={notifs}
+          navigate={navigate}
+          onClose={() => setShowNotifs(false)}
+          onMarkRead={markRead}
+          onConfirm={confirmarAluno}
+        />
+      )}
       <MobileBottomNav nav={nav} setNav={setNav} navigate={navigate} logout={logout} />
     </div>
   )
