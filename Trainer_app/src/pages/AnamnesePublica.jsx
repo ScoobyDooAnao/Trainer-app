@@ -197,6 +197,7 @@ export default function AnamnesePublica({ token: tokenProp }) {
       teacher_id: tokenData.teacher_id,
       name: D.nome, plano: tokenData.plano,
       guardian_phone: whatsapp,
+      status: 'pendente',
     }]).select().single()
 
     if (aluno) {
@@ -220,13 +221,25 @@ export default function AnamnesePublica({ token: tokenProp }) {
         respondido_em: new Date().toISOString(),
       }).eq('token',token)
 
-      // Notificacao para o professor
+      // Notificacao para o professor — payload completo para o card
+      const imcVal = D.peso && D.altura ? (parseFloat(D.peso) / Math.pow(parseFloat(D.altura)/100, 2)).toFixed(1) : null
       await supabase.from('notificacoes').insert([{
         teacher_id: tokenData.teacher_id,
         tipo: 'nova_anamnese',
-        titulo: `Nova anamnese recebida — ${D.nome}`,
-        corpo: `${D.nome} preencheu a anamnese. Objetivo: ${D.objetivo}. Disponibilidade: ${D.dias_semana}.`,
-        payload: { student_id: aluno.id, nome: D.nome },
+        titulo: 'Nova anamnese recebida',
+        corpo: `${D.nome} preencheu o formulário e aguarda confirmação.`,
+        lida: false,
+        payload: {
+          student_id: aluno.id,
+          nome: D.nome,
+          faixa_etaria: D.faixa_etaria,
+          peso: D.peso,
+          altura: D.altura,
+          imc: imcVal,
+          objetivo: D.objetivo,
+          dias_semana: D.dias_semana,
+          whatsapp: whatsapp,
+        },
       }])
     }
 
