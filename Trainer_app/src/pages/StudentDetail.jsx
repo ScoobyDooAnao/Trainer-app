@@ -2425,6 +2425,16 @@ export default function StudentDetail({ navigate, studentId }) {
               <div style={{ fontSize: 22, fontWeight: 800, color: C.text }}>{student.name}</div>
               <div style={{ fontSize: 13, color: C.textSub }}>{student.goal} · {student.level}</div>
             </div>
+            {student.status === 'pendente' && (
+              <button onClick={async () => {
+                await supabase.from('students').update({ status:'ativo' }).eq('id', studentId)
+                await supabase.from('notificacoes').update({ lida:true })
+                  .eq('teacher_id', student.teacher_id).eq('tipo','nova_anamnese')
+                setStudent(p => ({ ...p, status:'ativo' }))
+              }} style={{ padding:'9px 16px', borderRadius:9, border:'none', background:'#22C55E', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', fontFamily:'inherit' }}>
+                Confirmar Aluno
+              </button>
+            )}
             <button style={s.outlineBtn} onClick={() => setEditing(!editing)}>{editing ? 'Cancelar' : 'Editar Perfil'}</button>
           </div>
 
@@ -2468,6 +2478,14 @@ export default function StudentDetail({ navigate, studentId }) {
             </div>
           </div>
         </div>
+
+        {/* Banner pendente */}
+        {student.status === 'pendente' && (
+          <div style={{ marginBottom:12, padding:'11px 16px', background:'rgba(251,191,36,0.08)', border:'1px solid rgba(251,191,36,0.25)', borderRadius:12, display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ width:8, height:8, borderRadius:'50%', background:'#FBBF24', flexShrink:0 }}/>
+            <div style={{ fontSize:13, color:'#FBBF24', fontWeight:600 }}>Candidatura pendente — revise a anamnese na aba Obs. e confirme o aluno para iniciar a prescrição.</div>
+          </div>
+        )}
 
         {/* Tabs */}
         <div style={s.tabs}>
