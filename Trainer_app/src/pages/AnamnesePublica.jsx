@@ -146,9 +146,14 @@ export default function AnamnesePublica({ token: tokenProp }) {
 
   const [D, setD] = useState({
     nome:'', ddd:'', tel1:'', tel2:'',
+    peso:'', altura:'',
     faixa_etaria:'', rotina_trabalho:'', rotina_detalhe:'',
+    lazer:'', lazer_detalhe:'',
     qualidade_sono:'', horas_sono:'',
-    alcool_cigarro:[], alcool_cigarro_detalhe:'',
+    alcool:'', alcool_freq:'',
+    tabaco:'', tabaco_freq:'',
+    refeicoes:'', qualidade_alimentacao:'',
+    medicamentos:'', medicamentos_detalhe:'',
     condicao_saude:[], condicao_saude_detalhe:'',
     limitacao:[], limitacao_detalhe:'',
     objetivo:'', objetivo_detalhe:'',
@@ -159,8 +164,8 @@ export default function AnamnesePublica({ token: tokenProp }) {
   const s = (k) => (v) => setD(p => ({ ...p, [k]: v }))
 
   const REQUIRED = {
-    1: ['nome','ddd','tel1','tel2','faixa_etaria','rotina_trabalho'],
-    2: ['qualidade_sono','horas_sono','alcool_cigarro','condicao_saude','limitacao'],
+    1: ['nome','ddd','tel1','tel2','faixa_etaria','rotina_trabalho','lazer'],
+    2: ['qualidade_sono','horas_sono','alcool','tabaco','refeicoes','qualidade_alimentacao','condicao_saude','limitacao'],
     3: ['objetivo','dias_semana','horario','local_treino'],
     4: ['experiencia','motivacao'],
   }
@@ -203,8 +208,12 @@ export default function AnamnesePublica({ token: tokenProp }) {
     if (aluno) {
       await supabase.from('anamnese').upsert([{
         student_id: aluno.id, teacher_id: tokenData.teacher_id,
-        historico_saude: [...(D.condicao_saude||[]), D.condicao_saude_detalhe].filter(Boolean).join(', '),
-        alcool_cigarro: [...(D.alcool_cigarro||[]), D.alcool_cigarro_detalhe].filter(Boolean).join(', '),
+        historico_saude: [...(D.condicao_saude||[]), D.condicao_saude_detalhe, D.medicamentos_detalhe].filter(Boolean).join(', '),
+        alcool_cigarro: [
+          D.alcool ? `Álcool: ${D.alcool} (${D.alcool_freq||'freq. não informada'})` : '',
+          D.tabaco ? `Tabaco: ${D.tabaco} (${D.tabaco_freq||'freq. não informada'})` : '',
+        ].filter(Boolean).join(' | '),
+        alimentacao: `${D.refeicoes} refeições/dia — qualidade: ${D.qualidade_alimentacao}`,
         limitacao_detalhe: [...(D.limitacao||[]), D.limitacao_detalhe].filter(Boolean).join(', '),
         horas_sono: D.horas_sono, qualidade_sono: D.qualidade_sono,
         objetivo_estetico: [D.objetivo, D.objetivo_detalhe].filter(Boolean).join(' — '),
@@ -212,9 +221,17 @@ export default function AnamnesePublica({ token: tokenProp }) {
         local_treino: (D.local_treino||[]).join(', '),
         historico: [D.experiencia, D.experiencia_detalhe].filter(Boolean).join(' — '),
         motivacao_inicio: [...(D.motivacao||[]), D.motivacao_detalhe].filter(Boolean).join(', '),
-        profissao: [D.rotina_trabalho, D.rotina_detalhe].filter(Boolean).join(' — '),
-        parq: { faixa_etaria: D.faixa_etaria },
+        profissao: [D.rotina_trabalho, D.rotina_detalhe, (D.lazer||[]).length ? `Lazer: ${(D.lazer||[]).join(', ')}` : '', D.lazer_detalhe].filter(Boolean).join(' | '),
+        parq: { faixa_etaria: D.faixa_etaria, medicamentos: D.medicamentos },
       }], {onConflict:'student_id'})
+
+      // Salva peso e altura no aluno
+      if (D.peso || D.altura) {
+        await supabase.from('students').update({
+          weight: +D.peso || null,
+          height: +D.altura || null,
+        }).eq('id', aluno.id)
+      }
 
       await supabase.from('anamnese_tokens').update({
         student_id: aluno.id, status:'respondido',
@@ -222,7 +239,9 @@ export default function AnamnesePublica({ token: tokenProp }) {
       }).eq('token',token)
 
       // Notificacao para o professor — payload completo para o card
-      const imcVal = D.peso && D.altura ? (parseFloat(D.peso) / Math.pow(parseFloat(D.altura)/100, 2)).toFixed(1) : null
+      const imcVal = D.peso && D.altura
+        ? (parseFloat(D.peso) / Math.pow(parseFloat(D.altura)/100, 2)).toFixed(1)
+        : null
       await supabase.from('notificacoes').insert([{
         teacher_id: tokenData.teacher_id,
         tipo: 'nova_anamnese',
@@ -322,6 +341,22 @@ export default function AnamnesePublica({ token: tokenProp }) {
                   <div style={{fontSize:11,color:GREEN,marginTop:4}}>({D.ddd}) {D.tel1}-{D.tel2}</div>
                 )}
               </div>
+
+              <div style={{marginTop:14}}>
+                <Label>Peso e altura</Label>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                  <div>
+                    <div style={{fontSize:10,color:DIM,marginBottom:4}}>Peso atual (kg)</div>
+                    <input style={INP} type="number" placeholder="Ex: 75"
+                      value={D.peso} onChange={e=>s('peso')(e.target.value)}/>
+                  </div>
+                  <div>
+                    <div style={{fontSize:10,color:DIM,marginBottom:4}}>Altura (cm)</div>
+                    <input style={INP} type="number" placeholder="Ex: 175"
+                      value={D.altura} onChange={e=>s('altura')(e.target.value)}/>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div style={CARD}>
@@ -345,14 +380,41 @@ export default function AnamnesePublica({ token: tokenProp }) {
             </div>
 
             <div style={CARD}>
-              <Sec title="Rotina diaria"/>
-              <Label required>Como e sua demanda de esforco fisico no dia a dia?</Label>
+              <Sec title="Sua rotina"/>
+              <Label required>No trabalho, qual e o nivel de esforco fisico do seu dia?</Label>
+              <div style={{fontSize:11,color:DIM,marginBottom:8,lineHeight:1.5}}>Inclua o deslocamento — quem passa horas em transporte publico ou no carro tambem esta ativo.</div>
               <ChipGroup
-                options={['Trabalho sentado a maior parte do dia','Fico em pe ou caminho bastante','Esforco fisico moderado ao longo do dia','Esforco fisico intenso ou trabalho braçal']}
+                options={[
+                  'Trabalho sentado e me desloco pouco',
+                  'Trabalho sentado mas me desloco bastante',
+                  'Fico em pe ou caminho boa parte do dia',
+                  'Realizo esforco fisico moderado no trabalho',
+                  'Realizo esforco fisico intenso ou trabalho braçal',
+                ]}
                 value={D.rotina_trabalho} onChange={s('rotina_trabalho')}
-                complement complementLabel="Detalhe se quiser"
+                complement complementLabel="Tempo aproximado de deslocamento diario (opcional)"
                 complementValue={D.rotina_detalhe} onComplementChange={s('rotina_detalhe')}/>
               {err('rotina_trabalho')}
+            </div>
+
+            <div style={CARD}>
+              <Sec title="Seu tempo livre"/>
+              <Label required>Fora do trabalho e do sono, como voce costuma ocupar seu tempo?</Label>
+              <div style={{fontSize:11,color:DIM,marginBottom:8,lineHeight:1.5}}>Nao ha resposta certa — queremos entender sua rotina real para construir um programa que caiba nela.</div>
+              <ChipGroup multi
+                options={[
+                  'Descanso e recuperacao (TV, streaming, celular)',
+                  'Leitura ou aprendizado',
+                  'Atividade fisica ou esporte',
+                  'Vida social (amigos, familia, saidas)',
+                  'Hobbies criativos (musica, arte, culinaria)',
+                  'Cuidados com a casa ou familia',
+                  'Pouco tempo livre disponivel',
+                ]}
+                value={D.lazer} onChange={s('lazer')}
+                complement complementLabel="Algo que nao esta na lista? Conta aqui"
+                complementValue={D.lazer_detalhe} onComplementChange={s('lazer_detalhe')}/>
+              {err('lazer')}
             </div>
           </div>
         )}
@@ -362,49 +424,110 @@ export default function AnamnesePublica({ token: tokenProp }) {
           <div>
             <div style={{marginBottom:20}}>
               <div style={{fontSize:20,fontWeight:800,color:TEXT,marginBottom:4}}>Saude e habitos</div>
-              <div style={{fontSize:13,color:SUB}}>Informacoes que guiam a prescricao do seu programa</div>
+              <div style={{fontSize:13,color:SUB}}>Estas informacoes sao confidenciais e usadas apenas para personalizar seu programa</div>
             </div>
 
+            {/* Sono */}
             <div style={CARD}>
-              <Sec title="Sono"/>
-              <Label required>Como voce classifica seu sono?</Label>
-              <ChipGroup options={['Durmo bem e acordo descansado','Durmo mal ou insuficiente','Tenho insonia frequente','Muito irregular']}
+              <Sec title="Qualidade do sono"/>
+              <Label required>Como voce descreveria seu sono na maior parte das noites?</Label>
+              <ChipGroup
+                options={['Durmo bem e acordo descansado','Acordo cansado mesmo dormindo','Tenho dificuldade para dormir ou manter o sono','Muito irregular — varia bastante']}
                 value={D.qualidade_sono} onChange={s('qualidade_sono')}/>
               {err('qualidade_sono')}
               <div style={{marginTop:14}}>
-                <Label required>Quantas horas dorme por noite?</Label>
+                <Label required>Quantas horas costuma dormir por noite?</Label>
                 <ChipGroup options={['Menos de 5h','5 a 6h','6 a 7h','7 a 8h','Mais de 8h']}
                   value={D.horas_sono} onChange={s('horas_sono')}/>
                 {err('horas_sono')}
               </div>
             </div>
 
+            {/* Alimentacao */}
             <div style={CARD}>
-              <Sec title="Habitos"/>
-              <Label required>Uso de alcool ou tabaco</Label>
-              <ChipGroup multi
-                options={['Nao uso nenhum','Bebo socialmente','Bebo com frequencia','Fumo','Uso ocasional']}
-                value={D.alcool_cigarro} onChange={s('alcool_cigarro')}
-                complement complementLabel="Detalhe se quiser"
-                complementValue={D.alcool_cigarro_detalhe} onComplementChange={s('alcool_cigarro_detalhe')}/>
-              {err('alcool_cigarro')}
+              <Sec title="Alimentacao"/>
+              <div style={{fontSize:11,color:DIM,marginBottom:10,lineHeight:1.6}}>A alimentacao influencia diretamente nos resultados do treino. Nao ha julgamento aqui — apenas queremos entender seu ponto de partida.</div>
+              <Label required>Quantas refeicoes voce faz por dia, em media?</Label>
+              <ChipGroup options={['1 a 2 refeicoes','3 refeicoes','4 a 5 refeicoes','6 ou mais refeicoes']}
+                value={D.refeicoes} onChange={s('refeicoes')}/>
+              {err('refeicoes')}
+              <div style={{marginTop:14}}>
+                <Label required>Como voce avalia a qualidade da sua alimentacao hoje?</Label>
+                <ChipGroup
+                  options={['Muito boa — equilibrada e variada','Boa — com alguns deslizes pontuais','Regular — poderia melhorar bastante','Precisa de muita melhora']}
+                  value={D.qualidade_alimentacao} onChange={s('qualidade_alimentacao')}/>
+                {err('qualidade_alimentacao')}
+              </div>
             </div>
 
+            {/* Habitos */}
             <div style={CARD}>
-              <Sec title="Saude"/>
-              <Label required>Condicao de saude diagnosticada</Label>
+              <Sec title="Habitos e substancias"/>
+              <div style={{fontSize:11,color:DIM,marginBottom:12,lineHeight:1.6}}>Essas informacoes sao importantes para ajustar a intensidade e o volume do seu programa com segurança.</div>
+
+              <Label required>Voce faz uso de alcool?</Label>
+              <ChipGroup
+                options={['Nao faco uso','Raramente — ocasioes especiais','Fins de semana','Algumas vezes por semana','Diariamente']}
+                value={D.alcool} onChange={s('alcool')}/>
+              {err('alcool')}
+              {D.alcool && D.alcool !== 'Nao faco uso' && (
+                <div style={{marginTop:8}}>
+                  <div style={{fontSize:11,color:SUB,marginBottom:5}}>Com que frequencia aproximada? (ex: 2 cervejas nos fins de semana)</div>
+                  <input style={{...INP,fontSize:13}} placeholder="Descreva brevemente se quiser"
+                    value={D.alcool_freq} onChange={e=>s('alcool_freq')(e.target.value)}/>
+                </div>
+              )}
+
+              <div style={{marginTop:16}}>
+                <Label required>E tabaco ou cigarro?</Label>
+                <ChipGroup
+                  options={['Nao faco uso','Ja fumei mas parei','Fumo ocasionalmente','Fumo regularmente','Fumo diariamente']}
+                  value={D.tabaco} onChange={s('tabaco')}/>
+                {err('tabaco')}
+                {D.tabaco && D.tabaco !== 'Nao faco uso' && D.tabaco !== 'Ja fumei mas parei' && (
+                  <div style={{marginTop:8}}>
+                    <div style={{fontSize:11,color:SUB,marginBottom:5}}>Quantidade aproximada por dia ou semana</div>
+                    <input style={{...INP,fontSize:13}} placeholder="Ex: 5 cigarros por dia"
+                      value={D.tabaco_freq} onChange={e=>s('tabaco_freq')(e.target.value)}/>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Medicamentos */}
+            <div style={CARD}>
+              <Sec title="Medicamentos"/>
+              <div style={{fontSize:11,color:DIM,marginBottom:10,lineHeight:1.6}}>Alguns medicamentos influenciam a resposta ao exercicio fisico. Esta informacao e confidencial e usada exclusivamente para adaptar seu programa com segurança.</div>
+              <Label required>Voce faz uso de algum medicamento de forma continua ou frequente?</Label>
+              <ChipGroup
+                options={['Nao faco uso de medicamentos','Sim, uso medicamento controlado','Sim, uso medicamento para pressao ou coracao','Sim, uso insulina ou medicamento para diabetes','Sim, outro tipo de medicamento']}
+                value={D.medicamentos} onChange={s('medicamentos')}/>
+              {err('medicamentos')}
+              {D.medicamentos && D.medicamentos !== 'Nao faco uso de medicamentos' && (
+                <div style={{marginTop:8}}>
+                  <div style={{fontSize:11,color:SUB,marginBottom:5}}>Qual medicamento? (nome e dosagem, se souber)</div>
+                  <input style={{...INP,fontSize:13}} placeholder="Ex: Propranolol 40mg, uso diario"
+                    value={D.medicamentos_detalhe} onChange={e=>s('medicamentos_detalhe')(e.target.value)}/>
+                </div>
+              )}
+            </div>
+
+            {/* Saude */}
+            <div style={CARD}>
+              <Sec title="Historico de saude"/>
+              <Label required>Voce possui alguma condicao de saude diagnosticada?</Label>
               <ChipGroup multi
                 options={['Nenhuma','Hipertensao','Diabetes','Problema cardiaco','Osteoporose','Artrite ou artrose','Hernia de disco','Outra']}
                 value={D.condicao_saude} onChange={s('condicao_saude')}
-                complement complementLabel="Especifique medicamentos, cirurgias ou outras condicoes"
+                complement complementLabel="Especifique cirurgias ou outras condicoes relevantes"
                 complementValue={D.condicao_saude_detalhe} onComplementChange={s('condicao_saude_detalhe')}/>
               {err('condicao_saude')}
               <div style={{marginTop:16}}>
-                <Label required>Limitacao fisica ou dor recorrente</Label>
+                <Label required>Voce sente dor ou tem limitacao fisica em alguma regiao do corpo?</Label>
                 <ChipGroup multi
                   options={['Nenhuma','Ombro','Coluna lombar','Coluna cervical','Joelho','Quadril','Tornozelo','Punho ou cotovelo','Outra regiao']}
                   value={D.limitacao} onChange={s('limitacao')}
-                  complement complementLabel="Descreva a limitacao"
+                  complement complementLabel="Descreva a limitacao com mais detalhes"
                   complementValue={D.limitacao_detalhe} onComplementChange={s('limitacao_detalhe')}/>
                 {err('limitacao')}
               </div>
