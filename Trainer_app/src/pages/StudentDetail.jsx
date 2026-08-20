@@ -2270,11 +2270,292 @@ function AnamneseTab({ studentId, teacherId, s }) {
 }
 
 
+
+// ── FichaInformacoes ──────────────────────────────────────────────────────────
+function alertLvl(field, val, imc) {
+  const v = String(val || '').toLowerCase()
+  const CRITICO = {
+    imc:           () => parseFloat(imc) >= 30,
+    condicao_saude:() => ['cardiaco','diabetes','cardiopatia','problema cardiaco'].some(x=>v.includes(x)),
+    medicamentos:  () => ['insulina','beta','pressão','coração','controlado'].some(x=>v.includes(x)),
+    limitacoes:    () => v.length > 3 && !v.includes('nenhuma'),
+  }
+  const ATENCAO = {
+    imc:                  () => parseFloat(imc) >= 25 && parseFloat(imc) < 30,
+    qualidade_sono:       () => ['mal','insonia','irregular','cansado'].some(x=>v.includes(x)),
+    alcool:               () => ['frequen','diariamente','semana'].some(x=>v.includes(x)),
+    tabaco:               () => ['regularmente','diariamente','ocasionalmente'].some(x=>v.includes(x)),
+    qualidade_alimentacao:() => ['muita melhora','regular'].some(x=>v.includes(x)),
+    condicao_saude:       () => ['hipertensao','hipertens','artrite','hernia'].some(x=>v.includes(x)),
+  }
+  if (CRITICO[field]?.()) return 'critico'
+  if (ATENCAO[field]?.()) return 'atencao'
+  return null
+}
+
+const AL_STYLE = {
+  critico: { border:'1.5px solid rgba(248,113,113,0.55)', background:'rgba(248,113,113,0.05)' },
+  atencao: { border:'1.5px solid rgba(251,191,36,0.45)',  background:'rgba(251,191,36,0.04)' },
+  ok:      { border:'1px solid rgba(255,255,255,0.07)',   background:'#111827' },
+}
+
+function FichaField({ label, children, alert }) {
+  const st = AL_STYLE[alert] || AL_STYLE.ok
+  return (
+    <div style={{ ...st, borderRadius:10, padding:'10px 14px', marginBottom:8 }}>
+      <div style={{ fontSize:10, color:'#475569', fontWeight:700, textTransform:'uppercase', letterSpacing:0.8, marginBottom:5, display:'flex', alignItems:'center', gap:6 }}>
+        {label}
+        {alert === 'critico' && <span style={{ fontSize:9, background:'rgba(248,113,113,0.15)', color:'#F87171', padding:'1px 6px', borderRadius:20, fontWeight:700 }}>Critico</span>}
+        {alert === 'atencao' && <span style={{ fontSize:9, background:'rgba(251,191,36,0.15)',  color:'#FBBF24', padding:'1px 6px', borderRadius:20, fontWeight:700 }}>Atencao</span>}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function FichaInformacoes({ student, anamData, studentId, onSaved }) {
+  const parseF = (an, st) => ({
+    nome:                  st?.name || '',
+    idade:                 st?.age  || '',
+    peso:                  st?.weight || '',
+    altura:                st?.height || '',
+    objetivo:              st?.goal  || '',
+    objetivo_especifico:   an?.objetivo_estetico || '',
+    whatsapp:              st?.guardian_phone || '',
+    rotina_trabalho:       an?.profissao?.split(' | ')[0] || '',
+    lazer:                 an?.profissao?.includes('Lazer:') ? an.profissao.split('Lazer:')[1]?.split(' | ')[0]?.trim() : '',
+    qualidade_sono:        an?.qualidade_sono || '',
+    horas_sono:            an?.horas_sono || '',
+    refeicoes:             an?.alimentacao?.split(' refeições')[0]?.split('— ').pop() || '',
+    qualidade_alimentacao: an?.alimentacao?.split('qualidade:')[1]?.trim() || '',
+    alcool:                an?.alcool_cigarro?.split('Álcool:')[1]?.split(' (')[0]?.trim() || '',
+    alcool_freq:           an?.alcool_cigarro?.match(/Álcool:[^(]*\(([^)]+)\)/)?.[1] || '',
+    tabaco:                an?.alcool_cigarro?.split('Tabaco:')[1]?.split(' (')[0]?.trim() || '',
+    tabaco_freq:           an?.alcool_cigarro?.match(/Tabaco:[^(]*\(([^)]+)\)/)?.[1] || '',
+    medicamentos:          an?.parq?.medicamentos || '',
+    condicao_saude:        an?.historico_saude || '',
+    limitacoes:            an?.limitacao_detalhe || '',
+    dias_semana:           an?.dias_disponiveis || '',
+    horario:               an?.horario_preferido || '',
+    local_treino:          an?.local_treino || '',
+    experiencia:           an?.historico || '',
+    motivacao:             an?.motivacao_inicio || '',
+    notas_professor:       an?.notas || '',
+  })
+
+  const [F,  setF]  = useState(parseF(anamData, student))
+  const [sav,setSav]= useState(false)
+  const [ok, setOk] = useState(false)
+  const f = k => v => setF(p=>({...p,[k]:v}))
+
+  useEffect(() => { setF(parseF(anamData, student)) }, [anamData, student])
+
+  const imc = F.peso && F.altura
+    ? (parseFloat(F.peso) / Math.pow(parseFloat(F.altura)/100, 2)).toFixed(1)
+    : null
+
+  const al = (field, val) => alertLvl(field, val ?? F[field], imc)
+
+  const inp = { width:'100%', background:'#0D1117', border:'1px solid rgba(255,255,255,0.07)', borderRadius:8, padding:'8px 11px', color:'#E2E8F0', fontSize:13, outline:'none', boxSizing:'border-box', fontFamily:'inherit' }
+  const sel = { ...inp }
+
+  const save = async () => {
+    setSav(true)
+    await supabase.from('students').update({
+      name: F.nome, age: +F.idade||null,
+      weight: +F.peso||null, height: +F.altura||null, goal: F.objetivo,
+      guardian_phone: F.whatsapp,
+    }).eq('id', studentId)
+
+    await supabase.from('anamnese').upsert([{
+      student_id: studentId,
+      qualidade_sono: F.qualidade_sono, horas_sono: F.horas_sono,
+      alimentacao: `${F.refeicoes} refeições/dia — qualidade: ${F.qualidade_alimentacao}`,
+      alcool_cigarro: [
+        F.alcool ? `Álcool: ${F.alcool}${F.alcool_freq?` (${F.alcool_freq})`:''}`:'',
+        F.tabaco ? `Tabaco: ${F.tabaco}${F.tabaco_freq?` (${F.tabaco_freq})`:''}`:'',
+      ].filter(Boolean).join(' | '),
+      limitacao_detalhe: F.limitacoes, historico_saude: F.condicao_saude,
+      objetivo_estetico: F.objetivo_especifico,
+      dias_disponiveis: F.dias_semana, horario_preferido: F.horario,
+      local_treino: F.local_treino, historico: F.experiencia,
+      motivacao_inicio: F.motivacao, notas: F.notas_professor,
+      profissao: [F.rotina_trabalho, F.lazer?`Lazer: ${F.lazer}`:''].filter(Boolean).join(' | '),
+      parq: { medicamentos: F.medicamentos },
+    }], { onConflict:'student_id' })
+
+    setSav(false); setOk(true); setTimeout(()=>setOk(false),2000)
+    onSaved?.()
+  }
+
+  const SECTION = t => (
+    <div style={{ display:'flex', alignItems:'center', gap:10, margin:'18px 0 12px' }}>
+      <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.07)' }}/>
+      <span style={{ fontSize:10, color:'#334155', fontWeight:700, textTransform:'uppercase', letterSpacing:1.2, whiteSpace:'nowrap' }}>{t}</span>
+      <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.07)' }}/>
+    </div>
+  )
+
+  const GOALS = ['Ganho de Massa','Emagrecimento','Força e Performance','Condicionamento','Saúde e Bem-Estar','Iniciação Esportiva']
+
+  return (
+    <div style={{ background:'#0D1117', borderRadius:14, border:'1px solid rgba(255,255,255,0.07)', padding:'18px 20px' }}>
+      {/* Salvar */}
+      <button onClick={save} disabled={sav}
+        style={{ width:'100%', padding:'11px', borderRadius:10, border:'none', cursor:'pointer', marginBottom:18,
+          background: ok ? '#22C55E' : sav ? '#1E293B' : '#3B82F6',
+          color:'#fff', fontWeight:800, fontSize:14, fontFamily:'inherit' }}>
+        {sav ? 'Salvando...' : ok ? '✓ Mudanças Confirmadas' : 'Confirmar Mudanças'}
+      </button>
+
+      {/* ── Dados Pessoais ───────────────────────────────── */}
+      {SECTION('Dados Pessoais')}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+        <FichaField label="Nome">
+          <input style={inp} value={F.nome} onChange={e=>f('nome')(e.target.value)} placeholder="Nome completo"/>
+        </FichaField>
+        <FichaField label="Idade">
+          <input style={inp} type="number" value={F.idade} onChange={e=>f('idade')(e.target.value)} placeholder="Anos"/>
+        </FichaField>
+      </div>
+
+      <FichaField label="Objetivo Geral">
+        <select style={sel} value={F.objetivo} onChange={e=>f('objetivo')(e.target.value)}>
+          <option value="">Selecione</option>
+          {GOALS.map(g=><option key={g}>{g}</option>)}
+        </select>
+      </FichaField>
+
+      <FichaField label="Objetivo Específico — como o aluno descreveu">
+        <textarea style={{...inp,minHeight:55,resize:'vertical',lineHeight:1.6}}
+          value={F.objetivo_especifico} onChange={e=>f('objetivo_especifico')(e.target.value)}
+          placeholder="Descrição do objetivo pelo próprio aluno..."/>
+      </FichaField>
+
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
+        <FichaField label="Peso (kg)">
+          <input style={inp} type="number" value={F.peso} onChange={e=>f('peso')(e.target.value)} placeholder="kg"/>
+        </FichaField>
+        <FichaField label="Altura (cm)">
+          <input style={inp} type="number" value={F.altura} onChange={e=>f('altura')(e.target.value)} placeholder="cm"/>
+        </FichaField>
+        <FichaField label="IMC" alert={al('imc', imc)}>
+          <div style={{ fontSize:16, fontWeight:800, color: al('imc',imc)==='critico'?'#F87171':al('imc',imc)==='atencao'?'#FBBF24':'#E2E8F0', paddingTop:2 }}>
+            {imc || '—'}
+          </div>
+          {imc && <div style={{ fontSize:10, color:'#475569', marginTop:2 }}>
+            {parseFloat(imc)<18.5?'Abaixo do peso':parseFloat(imc)<25?'Normal':parseFloat(imc)<30?'Sobrepeso':parseFloat(imc)<35?'Obesidade I':'Obesidade II+'}
+          </div>}
+        </FichaField>
+      </div>
+
+      <FichaField label="WhatsApp">
+        <input style={inp} value={F.whatsapp} onChange={e=>f('whatsapp')(e.target.value)} placeholder="(XX) XXXXX-XXXX"/>
+      </FichaField>
+
+      <FichaField label="Rotina de trabalho — como o aluno descreveu">
+        <input style={inp} value={F.rotina_trabalho} onChange={e=>f('rotina_trabalho')(e.target.value)} placeholder="Tipo de esforço físico no trabalho..."/>
+      </FichaField>
+
+      <FichaField label="Tempo livre e lazer">
+        <input style={inp} value={F.lazer} onChange={e=>f('lazer')(e.target.value)} placeholder="Como ocupa o tempo livre..."/>
+      </FichaField>
+
+      {/* ── Saúde e Hábitos ──────────────────────────────── */}
+      {SECTION('Saúde e Hábitos')}
+
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+        <FichaField label="Qualidade do sono" alert={al('qualidade_sono')}>
+          <input style={inp} value={F.qualidade_sono} onChange={e=>f('qualidade_sono')(e.target.value)} placeholder="Ex: Durmo mal..."/>
+        </FichaField>
+        <FichaField label="Horas de sono">
+          <input style={inp} value={F.horas_sono} onChange={e=>f('horas_sono')(e.target.value)} placeholder="Ex: 6 a 7h"/>
+        </FichaField>
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+        <FichaField label="Qualidade da alimentação" alert={al('qualidade_alimentacao')}>
+          <input style={inp} value={F.qualidade_alimentacao} onChange={e=>f('qualidade_alimentacao')(e.target.value)} placeholder="Ex: Regular..."/>
+        </FichaField>
+        <FichaField label="Refeições por dia">
+          <input style={inp} value={F.refeicoes} onChange={e=>f('refeicoes')(e.target.value)} placeholder="Ex: 3 refeições"/>
+        </FichaField>
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+        <FichaField label="Uso de álcool" alert={al('alcool')}>
+          <input style={inp} value={F.alcool} onChange={e=>f('alcool')(e.target.value)} placeholder="Frequência..."/>
+          <input style={{...inp,marginTop:5,fontSize:12}} value={F.alcool_freq} onChange={e=>f('alcool_freq')(e.target.value)} placeholder="Quantidade por semana/mês"/>
+        </FichaField>
+        <FichaField label="Uso de tabaco" alert={al('tabaco')}>
+          <input style={inp} value={F.tabaco} onChange={e=>f('tabaco')(e.target.value)} placeholder="Frequência..."/>
+          <input style={{...inp,marginTop:5,fontSize:12}} value={F.tabaco_freq} onChange={e=>f('tabaco_freq')(e.target.value)} placeholder="Quantidade por dia/semana"/>
+        </FichaField>
+      </div>
+
+      <FichaField label="Medicamentos de uso contínuo ou frequente" alert={al('medicamentos')}>
+        <input style={inp} value={F.medicamentos} onChange={e=>f('medicamentos')(e.target.value)} placeholder="Nome, dosagem e frequência..."/>
+      </FichaField>
+
+      {/* ── Histórico de Saúde ────────────────────────────── */}
+      {SECTION('Histórico de Saúde')}
+
+      <FichaField label="Condições de saúde diagnosticadas" alert={al('condicao_saude')}>
+        <textarea style={{...inp,minHeight:55,resize:'vertical',lineHeight:1.6}}
+          value={F.condicao_saude} onChange={e=>f('condicao_saude')(e.target.value)}
+          placeholder="Condições, cirurgias, diagnósticos..."/>
+      </FichaField>
+
+      <FichaField label="Limitações físicas e dores recorrentes" alert={al('limitacoes')}>
+        <textarea style={{...inp,minHeight:55,resize:'vertical',lineHeight:1.6}}
+          value={F.limitacoes} onChange={e=>f('limitacoes')(e.target.value)}
+          placeholder="Regiões com dor ou restrição de movimento..."/>
+      </FichaField>
+
+      {/* ── Objetivos e Motivação ────────────────────────── */}
+      {SECTION('Objetivos e Motivação')}
+
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
+        <FichaField label="Dias por semana">
+          <input style={inp} value={F.dias_semana} onChange={e=>f('dias_semana')(e.target.value)} placeholder="Ex: 3 dias"/>
+        </FichaField>
+        <FichaField label="Horário preferido">
+          <input style={inp} value={F.horario} onChange={e=>f('horario')(e.target.value)} placeholder="Ex: Manhã"/>
+        </FichaField>
+        <FichaField label="Local de treino">
+          <input style={inp} value={F.local_treino} onChange={e=>f('local_treino')(e.target.value)} placeholder="Ex: Academia"/>
+        </FichaField>
+      </div>
+
+      <FichaField label="Experiência com exercício físico">
+        <textarea style={{...inp,minHeight:55,resize:'vertical',lineHeight:1.6}}
+          value={F.experiencia} onChange={e=>f('experiencia')(e.target.value)}
+          placeholder="Histórico de treinos anteriores..."/>
+      </FichaField>
+
+      <FichaField label="Motivação para começar agora">
+        <textarea style={{...inp,minHeight:55,resize:'vertical',lineHeight:1.6}}
+          value={F.motivacao} onChange={e=>f('motivacao')(e.target.value)}
+          placeholder="O que levou o aluno a buscar o programa..."/>
+      </FichaField>
+
+      <FichaField label="Notas do professor">
+        <textarea style={{...inp,minHeight:65,resize:'vertical',lineHeight:1.6}}
+          value={F.notas_professor} onChange={e=>f('notas_professor')(e.target.value)}
+          placeholder="Observações, estratégias, pontos de atenção..."/>
+      </FichaField>
+    </div>
+  )
+}
+
 export default function StudentDetail({ navigate, studentId }) {
   const [student, setStudent] = useState(null)
-  const [plans, setPlans] = useState([])
-  const [progress, setProgress] = useState([])
-  const [exLogs,   setExLogs]   = useState([])
+  const [plans,   setPlans]   = useState([])
+  const [progress,setProgress]= useState([])
+  const [exLogs,  setExLogs]  = useState([])
+  const [anamData,setAnamData]= useState(null)
+  const [editName,setEditName]= useState(false)
+  const [tmpName, setTmpName] = useState('')
   const [tab, setTab] = useState('plans')
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({})
@@ -2314,6 +2595,9 @@ export default function StudentDetail({ navigate, studentId }) {
       }
 
       if (plRes.data) setPlans(plRes.data)
+      // Load anamnese
+      const { data: anam } = await supabase.from('anamnese').select('*').eq('student_id', studentId).single()
+      if (anam) setAnamData(anam)
       if (elRes.data) {
         // Enrich with exercise names from exercises table
         const exIds = [...new Set((elRes.data||[]).map(l => l.exercise_id).filter(Boolean))]
@@ -2421,26 +2705,62 @@ export default function StudentDetail({ navigate, studentId }) {
         <div style={s.header}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
             <div>
-              <div style={{ fontSize: 10, color: C.blue, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 }}>Perfil do Aluno</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: C.text }}>{student.name}</div>
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+                <div style={{ fontSize: 10, color: C.blue, letterSpacing: 2, textTransform: 'uppercase' }}>Perfil do Aluno</div>
+                {student.status === 'pendente' && (
+                  <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                    <div style={{ width:18, height:2, background:'#EF4444', borderRadius:99 }}/>
+                    <span style={{ fontSize:10, fontWeight:800, color:'#F87171', textTransform:'uppercase', letterSpacing:1 }}>Em Análise</span>
+                  </div>
+                )}
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:2 }}>
+                {editName ? (
+                  <input autoFocus value={tmpName}
+                    onChange={e=>setTmpName(e.target.value)}
+                    onBlur={async()=>{
+                      if(tmpName.trim()&&tmpName!==student.name){
+                        await supabase.from('students').update({name:tmpName.trim()}).eq('id',studentId)
+                        setStudent(p=>({...p,name:tmpName.trim()}))
+                      }
+                      setEditName(false)
+                    }}
+                    onKeyDown={e=>{ if(e.key==='Enter') e.target.blur() }}
+                    style={{ fontSize:22,fontWeight:800,color:C.text,background:'rgba(255,255,255,0.06)',border:`1px solid ${C.border}`,borderRadius:8,padding:'2px 10px',outline:'none',fontFamily:'inherit' }}/>
+                ) : (
+                  <div style={{ fontSize: 22, fontWeight: 800, color: C.text }}>{student.name}</div>
+                )}
+                <button onClick={()=>{setTmpName(student.name);setEditName(true)}}
+                  style={{ background:'none',border:'none',cursor:'pointer',padding:2,lineHeight:1 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="#F59E0B"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                </button>
+              </div>
               <div style={{ fontSize: 13, color: C.textSub }}>{student.goal} · {student.level}</div>
             </div>
-            {student.status === 'pendente' && (
+            {student.status === 'pendente' ? (
               <button onClick={async () => {
                 await supabase.from('students').update({ status:'ativo' }).eq('id', studentId)
                 await supabase.from('notificacoes').update({ lida:true })
                   .eq('teacher_id', student.teacher_id).eq('tipo','nova_anamnese')
                 setStudent(p => ({ ...p, status:'ativo' }))
-              }} style={{ padding:'9px 16px', borderRadius:9, border:'none', background:'#22C55E', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', fontFamily:'inherit' }}>
-                Confirmar Aluno
+              }} style={{ padding:'9px 18px', borderRadius:9, border:'none', background:'#22C55E', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', fontFamily:'inherit' }}>
+                Matricular Aluno
+              </button>
+            ) : (
+              <button style={s.outlineBtn} onClick={() => setEditing(!editing)}>
+                {editing ? 'Fechar Ficha' : 'Abrir Ficha'}
               </button>
             )}
-            <button style={s.outlineBtn} onClick={() => setEditing(!editing)}>{editing ? 'Cancelar' : 'Editar Perfil'}</button>
           </div>
 
           {editing ? (
             <>
-              <EditFormFields form={form} setForm={setForm} student={student} />
+              <FichaInformacoes
+                student={student}
+                anamData={anamData}
+                studentId={studentId}
+                onSaved={fetchAll}
+              />
               <div style={{ display:'flex', gap:8, marginTop:16 }}>
                 <button onClick={saveStudent} disabled={saving} style={{ flex:1, padding:'13px', borderRadius:12, border:'none', background:C.green, color:'#fff', fontWeight:800, fontSize:14, cursor:'pointer' }}>
                   {saving ? 'Salvando...' : '✓ Salvar Alterações'}
