@@ -198,11 +198,13 @@ export default function AnamnesePublica({ token: tokenProp }) {
     setSaving(true)
     const whatsapp = `(${D.ddd}) ${D.tel1}-${D.tel2}`
 
+    const OBJ_MAP = { emagrecimento:'Emagrecimento', massa:'Ganho de Massa', saude:'Saúde e Bem-Estar', performance:'Força e Performance' }
     const {data: aluno} = await supabase.from('students').insert([{
       teacher_id: tokenData.teacher_id,
       name: D.nome, plano: tokenData.plano,
       guardian_phone: whatsapp,
       status: 'pendente',
+      goal: OBJ_MAP[D.objetivo] || D.objetivo || null,
     }]).select().single()
 
     if (aluno) {
@@ -216,7 +218,7 @@ export default function AnamnesePublica({ token: tokenProp }) {
         alimentacao: `${D.refeicoes} refeições/dia — qualidade: ${D.qualidade_alimentacao}`,
         limitacao_detalhe: [...(D.limitacao||[]), D.limitacao_detalhe].filter(Boolean).join(', '),
         horas_sono: D.horas_sono, qualidade_sono: D.qualidade_sono,
-        objetivo_estetico: [D.objetivo, D.objetivo_detalhe].filter(Boolean).join(' — '),
+        objetivo_estetico: D.objetivo_detalhe || '',
         dias_disponiveis: D.dias_semana, horario_preferido: D.horario,
         local_treino: (D.local_treino||[]).join(', '),
         historico: [D.experiencia, D.experiencia_detalhe].filter(Boolean).join(' — '),
@@ -255,7 +257,7 @@ export default function AnamnesePublica({ token: tokenProp }) {
           peso: D.peso,
           altura: D.altura,
           imc: imcVal,
-          objetivo: D.objetivo,
+          objetivo: OBJ_MAP[D.objetivo] || D.objetivo,
           dias_semana: D.dias_semana,
           whatsapp: whatsapp,
         },
