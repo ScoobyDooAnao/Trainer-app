@@ -2275,17 +2275,21 @@ function AnamneseTab({ studentId, teacherId, s }) {
 function alertLvl(field, val, imc) {
   const v = String(val || '').toLowerCase()
   const CRITICO = {
-    imc:           () => parseFloat(imc) >= 30,
-    condicao_saude:() => ['cardiaco','diabetes','cardiopatia','problema cardiaco'].some(x=>v.includes(x)),
-    medicamentos:  () => ['insulina','beta','pressão','coração','controlado'].some(x=>v.includes(x)),
-    limitacoes:    () => v.length > 3 && !v.includes('nenhuma'),
+    imc:                  () => parseFloat(imc) >= 30,
+    condicao_saude:       () => ['cardiaco','diabetes','cardiopatia','problema cardiaco'].some(x=>v.includes(x)),
+    medicamentos:         () => ['insulina','beta bloq','pressão','coração','controlado'].some(x=>v.includes(x)),
+    limitacoes:           () => v.length > 3 && !v.includes('nenhuma'),
+    horas_sono:           () => v.includes('menos de 5'),
+    qualidade_alimentacao:() => v.includes('muita melhora'),
   }
   const ATENCAO = {
     imc:                  () => parseFloat(imc) >= 25 && parseFloat(imc) < 30,
-    qualidade_sono:       () => ['mal','insonia','irregular','cansado'].some(x=>v.includes(x)),
+    // fix: 'descansado' continha 'cansado' — usar termos mais específicos
+    qualidade_sono:       () => ['durmo mal','insonia','acordo cansado','muito irregular'].some(x=>v.includes(x)),
+    horas_sono:           () => v.includes('5 a 6'),
     alcool:               () => ['frequen','diariamente','semana'].some(x=>v.includes(x)),
     tabaco:               () => ['regularmente','diariamente','ocasionalmente'].some(x=>v.includes(x)),
-    qualidade_alimentacao:() => ['muita melhora','regular'].some(x=>v.includes(x)),
+    qualidade_alimentacao:() => v.includes('regular'),
     condicao_saude:       () => ['hipertensao','hipertens','artrite','hernia'].some(x=>v.includes(x)),
   }
   if (CRITICO[field]?.()) return 'critico'
@@ -2319,7 +2323,7 @@ function FichaInformacoes({ student, anamData, studentId, onSaved }) {
     idade:                 st?.age  || '',
     peso:                  st?.weight || '',
     altura:                st?.height || '',
-    objetivo:              st?.goal  || '',
+    objetivo:              st?.goal  || an?.parq?.goal || '',
     objetivo_especifico:   an?.objetivo_estetico || '',
     whatsapp:              st?.guardian_phone || '',
     rotina_trabalho:       an?.profissao?.split(' | ')[0] || '',
@@ -2493,10 +2497,6 @@ function FichaInformacoes({ student, anamData, studentId, onSaved }) {
         </FichaField>
       </div>
 
-      <FichaField label="Medicamentos de uso contínuo ou frequente" alert={al('medicamentos')}>
-        <input style={inp} value={F.medicamentos} onChange={e=>f('medicamentos')(e.target.value)} placeholder="Nome, dosagem e frequência..."/>
-      </FichaField>
-
       {/* ── Histórico de Saúde ────────────────────────────── */}
       {SECTION('Histórico de Saúde')}
 
@@ -2510,6 +2510,11 @@ function FichaInformacoes({ student, anamData, studentId, onSaved }) {
         <textarea style={{...inp,minHeight:55,resize:'vertical',lineHeight:1.6}}
           value={F.limitacoes} onChange={e=>f('limitacoes')(e.target.value)}
           placeholder="Regiões com dor ou restrição de movimento..."/>
+      </FichaField>
+
+      <FichaField label="Medicamentos de uso contínuo ou frequente" alert={al('medicamentos')}>
+        <input style={inp} value={F.medicamentos} onChange={e=>f('medicamentos')(e.target.value)}
+          placeholder="Nome, dosagem e frequência..."/>
       </FichaField>
 
       {/* ── Objetivos e Motivação ────────────────────────── */}
