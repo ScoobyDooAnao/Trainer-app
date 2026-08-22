@@ -3272,7 +3272,7 @@ export default function Dashboard({ navigate, session }) {
   const fetchAll = async () => {
     setLoading(true)
     const uid = session.user.id
-    const { data: studs } = await supabase.from('students').select('*').eq('teacher_id', uid).order('created_at', { ascending: false })
+    const { data: studs } = await supabase.from('students').select('*').eq('teacher_id', uid).neq('status','pendente').order('created_at', { ascending: false })
 
     if (studs && studs.length > 0) {
       const ids = studs.map(s => s.id)
