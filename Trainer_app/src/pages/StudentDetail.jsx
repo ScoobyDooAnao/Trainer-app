@@ -2704,7 +2704,20 @@ export default function StudentDetail({ navigate, studentId }) {
     <div style={s.wrap}>
       <div style={s.inner}>
         {duplicarPlan && <DuplicarPlanoModal plan={duplicarPlan} student={student} onClose={() => setDuplicarPlan(null)} />}
-        <button style={s.back} onClick={() => navigate('dashboard')}>← Voltar ao Painel</button>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+          <button style={s.back} onClick={() => navigate('dashboard')}>← Voltar ao Painel</button>
+          {student.status === 'pendente' && (
+            <button onClick={async () => {
+              await supabase.from('students').update({ status:'ativo' }).eq('id', studentId)
+              await supabase.from('notificacoes').update({ lida:true })
+                .eq('teacher_id', student.teacher_id).eq('tipo','nova_anamnese')
+              setStudent(p => ({ ...p, status:'ativo' }))
+              setEditing(false)
+            }} style={{ padding:'10px 24px', borderRadius:10, border:'none', background:'#22C55E', color:'#fff', fontWeight:800, fontSize:14, cursor:'pointer', fontFamily:'inherit', boxShadow:'0 4px 14px rgba(34,197,94,0.35)' }}>
+              Confirmar Matrícula
+            </button>
+          )}
+        </div>
 
         {/* Header */}
         <div style={s.header}>
@@ -2715,7 +2728,7 @@ export default function StudentDetail({ navigate, studentId }) {
                 {student.status === 'pendente' && (
                   <div style={{ display:'flex', alignItems:'center', gap:4 }}>
                     <div style={{ width:18, height:2, background:'#EF4444', borderRadius:99 }}/>
-                    <span style={{ fontSize:10, fontWeight:800, color:'#F87171', textTransform:'uppercase', letterSpacing:1 }}>Em Análise</span>
+                    <span style={{ fontSize:10, fontWeight:800, color:'#F87171', textTransform:'uppercase', letterSpacing:1, background:'rgba(239,68,68,0.12)', border:'1px solid rgba(239,68,68,0.3)', borderRadius:20, padding:'2px 8px' }}>Em Análise</span>
                   </div>
                 )}
               </div>
@@ -2742,20 +2755,9 @@ export default function StudentDetail({ navigate, studentId }) {
               </div>
               <div style={{ fontSize: 13, color: C.textSub }}>{student.goal} · {student.level}</div>
             </div>
-            {student.status === 'pendente' ? (
-              <button onClick={async () => {
-                await supabase.from('students').update({ status:'ativo' }).eq('id', studentId)
-                await supabase.from('notificacoes').update({ lida:true })
-                  .eq('teacher_id', student.teacher_id).eq('tipo','nova_anamnese')
-                setStudent(p => ({ ...p, status:'ativo' }))
-              }} style={{ padding:'9px 18px', borderRadius:9, border:'none', background:'#22C55E', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', fontFamily:'inherit' }}>
-                Matricular Aluno
-              </button>
-            ) : (
-              <button style={s.outlineBtn} onClick={() => setEditing(!editing)}>
-                {editing ? 'Fechar Ficha' : 'Abrir Ficha'}
-              </button>
-            )}
+            <button style={s.outlineBtn} onClick={() => setEditing(!editing)}>
+              {editing ? 'Fechar Ficha' : 'Abrir Ficha'}
+            </button>
           </div>
 
           {editing ? (
