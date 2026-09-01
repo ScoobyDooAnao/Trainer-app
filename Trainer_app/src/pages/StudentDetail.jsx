@@ -2706,11 +2706,13 @@ export default function StudentDetail({ navigate, studentId }) {
         {duplicarPlan && <DuplicarPlanoModal plan={duplicarPlan} student={student} onClose={() => setDuplicarPlan(null)} />}
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
           <button style={s.back} onClick={() => navigate('dashboard')}>← Voltar ao Painel</button>
-          {student.status === 'pendente' && (
+          {((student.status === 'pendente' || !student.status) || student.status === null || student.status === undefined) && (
             <button onClick={async () => {
-              await supabase.from('students').update({ status:'ativo' }).eq('id', studentId)
-              await supabase.from('notificacoes').update({ lida:true })
-                .eq('teacher_id', student.teacher_id).eq('tipo','nova_anamnese')
+              const { error: upErr } = await supabase.from('students').update({ status:'ativo' }).eq('id', studentId)
+              if (!upErr) {
+                await supabase.from('notificacoes').update({ lida:true })
+                  .eq('teacher_id', student.teacher_id).eq('tipo','nova_anamnese')
+              }
               setStudent(p => ({ ...p, status:'ativo' }))
               setEditing(false)
             }} style={{ padding:'10px 24px', borderRadius:10, border:'none', background:'#22C55E', color:'#fff', fontWeight:800, fontSize:14, cursor:'pointer', fontFamily:'inherit', boxShadow:'0 4px 14px rgba(34,197,94,0.35)' }}>
@@ -2725,10 +2727,10 @@ export default function StudentDetail({ navigate, studentId }) {
             <div>
               <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
                 <div style={{ fontSize: 10, color: C.blue, letterSpacing: 2, textTransform: 'uppercase' }}>Perfil do Aluno</div>
-                {student.status === 'pendente' && (
+                {(student.status === 'pendente' || !student.status) && (
                   <div style={{ display:'flex', alignItems:'center', gap:4 }}>
                     <div style={{ width:18, height:2, background:'#EF4444', borderRadius:99 }}/>
-                    <span style={{ fontSize:10, fontWeight:800, color:'#F87171', textTransform:'uppercase', letterSpacing:1, background:'rgba(239,68,68,0.12)', border:'1px solid rgba(239,68,68,0.3)', borderRadius:20, padding:'2px 8px' }}>Em Análise</span>
+                    <span style={{ fontSize:11, fontWeight:800, color:'#F87171', textTransform:'uppercase', letterSpacing:0.8, background:'rgba(239,68,68,0.15)', border:'1.5px solid rgba(239,68,68,0.4)', borderRadius:20, padding:'3px 12px' }}>Em Análise</span>
                   </div>
                 )}
               </div>
@@ -2807,7 +2809,7 @@ export default function StudentDetail({ navigate, studentId }) {
         </div>
 
         {/* Banner pendente */}
-        {student.status === 'pendente' && (
+        {(student.status === 'pendente' || !student.status) && (
           <div style={{ marginBottom:12, padding:'11px 16px', background:'rgba(251,191,36,0.08)', border:'1px solid rgba(251,191,36,0.25)', borderRadius:12, display:'flex', alignItems:'center', gap:10 }}>
             <div style={{ width:8, height:8, borderRadius:'50%', background:'#FBBF24', flexShrink:0 }}/>
             <div style={{ fontSize:13, color:'#FBBF24', fontWeight:600 }}>Candidatura pendente — revise a anamnese na aba Obs. e confirme o aluno para iniciar a prescrição.</div>
