@@ -3185,6 +3185,7 @@ function NotificacoesPanel({ notifs, onClose, onMarkRead, onConfirm, onReject, n
           ) : notifs.map(n => {
             const p = n.payload || {}
             const imc = p.imc ? imcInfo(p.imc) : null
+            if (n.tipo === 'nova_anamnese' && n.lida) return null
             if (n.tipo === 'nova_anamnese') return (
               <div key={n.id} style={{ padding:'14px 16px', borderBottom:'1px solid rgba(255,255,255,0.05)' }}>
                 {/* Card azul — dados do candidato */}
@@ -3445,7 +3446,7 @@ export default function Dashboard({ navigate, session }) {
                 <div style={{ fontSize: 15, fontWeight: 800, color: '#FFF', letterSpacing: '-0.3px' }}>TrainerApp</div>
                 <div style={{ fontSize: 10, color: '#BEE3F8', fontWeight: 500 }}>Gestão de Alunos</div>
               </div>
-              <button onClick={() => { setShowNotifs(true); markRead() }}
+              <button onClick={() => { setShowNotifs(true); markRead(); fetchNotifs() }}
                 style={{ position:'relative', background:'none', border:'none', cursor:'pointer', padding:4, flexShrink:0 }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="#FBBF24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
                 {notifs.filter(n=>!n.lida).length > 0 && (
