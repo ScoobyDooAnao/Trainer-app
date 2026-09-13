@@ -1107,6 +1107,15 @@ function EvolucaoModal({ studentId, mode, onSave, onClose, exercises }) {
         await supabase.from('exercise_logs').insert([{ student_id: studentId, exercise_id: exId, date, sets: validSets.map(s => ({ weight: +s.weight, reps: +s.reps })) }])
       }
     }
+    if (aluno && (plano === 'academia' || plano === 'ambos')) {
+      await supabase.from('notificacoes').insert([{
+        teacher_id: teacherId, tipo: 'nova_anamnese',
+        titulo: `Novo candidato — ${form.name}`,
+        corpo: `Perfil criado manualmente. Confirme a matrícula quando o pagamento for realizado.`,
+        lida: false,
+        payload: { student_id: aluno.id, nome: form.name, objetivo: form.goal },
+      }])
+    }
     setSaving(false)
     onSave()
     onClose()
@@ -3393,9 +3402,10 @@ export default function Dashboard({ navigate, session }) {
   }
 
   const markRead = async () => {
+    // Only mark generic notifications as read — not nova_anamnese (candidatures)
     await supabase.from('notificacoes').update({ lida: true })
-      .eq('teacher_id', session.user.id).eq('lida', false)
-    setNotifs(p => p.map(n => ({ ...n, lida: true })))
+      .eq('teacher_id', session.user.id).eq('lida', false).neq('tipo','nova_anamnese')
+    setNotifs(p => p.map(n => n.tipo === 'nova_anamnese' ? n : { ...n, lida: true }))
   }
 
   const rejeitarAluno = async (notif) => {
