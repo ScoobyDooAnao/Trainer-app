@@ -2318,7 +2318,7 @@ function FichaField({ label, children, alert }) {
   )
 }
 
-function FichaInformacoes({ student, anamData, studentId, onSaved }) {
+function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], plans = [] }) {
   const parseF = (an, st) => ({
     nome:                  st?.name || '',
     idade:                 st?.age  || '',
@@ -2352,6 +2352,64 @@ function FichaInformacoes({ student, anamData, studentId, onSaved }) {
   const [sav,setSav]  = useState(false)
   const [ok, setOk]   = useState(false)
   const [fichaPage,setFichaPage] = useState(0)
+
+  // ── Página 2: Avaliações Físicas ──
+  const [avaliacoes, setAvaliacoes] = useState([])
+  const [loadingAval, setLoadingAval] = useState(false)
+  const [novaAval, setNovaAval] = useState({ date: new Date().toISOString().slice(0,10), weight:'', body_fat:'', lean_mass:'', waist:'', chest:'', hip:'', thigh:'', calf:'', notes:'' })
+  const [savingAval, setSavingAval] = useState(false)
+
+  useEffect(() => {
+    if (fichaPage !== 2) return
+    setLoadingAval(true)
+    supabase.from('measure_logs').select('*').eq('student_id', studentId).order('date', { ascending:false })
+      .then(({ data, error }) => { if (!error) setAvaliacoes(data || []); setLoadingAval(false) })
+  }, [fichaPage, studentId])
+
+  const salvarAvaliacao = async () => {
+    setSavingAval(true)
+    const payload = {
+      student_id: studentId, teacher_id: student?.teacher_id,
+      date: novaAval.date,
+      weight: +novaAval.weight || null, body_fat: +novaAval.body_fat || null, lean_mass: +novaAval.lean_mass || null,
+      waist: +novaAval.waist || null, chest: +novaAval.chest || null, hip: +novaAval.hip || null,
+      thigh: +novaAval.thigh || null, calf: +novaAval.calf || null,
+      notes: novaAval.notes || null,
+    }
+    const { data, error } = await supabase.from('measure_logs').insert([payload]).select().single()
+    if (!error && data) {
+      setAvaliacoes(p => [data, ...p])
+      setNovaAval({ date: new Date().toISOString().slice(0,10), weight:'', body_fat:'', lean_mass:'', waist:'', chest:'', hip:'', thigh:'', calf:'', notes:'' })
+    }
+    setSavingAval(false)
+  }
+
+  // ── Página 1: Evolução do Treinamento ──
+  const exerciciosDisponiveis = useMemo(() => {
+    const map = new Map()
+    exLogs.forEach(l => { if (l.exercise_id) map.set(l.exercise_id, l._name || l.exercise_id) })
+    return [...map.entries()]
+  }, [exLogs])
+  const [exSelecionado, setExSelecionado] = useState('')
+  useEffect(() => { if (!exSelecionado && exerciciosDisponiveis.length) setExSelecionado(exerciciosDisponiveis[0][0]) }, [exerciciosDisponiveis, exSelecionado])
+
+  const cargaPorExercicio = useMemo(() => {
+    if (!exSelecionado) return []
+    return exLogs
+      .filter(l => l.exercise_id === exSelecionado)
+      .map(l => ({ date: l.date, carga: Math.max(0, ...(l.sets || []).map(s => +s.weight || 0)) }))
+      .sort((a,b) => new Date(a.date) - new Date(b.date))
+  }, [exLogs, exSelecionado])
+
+  const recordeCarga = useMemo(() => cargaPorExercicio.reduce((m,e) => Math.max(m, e.carga), 0), [cargaPorExercicio])
+  const ultimaCarga = cargaPorExercicio[cargaPorExercicio.length - 1]?.carga || 0
+
+  const diasTreinadosMes = useMemo(() => {
+    const cutoff = Date.now() - 30*24*60*60*1000
+    const dias = new Set(exLogs.filter(l => new Date(l.date).getTime() >= cutoff).map(l => l.date))
+    return dias.size
+  }, [exLogs])
+
   const f = k => v => setF(p=>({...p,[k]:v}))
 
   useEffect(() => { setF(parseF(anamData, student)) }, [anamData, student])
@@ -2415,8 +2473,112 @@ function FichaInformacoes({ student, anamData, studentId, onSaved }) {
           </button>
         ))}
       </div>
-      {fichaPage===1 && <div style={{textAlign:'center',padding:'40px 20px'}}><div style={{fontSize:36,marginBottom:10,opacity:0.2}}>📈</div><div style={{fontSize:14,fontWeight:700,color:'#475569',marginBottom:6}}>Evolução do Treinamento</div><div style={{fontSize:12,color:'#334155'}}>Em breve.</div></div>}
-      {fichaPage===2 && <div style={{textAlign:'center',padding:'40px 20px'}}><div style={{fontSize:36,marginBottom:10,opacity:0.2}}>📋</div><div style={{fontSize:14,fontWeight:700,color:'#475569',marginBottom:6}}>Avaliações Físicas e Composição Corporal</div><div style={{fontSize:12,color:'#334155'}}>Em breve.</div></div>}
+      {fichaPage===1 && (
+        <div style={{ padding:'8px 0' }}>
+          {exerciciosDisponiveis.length === 0 ? (
+            <div style={{textAlign:'center',padding:'40px 20px'}}><div style={{fontSize:36,marginBottom:10,opacity:0.2}}>📈</div><div style={{fontSize:14,fontWeight:700,color:'#475569',marginBottom:6}}>Evolução do Treinamento</div><div style={{fontSize:12,color:'#334155'}}>Nenhum registro de carga ainda.</div></div>
+          ) : (
+            <>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:16 }}>
+                <div style={{ background:'#111827', borderRadius:10, padding:'10px 14px', border:'1px solid rgba(255,255,255,0.07)' }}>
+                  <div style={{ fontSize:10, color:'#64748B', fontWeight:700, textTransform:'uppercase' }}>Recorde</div>
+                  <div style={{ fontSize:20, fontWeight:800, color:'#E2E8F0' }}>{recordeCarga || '—'} <span style={{fontSize:11,color:'#64748B'}}>kg</span></div>
+                </div>
+                <div style={{ background:'#111827', borderRadius:10, padding:'10px 14px', border:'1px solid rgba(255,255,255,0.07)' }}>
+                  <div style={{ fontSize:10, color:'#64748B', fontWeight:700, textTransform:'uppercase' }}>Última carga</div>
+                  <div style={{ fontSize:20, fontWeight:800, color: ultimaCarga >= recordeCarga && ultimaCarga>0 ? '#22C55E' : '#E2E8F0' }}>{ultimaCarga || '—'} <span style={{fontSize:11,color:'#64748B'}}>kg</span></div>
+                </div>
+                <div style={{ background:'#111827', borderRadius:10, padding:'10px 14px', border:'1px solid rgba(255,255,255,0.07)' }}>
+                  <div style={{ fontSize:10, color:'#64748B', fontWeight:700, textTransform:'uppercase' }}>Dias treinados (30d)</div>
+                  <div style={{ fontSize:20, fontWeight:800, color:'#E2E8F0' }}>{diasTreinadosMes}</div>
+                </div>
+              </div>
+
+              <select value={exSelecionado} onChange={e=>setExSelecionado(e.target.value)} style={{ width:'100%', background:'#0D1117', border:'1px solid rgba(255,255,255,0.07)', borderRadius:8, padding:'8px 11px', color:'#E2E8F0', fontSize:13, marginBottom:12 }}>
+                {exerciciosDisponiveis.map(([id,name]) => <option key={id} value={id}>{name}</option>)}
+              </select>
+
+              <div style={{ height:220, background:'#111827', borderRadius:10, padding:'10px 14px', border:'1px solid rgba(255,255,255,0.07)' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={cargaPorExercicio}>
+                    <XAxis dataKey="date" tick={{ fontSize:10, fill:'#64748B' }} />
+                    <YAxis tick={{ fontSize:10, fill:'#64748B' }} />
+                    <Tooltip contentStyle={{ background:'#0D1117', border:'1px solid rgba(255,255,255,0.1)', fontSize:12 }} />
+                    <Line type="monotone" dataKey="carga" stroke="#3B82F6" strokeWidth={2} dot={{ r:3 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+              {plans.length > 0 && (
+                <>
+                  {SECTION('Histórico de Planos')}
+                  <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                    {plans.map(p => (
+                      <div key={p.id} style={{ display:'flex', justifyContent:'space-between', background:'#111827', borderRadius:8, padding:'8px 12px', border:'1px solid rgba(255,255,255,0.06)' }}>
+                        <span style={{ fontSize:12, color:'#E2E8F0' }}>{p.title}</span>
+                        <span style={{ fontSize:11, color:'#64748B' }}>{p.status} · {p.created_at?.slice(0,10)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
+      {fichaPage===2 && (
+        <div style={{ padding:'8px 0' }}>
+          {SECTION('Nova Avaliação')}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+            <div><label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Data</label><input type="date" style={inp} value={novaAval.date} onChange={e=>setNovaAval(p=>({...p,date:e.target.value}))} /></div>
+            <div><label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Peso (kg)</label><input type="number" style={inp} value={novaAval.weight} onChange={e=>setNovaAval(p=>({...p,weight:e.target.value}))} /></div>
+            <div><label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>% Gordura</label><input type="number" style={inp} value={novaAval.body_fat} onChange={e=>setNovaAval(p=>({...p,body_fat:e.target.value}))} /></div>
+            <div><label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Massa Magra (kg)</label><input type="number" style={inp} value={novaAval.lean_mass} onChange={e=>setNovaAval(p=>({...p,lean_mass:e.target.value}))} /></div>
+            <div><label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Cintura (cm)</label><input type="number" style={inp} value={novaAval.waist} onChange={e=>setNovaAval(p=>({...p,waist:e.target.value}))} /></div>
+            <div><label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Peito (cm)</label><input type="number" style={inp} value={novaAval.chest} onChange={e=>setNovaAval(p=>({...p,chest:e.target.value}))} /></div>
+            <div><label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Quadril (cm)</label><input type="number" style={inp} value={novaAval.hip} onChange={e=>setNovaAval(p=>({...p,hip:e.target.value}))} /></div>
+            <div><label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Coxa (cm)</label><input type="number" style={inp} value={novaAval.thigh} onChange={e=>setNovaAval(p=>({...p,thigh:e.target.value}))} /></div>
+            <div><label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Panturrilha (cm)</label><input type="number" style={inp} value={novaAval.calf} onChange={e=>setNovaAval(p=>({...p,calf:e.target.value}))} /></div>
+          </div>
+          <label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Observações</label>
+          <textarea style={{...inp,minHeight:60,resize:'vertical',marginBottom:10}} value={novaAval.notes} onChange={e=>setNovaAval(p=>({...p,notes:e.target.value}))} placeholder="Observações da avaliação..." />
+          <button onClick={salvarAvaliacao} disabled={savingAval} style={{ width:'100%', padding:'11px', borderRadius:10, border:'none', background:'#22C55E', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer' }}>
+            {savingAval ? 'Salvando...' : '✓ Salvar Avaliação'}
+          </button>
+
+          {SECTION('Evolução das Medidas')}
+          {avaliacoes.length >= 2 && (
+            <div style={{ height:200, background:'#111827', borderRadius:10, padding:'10px 14px', border:'1px solid rgba(255,255,255,0.07)', marginBottom:14 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={[...avaliacoes].reverse()}>
+                  <XAxis dataKey="date" tick={{ fontSize:10, fill:'#64748B' }} />
+                  <YAxis tick={{ fontSize:10, fill:'#64748B' }} />
+                  <Tooltip contentStyle={{ background:'#0D1117', border:'1px solid rgba(255,255,255,0.1)', fontSize:12 }} />
+                  <Line type="monotone" dataKey="weight" name="Peso" stroke="#3B82F6" strokeWidth={2} dot={{ r:3 }} />
+                  <Line type="monotone" dataKey="body_fat" name="% Gordura" stroke="#FBBF24" strokeWidth={2} dot={{ r:3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {SECTION('Histórico')}
+          {loadingAval ? <div style={{ textAlign:'center', color:'#475569', fontSize:12, padding:20 }}>Carregando...</div> : avaliacoes.length === 0 ? (
+            <div style={{ textAlign:'center', color:'#334155', fontSize:12, padding:20 }}>Nenhuma avaliação registrada ainda.</div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {avaliacoes.map(a => (
+                <div key={a.id} style={{ background:'#111827', borderRadius:10, padding:'10px 14px', border:'1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
+                    <span style={{ fontSize:12, fontWeight:700, color:'#E2E8F0' }}>{a.date}</span>
+                    <span style={{ fontSize:11, color:'#64748B' }}>{a.weight ? `${a.weight}kg` : ''} {a.body_fat ? `· ${a.body_fat}% gordura` : ''}</span>
+                  </div>
+                  {a.notes && <div style={{ fontSize:12, color:'#94A3B8' }}>{a.notes}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       {fichaPage===0 && <>
       {/* Salvar */}
       <button onClick={save} disabled={sav}
@@ -2734,7 +2896,7 @@ export default function StudentDetail({ navigate, studentId }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
             <div>
               <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
-                <div style={{ fontSize: 10, color: C.blue, letterSpacing: 2, textTransform: 'uppercase' }}>Perfil do Aluno</div>
+                <div style={{ fontSize: 10, color: C.blue, letterSpacing: 2, textTransform: 'uppercase' }}>Ficha do Aluno</div>
                 {(student.status === 'pendente' || !student.status) && (
                   <div style={{ display:'flex', alignItems:'center', gap:4 }}>
                     <div style={{ width:18, height:2, background:'#EF4444', borderRadius:99 }}/>
@@ -2784,6 +2946,8 @@ export default function StudentDetail({ navigate, studentId }) {
                 anamData={anamData}
                 studentId={studentId}
                 onSaved={fetchAll}
+                exLogs={exLogs}
+                plans={plans}
               />
               <div style={{ display:'flex', gap:8, marginTop:16 }}>
                 <button onClick={saveStudent} disabled={saving} style={{ flex:1, padding:'13px', borderRadius:12, border:'none', background:C.green, color:'#fff', fontWeight:800, fontSize:14, cursor:'pointer' }}>
