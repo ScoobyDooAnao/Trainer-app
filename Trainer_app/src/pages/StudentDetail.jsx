@@ -2347,9 +2347,10 @@ function FichaInformacoes({ student, anamData, studentId, onSaved }) {
     notas_professor:       an?.notas || '',
   })
 
-  const [F,  setF]  = useState(parseF(anamData, student))
-  const [sav,setSav]= useState(false)
-  const [ok, setOk] = useState(false)
+  const [F,  setF]    = useState(parseF(anamData, student))
+  const [sav,setSav]  = useState(false)
+  const [ok, setOk]   = useState(false)
+  const [fichaPage,setFichaPage] = useState(0)
   const f = k => v => setF(p=>({...p,[k]:v}))
 
   useEffect(() => { setF(parseF(anamData, student)) }, [anamData, student])
@@ -2404,6 +2405,18 @@ function FichaInformacoes({ student, anamData, studentId, onSaved }) {
 
   return (
     <div style={{ background:'#0D1117', borderRadius:14, border:'1px solid rgba(255,255,255,0.07)', padding:'18px 20px' }}>
+      {/* Page navigation */}
+      <div style={{ display:'flex', gap:5, justifyContent:'center', marginBottom:16 }}>
+        {[['Dados',0],['Evolução',1],['Avaliações',2]].map(([lbl,pg]) => (
+          <button key={pg} onClick={() => setFichaPage(pg)}
+            style={{ padding:'7px 14px', borderRadius:20, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit', border:`1.5px solid ${fichaPage===pg ? '#3B82F6' : 'rgba(255,255,255,0.1)'}`, background:fichaPage===pg ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.04)', color:fichaPage===pg ? '#3B82F6' : '#475569' }}>
+            {lbl}
+          </button>
+        ))}
+      </div>
+      {fichaPage===1 && <div style={{textAlign:'center',padding:'40px 20px'}}><div style={{fontSize:36,marginBottom:10,opacity:0.2}}>📈</div><div style={{fontSize:14,fontWeight:700,color:'#475569',marginBottom:6}}>Evolução do Treinamento</div><div style={{fontSize:12,color:'#334155'}}>Em breve.</div></div>}
+      {fichaPage===2 && <div style={{textAlign:'center',padding:'40px 20px'}}><div style={{fontSize:36,marginBottom:10,opacity:0.2}}>📋</div><div style={{fontSize:14,fontWeight:700,color:'#475569',marginBottom:6}}>Avaliações Físicas e Composição Corporal</div><div style={{fontSize:12,color:'#334155'}}>Em breve.</div></div>}
+      {fichaPage===0 && <>
       {/* Salvar */}
       <button onClick={save} disabled={sav}
         style={{ width:'100%', padding:'11px', borderRadius:10, border:'none', cursor:'pointer', marginBottom:18,
@@ -2414,14 +2427,9 @@ function FichaInformacoes({ student, anamData, studentId, onSaved }) {
 
       {/* ── Dados Pessoais ───────────────────────────────── */}
       {SECTION('Dados Pessoais')}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-        <FichaField label="Nome">
-          <input style={inp} value={F.nome} onChange={e=>f('nome')(e.target.value)} placeholder="Nome completo"/>
-        </FichaField>
-        <FichaField label="Idade">
-          <input style={inp} type="number" value={F.idade} onChange={e=>f('idade')(e.target.value)} placeholder="Anos"/>
-        </FichaField>
-      </div>
+      <FichaField label="Idade">
+        <input style={inp} type="number" value={F.idade} onChange={e=>f('idade')(e.target.value)} placeholder="Anos"/>
+      </FichaField>
 
       <FichaField label="Objetivo Geral">
         <select style={sel} value={F.objetivo} onChange={e=>f('objetivo')(e.target.value)}>
@@ -2549,6 +2557,7 @@ function FichaInformacoes({ student, anamData, studentId, onSaved }) {
           value={F.notas_professor} onChange={e=>f('notas_professor')(e.target.value)}
           placeholder="Observações, estratégias, pontos de atenção..."/>
       </FichaField>
+    </>}
     </div>
   )
 }
@@ -2757,9 +2766,16 @@ export default function StudentDetail({ navigate, studentId }) {
               </div>
               <div style={{ fontSize: 13, color: C.textSub }}>{student.goal} · {student.level}</div>
             </div>
-            <button style={s.outlineBtn} onClick={() => setEditing(!editing)}>
-              {editing ? 'Fechar Ficha' : 'Abrir Ficha'}
-            </button>
+            <div onClick={() => setEditing(!editing)} style={{ cursor:'pointer', textAlign:'right' }}>
+              {student.age ? (
+                <>
+                  <div style={{ fontSize:10, color:C.textSub, fontWeight:700, textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>Idade</div>
+                  <div style={{ fontSize:22, fontWeight:800, color:C.text }}>{student.age} <span style={{ fontSize:13, color:C.textSub }}>anos</span></div>
+                </>
+              ) : (
+                <div style={{ fontSize:12, color:C.blue, fontWeight:600 }}>{editing ? 'Fechar' : 'Abrir Ficha'}</div>
+              )}
+            </div>
           </div>
 
           {editing ? (
