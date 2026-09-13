@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../supabase'
 import { confirmarMatricula } from '../lib/alunos'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
@@ -2349,15 +2349,17 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
   })
 
   const [F,  setF]    = useState(parseF(anamData, student))
+  const lastSavedRef = useRef(JSON.stringify(parseF(anamData, student)))
   const [sav,setSav]  = useState(false)
   const [ok, setOk]   = useState(false)
   const [fichaPage,setFichaPage] = useState(0)
 
-  // ── Página 2: Avaliações Físicas ──
+  // ── Página 2: Avaliações Físicas (medidas do aluno + testes do professor) ──
   const [avaliacoes, setAvaliacoes] = useState([])
   const [loadingAval, setLoadingAval] = useState(false)
-  const [novaAval, setNovaAval] = useState({ date: new Date().toISOString().slice(0,10), weight:'', body_fat:'', lean_mass:'', waist:'', chest:'', hip:'', thigh:'', calf:'', notes:'' })
-  const [savingAval, setSavingAval] = useState(false)
+  const [showTesteForm, setShowTesteForm] = useState(false)
+  const [novoTeste, setNovoTeste] = useState({ date: new Date().toISOString().slice(0,10), label:'', value:'' })
+  const [savingTeste, setSavingTeste] = useState(false)
 
   useEffect(() => {
     if (fichaPage !== 2) return
@@ -2366,22 +2368,21 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
       .then(({ data, error }) => { if (!error) setAvaliacoes(data || []); setLoadingAval(false) })
   }, [fichaPage, studentId])
 
-  const salvarAvaliacao = async () => {
-    setSavingAval(true)
+  const salvarTeste = async () => {
+    if (!novoTeste.label || !novoTeste.value) return
+    setSavingTeste(true)
     const payload = {
       student_id: studentId, teacher_id: student?.teacher_id,
-      date: novaAval.date,
-      weight: +novaAval.weight || null, body_fat: +novaAval.body_fat || null, lean_mass: +novaAval.lean_mass || null,
-      waist: +novaAval.waist || null, chest: +novaAval.chest || null, hip: +novaAval.hip || null,
-      thigh: +novaAval.thigh || null, calf: +novaAval.calf || null,
-      notes: novaAval.notes || null,
+      date: novoTeste.date,
+      tests: { [novoTeste.label]: novoTeste.value },
     }
     const { data, error } = await supabase.from('measure_logs').insert([payload]).select().single()
     if (!error && data) {
       setAvaliacoes(p => [data, ...p])
-      setNovaAval({ date: new Date().toISOString().slice(0,10), weight:'', body_fat:'', lean_mass:'', waist:'', chest:'', hip:'', thigh:'', calf:'', notes:'' })
+      setNovoTeste({ date: new Date().toISOString().slice(0,10), label:'', value:'' })
+      setShowTesteForm(false)
     }
-    setSavingAval(false)
+    setSavingTeste(false)
   }
 
   // ── Página 1: Evolução do Treinamento ──
@@ -2413,6 +2414,17 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
   const f = k => v => setF(p=>({...p,[k]:v}))
 
   useEffect(() => { setF(parseF(anamData, student)) }, [anamData, student])
+
+  // Autosave: salva automaticamente 900ms após qualquer alteração
+  useEffect(() => {
+    const current = JSON.stringify(F)
+    if (current === lastSavedRef.current) return
+    const t = setTimeout(async () => {
+      await save()
+      lastSavedRef.current = current
+    }, 900)
+    return () => clearTimeout(t)
+  }, [F])
 
   const imc = F.peso && F.altura
     ? (parseFloat(F.peso) / Math.pow(parseFloat(F.altura)/100, 2)).toFixed(1)
@@ -2528,71 +2540,104 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
       )}
       {fichaPage===2 && (
         <div style={{ padding:'8px 0' }}>
-          {SECTION('Nova Avaliação')}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
-            <div><label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Data</label><input type="date" style={inp} value={novaAval.date} onChange={e=>setNovaAval(p=>({...p,date:e.target.value}))} /></div>
-            <div><label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Peso (kg)</label><input type="number" style={inp} value={novaAval.weight} onChange={e=>setNovaAval(p=>({...p,weight:e.target.value}))} /></div>
-            <div><label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>% Gordura</label><input type="number" style={inp} value={novaAval.body_fat} onChange={e=>setNovaAval(p=>({...p,body_fat:e.target.value}))} /></div>
-            <div><label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Massa Magra (kg)</label><input type="number" style={inp} value={novaAval.lean_mass} onChange={e=>setNovaAval(p=>({...p,lean_mass:e.target.value}))} /></div>
-            <div><label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Cintura (cm)</label><input type="number" style={inp} value={novaAval.waist} onChange={e=>setNovaAval(p=>({...p,waist:e.target.value}))} /></div>
-            <div><label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Peito (cm)</label><input type="number" style={inp} value={novaAval.chest} onChange={e=>setNovaAval(p=>({...p,chest:e.target.value}))} /></div>
-            <div><label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Quadril (cm)</label><input type="number" style={inp} value={novaAval.hip} onChange={e=>setNovaAval(p=>({...p,hip:e.target.value}))} /></div>
-            <div><label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Coxa (cm)</label><input type="number" style={inp} value={novaAval.thigh} onChange={e=>setNovaAval(p=>({...p,thigh:e.target.value}))} /></div>
-            <div><label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Panturrilha (cm)</label><input type="number" style={inp} value={novaAval.calf} onChange={e=>setNovaAval(p=>({...p,calf:e.target.value}))} /></div>
-          </div>
-          <label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Observações</label>
-          <textarea style={{...inp,minHeight:60,resize:'vertical',marginBottom:10}} value={novaAval.notes} onChange={e=>setNovaAval(p=>({...p,notes:e.target.value}))} placeholder="Observações da avaliação..." />
-          <button onClick={salvarAvaliacao} disabled={savingAval} style={{ width:'100%', padding:'11px', borderRadius:10, border:'none', background:'#22C55E', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer' }}>
-            {savingAval ? 'Salvando...' : '✓ Salvar Avaliação'}
-          </button>
+          {(() => {
+            const medidas = avaliacoes.filter(a => !(a.tests && Object.keys(a.tests).length))
+            const testes  = avaliacoes.filter(a => a.tests && Object.keys(a.tests).length)
+            return (
+              <>
+                {/* ── Medidas Corporais (só o aluno registra, via StudentView) ── */}
+                {SECTION('Medidas Corporais')}
+                <div style={{ fontSize:11, color:'#475569', marginBottom:10 }}>Registradas pelo próprio aluno no app — sincronizado automaticamente.</div>
+                {loadingAval ? (
+                  <div style={{ textAlign:'center', color:'#475569', fontSize:12, padding:20 }}>Carregando...</div>
+                ) : medidas.length === 0 ? (
+                  <div style={{ textAlign:'center', color:'#334155', fontSize:12, padding:20 }}>Nenhuma medida registrada pelo aluno ainda.</div>
+                ) : (
+                  <>
+                    {medidas.length >= 2 && (
+                      <div style={{ height:200, background:'#111827', borderRadius:10, padding:'10px 14px', border:'1px solid rgba(255,255,255,0.07)', marginBottom:14 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={[...medidas].reverse()}>
+                            <XAxis dataKey="date" tick={{ fontSize:10, fill:'#64748B' }} />
+                            <YAxis tick={{ fontSize:10, fill:'#64748B' }} />
+                            <Tooltip contentStyle={{ background:'#0D1117', border:'1px solid rgba(255,255,255,0.1)', fontSize:12 }} />
+                            <Line type="monotone" dataKey="weight" name="Peso" stroke="#3B82F6" strokeWidth={2} dot={{ r:3 }} />
+                            <Line type="monotone" dataKey="body_fat" name="% Gordura" stroke="#FBBF24" strokeWidth={2} dot={{ r:3 }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                      {medidas.map(a => (
+                        <div key={a.id} style={{ background:'#111827', borderRadius:10, padding:'10px 14px', border:'1px solid rgba(255,255,255,0.06)' }}>
+                          <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
+                            <span style={{ fontSize:12, fontWeight:700, color:'#E2E8F0' }}>{a.date}</span>
+                            <span style={{ fontSize:11, color:'#64748B' }}>{a.weight ? `${a.weight}kg` : ''} {a.body_fat ? `· ${a.body_fat}% gordura` : ''}</span>
+                          </div>
+                          {a.notes && <div style={{ fontSize:12, color:'#94A3B8' }}>{a.notes}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
 
-          {SECTION('Evolução das Medidas')}
-          {avaliacoes.length >= 2 && (
-            <div style={{ height:200, background:'#111827', borderRadius:10, padding:'10px 14px', border:'1px solid rgba(255,255,255,0.07)', marginBottom:14 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={[...avaliacoes].reverse()}>
-                  <XAxis dataKey="date" tick={{ fontSize:10, fill:'#64748B' }} />
-                  <YAxis tick={{ fontSize:10, fill:'#64748B' }} />
-                  <Tooltip contentStyle={{ background:'#0D1117', border:'1px solid rgba(255,255,255,0.1)', fontSize:12 }} />
-                  <Line type="monotone" dataKey="weight" name="Peso" stroke="#3B82F6" strokeWidth={2} dot={{ r:3 }} />
-                  <Line type="monotone" dataKey="body_fat" name="% Gordura" stroke="#FBBF24" strokeWidth={2} dot={{ r:3 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
+                {/* ── Testes de Performance (professor registra) ── */}
+                {SECTION('Testes de Performance')}
+                <button onClick={()=>setShowTesteForm(p=>!p)} style={{ padding:'9px 16px', borderRadius:10, border:'1px solid rgba(59,130,246,0.4)', background:'rgba(59,130,246,0.1)', color:'#3B82F6', fontWeight:700, fontSize:12, cursor:'pointer', marginBottom:12 }}>
+                  {showTesteForm ? '✕ Cancelar' : '+ Novo Teste'}
+                </button>
 
-          {SECTION('Histórico')}
-          {loadingAval ? <div style={{ textAlign:'center', color:'#475569', fontSize:12, padding:20 }}>Carregando...</div> : avaliacoes.length === 0 ? (
-            <div style={{ textAlign:'center', color:'#334155', fontSize:12, padding:20 }}>Nenhuma avaliação registrada ainda.</div>
-          ) : (
-            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-              {avaliacoes.map(a => (
-                <div key={a.id} style={{ background:'#111827', borderRadius:10, padding:'10px 14px', border:'1px solid rgba(255,255,255,0.06)' }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
-                    <span style={{ fontSize:12, fontWeight:700, color:'#E2E8F0' }}>{a.date}</span>
-                    <span style={{ fontSize:11, color:'#64748B' }}>{a.weight ? `${a.weight}kg` : ''} {a.body_fat ? `· ${a.body_fat}% gordura` : ''}</span>
+                {showTesteForm && (
+                  <div style={{ background:'#111827', borderRadius:10, padding:14, border:'1px solid rgba(255,255,255,0.07)', marginBottom:14 }}>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+                      <div><label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Data</label><input type="date" style={inp} value={novoTeste.date} onChange={e=>setNovoTeste(p=>({...p,date:e.target.value}))} /></div>
+                      <div><label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Teste</label>
+                        <select style={sel} value={novoTeste.label} onChange={e=>setNovoTeste(p=>({...p,label:e.target.value}))}>
+                          <option value="">Selecione</option>
+                          <option value="RM">RM (Repetição Máxima)</option>
+                          <option value="FC Repouso">FC Repouso</option>
+                          <option value="VO2 Máx">VO2 Máx</option>
+                          <option value="Outro">Outro</option>
+                        </select>
+                      </div>
+                    </div>
+                    <label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Valor</label>
+                    <input style={{...inp,marginBottom:10}} value={novoTeste.value} onChange={e=>setNovoTeste(p=>({...p,value:e.target.value}))} placeholder="Ex: 80kg, 62bpm, 45ml/kg/min..." />
+                    <button onClick={salvarTeste} disabled={savingTeste} style={{ width:'100%', padding:'10px', borderRadius:10, border:'none', background:'#22C55E', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer' }}>
+                      {savingTeste ? 'Salvando...' : '✓ Salvar Teste'}
+                    </button>
                   </div>
-                  {a.notes && <div style={{ fontSize:12, color:'#94A3B8' }}>{a.notes}</div>}
-                </div>
-              ))}
-            </div>
-          )}
+                )}
+
+                {testes.length === 0 ? (
+                  <div style={{ textAlign:'center', color:'#334155', fontSize:12, padding:20 }}>Nenhum teste registrado ainda.</div>
+                ) : (
+                  <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                    {testes.map(a => (
+                      <div key={a.id} style={{ background:'#111827', borderRadius:10, padding:'10px 14px', border:'1px solid rgba(255,255,255,0.06)' }}>
+                        <div style={{ display:'flex', justifyContent:'space-between' }}>
+                          <span style={{ fontSize:12, fontWeight:700, color:'#E2E8F0' }}>{a.date}</span>
+                        </div>
+                        {Object.entries(a.tests).map(([k,v]) => (
+                          <div key={k} style={{ fontSize:12, color:'#94A3B8' }}>{k}: <strong style={{color:'#E2E8F0'}}>{v}</strong></div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )
+          })()}
         </div>
       )}
       {fichaPage===0 && <>
-      {/* Salvar */}
-      <button onClick={save} disabled={sav}
-        style={{ width:'100%', padding:'11px', borderRadius:10, border:'none', cursor:'pointer', marginBottom:18,
-          background: ok ? '#22C55E' : sav ? '#1E293B' : '#3B82F6',
-          color:'#fff', fontWeight:800, fontSize:14, fontFamily:'inherit' }}>
-        {sav ? 'Salvando...' : ok ? '✓ Mudanças Confirmadas' : 'Confirmar Mudanças'}
-      </button>
+      {/* Status de salvamento automático */}
+      <div style={{ textAlign:'right', fontSize:11, fontWeight:600, marginBottom:12, height:14, color: sav ? '#64748B' : ok ? '#22C55E' : 'transparent' }}>
+        {sav ? 'Salvando...' : ok ? '✓ Salvo automaticamente' : ''}
+      </div>
 
       {/* ── Dados Pessoais ───────────────────────────────── */}
       {SECTION('Dados Pessoais')}
-      <FichaField label="Idade">
-        <input style={inp} type="number" value={F.idade} onChange={e=>f('idade')(e.target.value)} placeholder="Anos"/>
-      </FichaField>
 
       <FichaField label="Objetivo Geral">
         <select style={sel} value={F.objetivo} onChange={e=>f('objetivo')(e.target.value)}>
@@ -2733,6 +2778,8 @@ export default function StudentDetail({ navigate, studentId }) {
   const [anamData,setAnamData]= useState(null)
   const [editName,setEditName]= useState(false)
   const [tmpName, setTmpName] = useState('')
+  const [editAge, setEditAge] = useState(false)
+  const [tmpAge, setTmpAge]   = useState('')
   const [tab, setTab] = useState('plans')
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({})
@@ -2876,19 +2923,24 @@ export default function StudentDetail({ navigate, studentId }) {
     <div style={s.wrap}>
       <div style={s.inner}>
         {duplicarPlan && <DuplicarPlanoModal plan={duplicarPlan} student={student} onClose={() => setDuplicarPlan(null)} />}
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20, gap:10 }}>
           <button style={s.back} onClick={() => navigate('dashboard')}>← Voltar ao Painel</button>
-          {((student.status === 'pendente' || !student.status) || student.status === null || student.status === undefined) && (
-            <button onClick={async () => {
-              const { error: upErr } = await confirmarMatricula(studentId)
-              if (!upErr) {
-                setStudent(p => ({ ...p, status:'ativo' }))
-                setEditing(false)
-              }
-            }} style={{ padding:'10px 24px', borderRadius:10, border:'none', background:'#22C55E', color:'#fff', fontWeight:800, fontSize:14, cursor:'pointer', fontFamily:'inherit', boxShadow:'0 4px 14px rgba(34,197,94,0.35)' }}>
-              Confirmar Matrícula
+          <div style={{ display:'flex', gap:10 }}>
+            {((student.status === 'pendente' || !student.status) || student.status === null || student.status === undefined) && (
+              <button onClick={async () => {
+                const { error: upErr } = await confirmarMatricula(studentId)
+                if (!upErr) {
+                  setStudent(p => ({ ...p, status:'ativo' }))
+                  setEditing(false)
+                }
+              }} style={{ padding:'10px 24px', borderRadius:10, border:'none', background:'#22C55E', color:'#fff', fontWeight:800, fontSize:14, cursor:'pointer', fontFamily:'inherit', boxShadow:'0 4px 14px rgba(34,197,94,0.35)' }}>
+                Confirmar Matrícula
+              </button>
+            )}
+            <button onClick={() => setEditing(p => !p)} style={{ padding:'10px 24px', borderRadius:10, border:'none', background:'#22C55E', color:'#fff', fontWeight:800, fontSize:14, cursor:'pointer', fontFamily:'inherit', boxShadow:'0 4px 14px rgba(34,197,94,0.35)' }}>
+              {editing ? 'Fechar Ficha' : 'Abrir Ficha'}
             </button>
-          )}
+          </div>
         </div>
 
         {/* Header */}
@@ -2927,14 +2979,25 @@ export default function StudentDetail({ navigate, studentId }) {
               </div>
               <div style={{ fontSize: 13, color: C.textSub }}>{student.goal} · {student.level}</div>
             </div>
-            <div onClick={() => setEditing(!editing)} style={{ cursor:'pointer', textAlign:'right' }}>
-              {student.age ? (
-                <>
-                  <div style={{ fontSize:10, color:C.textSub, fontWeight:700, textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>Idade</div>
-                  <div style={{ fontSize:22, fontWeight:800, color:C.text }}>{student.age} <span style={{ fontSize:13, color:C.textSub }}>anos</span></div>
-                </>
+            <div style={{ textAlign:'right' }}>
+              {editAge ? (
+                <input autoFocus type="number" value={tmpAge}
+                  onChange={e=>setTmpAge(e.target.value)}
+                  onBlur={async()=>{
+                    const val = tmpAge === '' ? null : +tmpAge
+                    if (val !== student.age) {
+                      await supabase.from('students').update({ age: val }).eq('id', studentId)
+                      setStudent(p=>({...p, age: val}))
+                    }
+                    setEditAge(false)
+                  }}
+                  onKeyDown={e=>{ if(e.key==='Enter') e.target.blur() }}
+                  style={{ fontSize:22, fontWeight:800, color:C.text, background:'rgba(255,255,255,0.06)', border:`1px solid ${C.border}`, borderRadius:8, padding:'2px 10px', outline:'none', fontFamily:'inherit', width:80, textAlign:'right' }}/>
               ) : (
-                <div style={{ fontSize:12, color:C.blue, fontWeight:600 }}>{editing ? 'Fechar' : 'Abrir Ficha'}</div>
+                <div onClick={()=>{ setTmpAge(student.age ?? ''); setEditAge(true) }} style={{ cursor:'pointer' }}>
+                  <div style={{ fontSize:10, color:C.textSub, fontWeight:700, textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>Idade</div>
+                  <div style={{ fontSize:22, fontWeight:800, color:C.text }}>{student.age ?? '—'} <span style={{ fontSize:13, color:C.textSub }}>anos</span></div>
+                </div>
               )}
             </div>
           </div>
@@ -2949,14 +3012,6 @@ export default function StudentDetail({ navigate, studentId }) {
                 exLogs={exLogs}
                 plans={plans}
               />
-              <div style={{ display:'flex', gap:8, marginTop:16 }}>
-                <button onClick={saveStudent} disabled={saving} style={{ flex:1, padding:'13px', borderRadius:12, border:'none', background:C.green, color:'#fff', fontWeight:800, fontSize:14, cursor:'pointer' }}>
-                  {saving ? 'Salvando...' : '✓ Salvar Alterações'}
-                </button>
-                <button onClick={() => setEditing(false)} style={{ padding:'13px 18px', borderRadius:12, border:`1px solid ${C.border}`, background:'transparent', color:C.textSub, fontWeight:600, fontSize:13, cursor:'pointer' }}>
-                  Cancelar
-                </button>
-              </div>
             </>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
