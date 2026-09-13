@@ -2593,7 +2593,7 @@ export default function StudentDetail({ navigate, studentId }) {
     setFetchError(null)
     try {
       const [stRes, plRes, prRes, gsRes, elRes] = await Promise.all([
-        supabase.from('students').select('id,name,age,weight,height,goal,level,notes,teacher_id,birth_date,sport,sport_position,experience_years,guardian_name,guardian_phone,parent_message,parent_message_date,parent_height_father,parent_height_mother,height_sitting,tgmd_scores,tgmd_date').eq('id', studentId).single(),
+        supabase.from('students').select('id,name,age,weight,height,goal,level,notes,teacher_id,status,birth_date,sport,sport_position,experience_years,guardian_name,guardian_phone,parent_message,parent_message_date,parent_height_father,parent_height_mother,height_sitting,tgmd_scores,tgmd_date').eq('id', studentId).single(),
         supabase.from('workout_plans').select('*').eq('student_id', studentId).order('created_at', { ascending: false }),
         supabase.from('progress_entries').select('*').eq('student_id', studentId).order('date', { ascending: false }),
         supabase.from('student_goals').select('*').eq('student_id', studentId).order('created_at', { ascending: false }),
@@ -2604,7 +2604,7 @@ export default function StudentDetail({ navigate, studentId }) {
       let st = stRes.data
       if (stRes.error) {
         console.warn('fetch with new cols failed, retrying basic:', stRes.error.message)
-        const fallback = await supabase.from('students').select('id,name,age,weight,height,goal,level,notes,teacher_id').eq('id', studentId).single()
+        const fallback = await supabase.from('students').select('id,name,age,weight,height,goal,level,notes,teacher_id,status').eq('id', studentId).single()
         st = fallback.data
         if (!st) { setFetchError('Aluno não encontrado. Verifique o ID ou as permissões.'); setLoadingPage(false); return }
       }
