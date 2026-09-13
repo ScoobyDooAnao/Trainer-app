@@ -2812,14 +2812,16 @@ export default function StudentDetail({ navigate, studentId }) {
                 {shareLink} <span style={{ color: '#34D399', marginLeft: 8, cursor: 'pointer' }}>Copiar</span>
               </div>
             </div>
-            <div>
-              <div style={{ fontSize: 11, color: '#475569', marginBottom: 4 }}>Link do <strong>responsável</strong> — para o pai/mãe acompanhar a evolução:</div>
-              <div style={{ ...s.shareBox, borderColor: 'rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.05)' }}
-                onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/parent/${studentId}`); alert('Link do responsável copiado!') }}>
-                {window.location.origin}/parent/{studentId}
-                <span style={{ color: '#FBBF24', marginLeft: 8, cursor: 'pointer' }}>Copiar</span>
+            {student.age != null && student.age < 18 && (
+              <div>
+                <div style={{ fontSize: 11, color: '#475569', marginBottom: 4 }}>Link do <strong>responsável</strong> — para o pai/mãe acompanhar a evolução:</div>
+                <div style={{ ...s.shareBox, borderColor: 'rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.05)' }}
+                  onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/parent/${studentId}`); alert('Link do responsável copiado!') }}>
+                  {window.location.origin}/parent/{studentId}
+                  <span style={{ color: '#FBBF24', marginLeft: 8, cursor: 'pointer' }}>Copiar</span>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
