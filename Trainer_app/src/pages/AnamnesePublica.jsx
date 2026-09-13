@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabase'
+import { criarAlunoPendente } from '../lib/alunos'
 
 const BG   = '#080F1A'
 const SURF = '#0D1117'
@@ -199,17 +200,22 @@ export default function AnamnesePublica({ token: tokenProp }) {
     const whatsapp = `(${D.ddd}) ${D.tel1}-${D.tel2}`
 
     const OBJ_MAP = { emagrecimento:'Emagrecimento', massa:'Ganho de Massa', saude:'Saúde e Bem-Estar', performance:'Força e Performance' }
-    const {data: aluno} = await supabase.from('students').insert([{
-      teacher_id: tokenData.teacher_id,
-      name: D.nome, plano: tokenData.plano,
-      guardian_phone: whatsapp,
-      status: 'pendente',
-      goal: OBJ_MAP[D.objetivo] || D.objetivo || null,
-    }]).select().single()
 
-    if (aluno) {
-      await supabase.from('anamnese').upsert([{
-        student_id: aluno.id, teacher_id: tokenData.teacher_id,
+    const imcVal = D.peso && D.altura
+      ? (parseFloat(D.peso) / Math.pow(parseFloat(D.altura)/100, 2)).toFixed(1)
+      : null
+
+    await criarAlunoPendente({
+      teacherId: tokenData.teacher_id,
+      token,
+      studentData: {
+        name: D.nome, plano: tokenData.plano,
+        guardian_phone: whatsapp,
+        goal: OBJ_MAP[D.objetivo] || D.objetivo || null,
+        weight: +D.peso || null,
+        height: +D.altura || null,
+      },
+      anamneseData: {
         historico_saude: [...(D.condicao_saude||[]), D.condicao_saude_detalhe, D.medicamentos_detalhe].filter(Boolean).join(', '),
         alcool_cigarro: [
           D.alcool ? `Álcool: ${D.alcool} (${D.alcool_freq||'freq. não informada'})` : '',
@@ -225,33 +231,11 @@ export default function AnamnesePublica({ token: tokenProp }) {
         motivacao_inicio: [...(D.motivacao||[]), D.motivacao_detalhe].filter(Boolean).join(', '),
         profissao: [D.rotina_trabalho, D.rotina_detalhe, (D.lazer||[]).length ? `Lazer: ${(D.lazer||[]).join(', ')}` : '', D.lazer_detalhe].filter(Boolean).join(' | '),
         parq: { faixa_etaria: D.faixa_etaria, medicamentos: D.medicamentos },
-      }], {onConflict:'student_id'})
-
-      // Salva peso e altura no aluno
-      if (D.peso || D.altura) {
-        await supabase.from('students').update({
-          weight: +D.peso || null,
-          height: +D.altura || null,
-        }).eq('id', aluno.id)
-      }
-
-      await supabase.from('anamnese_tokens').update({
-        student_id: aluno.id, status:'respondido',
-        respondido_em: new Date().toISOString(),
-      }).eq('token',token)
-
-      // Notificacao para o professor — payload completo para o card
-      const imcVal = D.peso && D.altura
-        ? (parseFloat(D.peso) / Math.pow(parseFloat(D.altura)/100, 2)).toFixed(1)
-        : null
-      await supabase.from('notificacoes').insert([{
-        teacher_id: tokenData.teacher_id,
-        tipo: 'nova_anamnese',
+      },
+      notifPayload: {
         titulo: 'Nova anamnese recebida',
         corpo: `${D.nome} preencheu o formulário e aguarda confirmação.`,
-        lida: false,
         payload: {
-          student_id: aluno.id,
           nome: D.nome,
           faixa_etaria: D.faixa_etaria,
           peso: D.peso,
@@ -261,8 +245,8 @@ export default function AnamnesePublica({ token: tokenProp }) {
           dias_semana: D.dias_semana,
           whatsapp: whatsapp,
         },
-      }])
-    }
+      },
+    })
 
     setSaving(false)
     setFinalData(D)
