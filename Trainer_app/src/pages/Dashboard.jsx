@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../supabase'
+import { criarAlunoPendente, confirmarMatricula, rejeitarCandidato } from '../lib/alunos'
 import TabEscolinha from './TabEscolinha'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -2408,21 +2409,20 @@ function NovoAlunoModal({ onSave, onClose, teacherId }) {
     if (!form.name.trim()) return
     setSaving(true)
 
-    // Cria o aluno
-    const { data: aluno } = await supabase.from('students').insert([{
-      teacher_id: teacherId,
-      name: form.name, age: +form.age || null,
-      weight: +form.weight || null, height: +form.height || null,
-      goal: form.goal || null, level: form.level || null,
-      sport: plano === 'escolinha' || plano === 'ambos' ? form.sport : null,
-      guardian_name: form.guardian_name || null, guardian_phone: form.guardian_phone || null,
-      plano: plano,
-    }]).select().single()
+    const isAcademiaOuAmbos = plano === 'academia' || plano === 'ambos'
 
-    // Cria anamnese se for academia ou ambos
-    if (aluno && (plano === 'academia' || plano === 'ambos')) {
-      await supabase.from('anamnese').upsert([{
-        student_id: aluno.id, teacher_id: teacherId,
+    await criarAlunoPendente({
+      teacherId,
+      token: isAcademiaOuAmbos ? token : null,
+      studentData: {
+        name: form.name, age: +form.age || null,
+        weight: +form.weight || null, height: +form.height || null,
+        goal: form.goal || null, level: form.level || null,
+        sport: plano === 'escolinha' || plano === 'ambos' ? form.sport : null,
+        guardian_name: form.guardian_name || null, guardian_phone: form.guardian_phone || null,
+        plano: plano,
+      },
+      anamneseData: isAcademiaOuAmbos ? {
         profissao: form.profissao, tipo_trabalho: form.tipo_trabalho,
         historico_saude: form.historico_saude, historico_familiar: form.historico_familiar,
         horas_sono: form.horas_sono, qualidade_sono: form.qualidade_sono,
@@ -2434,13 +2434,13 @@ function NovoAlunoModal({ onSave, onClose, teacherId }) {
         dias_disponiveis: form.dias_disponiveis,
         horario_preferido: form.horario_preferido,
         local_treino: form.local_treino,
-      }], { onConflict: 'student_id' })
-
-      // Vincula token ao aluno
-      if (token) {
-        await supabase.from('anamnese_tokens').update({ student_id: aluno.id, status: 'respondido', respondido_em: new Date().toISOString() }).eq('token', token)
-      }
-    }
+      } : null,
+      notifPayload: {
+        titulo: 'Novo aluno cadastrado',
+        corpo: `${form.name} foi cadastrado e aguarda confirmação.`,
+        payload: { nome: form.name, objetivo: form.goal },
+      },
+    })
 
     setSaving(false)
     onSave()
@@ -3410,18 +3410,13 @@ export default function Dashboard({ navigate, session }) {
 
   const rejeitarAluno = async (notif) => {
     if (!window.confirm('Recusar este candidato? O perfil será removido.')) return
-    if (notif.payload?.student_id) {
-      await supabase.from('students').delete().eq('id', notif.payload.student_id)
-    }
-    await supabase.from('notificacoes').delete().eq('id', notif.id)
+    await rejeitarCandidato(notif.payload?.student_id, notif.id)
     setNotifs(p => p.filter(n => n.id !== notif.id))
     fetchAll()
   }
 
   const confirmarAluno = async (notif) => {
-    await supabase.from('students').update({ status: 'ativo' })
-      .eq('id', notif.payload?.student_id)
-    await supabase.from('notificacoes').update({ lida: true }).eq('id', notif.id)
+    await confirmarMatricula(notif.payload?.student_id)
     setNotifs(p => p.map(n => n.id === notif.id ? { ...n, lida: true } : n))
     fetchAll()
   }
