@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../supabase'
+import { confirmarMatricula } from '../lib/alunos'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 // ── Design tokens StudentDetail ──────────────────────────────────────────────
@@ -2717,13 +2718,11 @@ export default function StudentDetail({ navigate, studentId }) {
           <button style={s.back} onClick={() => navigate('dashboard')}>← Voltar ao Painel</button>
           {((student.status === 'pendente' || !student.status) || student.status === null || student.status === undefined) && (
             <button onClick={async () => {
-              const { error: upErr } = await supabase.from('students').update({ status:'ativo' }).eq('id', studentId)
+              const { error: upErr } = await confirmarMatricula(studentId)
               if (!upErr) {
-                await supabase.from('notificacoes').update({ lida:true })
-                  .eq('teacher_id', student.teacher_id).eq('tipo','nova_anamnese')
+                setStudent(p => ({ ...p, status:'ativo' }))
+                setEditing(false)
               }
-              setStudent(p => ({ ...p, status:'ativo' }))
-              setEditing(false)
             }} style={{ padding:'10px 24px', borderRadius:10, border:'none', background:'#22C55E', color:'#fff', fontWeight:800, fontSize:14, cursor:'pointer', fontFamily:'inherit', boxShadow:'0 4px 14px rgba(34,197,94,0.35)' }}>
               Confirmar Matrícula
             </button>
