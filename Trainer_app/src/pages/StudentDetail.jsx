@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../supabase'
-import { confirmarMatricula } from '../lib/alunos'
+import { confirmarMatricula, nivelFromExperiencia } from '../lib/alunos'
 import { useAppNavigate } from '../lib/useAppNavigate'
 import { useParams } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
@@ -2346,6 +2346,7 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
     horario:               an?.horario_preferido || '',
     local_treino:          an?.local_treino || '',
     experiencia:           an?.historico || '',
+    nivel:                 st?.level || nivelFromExperiencia(an?.historico) || '',
     motivacao:             an?.motivacao_inicio || '',
     notas_professor:       an?.notas || '',
   })
@@ -2442,7 +2443,7 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
     await supabase.from('students').update({
       name: F.nome, age: +F.idade||null,
       weight: +F.peso||null, height: +F.altura||null, goal: F.objetivo,
-      guardian_phone: F.whatsapp,
+      guardian_phone: F.whatsapp, level: F.nivel || null,
     }).eq('id', studentId)
 
     await supabase.from('anamnese').upsert([{
@@ -2750,10 +2751,12 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
         </FichaField>
       </div>
 
-      <FichaField label="Experiência com exercício físico">
-        <textarea style={{...inp,minHeight:55,resize:'vertical',lineHeight:1.6}}
-          value={F.experiencia} onChange={e=>f('experiencia')(e.target.value)}
-          placeholder="Histórico de treinos anteriores..."/>
+      <FichaField label="Nível de Experiência">
+        <select style={sel} value={F.nivel} onChange={e=>f('nivel')(e.target.value)}>
+          <option value="">Selecione</option>
+          {['Iniciante','Intermediário','Avançado','Atleta Jovem','Atleta Competitivo'].map(l => <option key={l} value={l}>{l}</option>)}
+        </select>
+        {F.experiencia && <div style={{ fontSize:11, color:'#475569', marginTop:6, fontStyle:'italic' }}>Relato da anamnese: "{F.experiencia}"</div>}
       </FichaField>
 
       <FichaField label="Motivação para começar agora">
@@ -3052,13 +3055,13 @@ export default function StudentDetail() {
         {(student.status === 'pendente' || !student.status) && (
           <div style={{ marginBottom:12, padding:'11px 16px', background:'rgba(251,191,36,0.08)', border:'1px solid rgba(251,191,36,0.25)', borderRadius:12, display:'flex', alignItems:'center', gap:10 }}>
             <div style={{ width:8, height:8, borderRadius:'50%', background:'#FBBF24', flexShrink:0 }}/>
-            <div style={{ fontSize:13, color:'#FBBF24', fontWeight:600 }}>Candidatura pendente — revise a anamnese na aba Obs. e confirme o aluno para iniciar a prescrição.</div>
+            <div style={{ fontSize:13, color:'#FBBF24', fontWeight:600 }}>Candidatura pendente — revise a anamnese na Ficha do Aluno (aba "Dados") e confirme o aluno para iniciar a prescrição.</div>
           </div>
         )}
 
         {/* Tabs */}
         <div style={s.tabs}>
-          {[['plans', 'Treinos'], ['progress', 'Evolução'], ['metas', 'Metas'], ['notes', 'Obs.']].map(([id, label]) => (
+          {[['plans', 'Treinos'], ['metas', 'Metas']].map(([id, label]) => (
             <button key={id} style={s.tab(tab === id)} onClick={() => setTab(id)}>{label}</button>
           ))}
         </div>
@@ -3097,22 +3100,6 @@ export default function StudentDetail() {
         )}
 
         {/* PROGRESS TAB */}
-        {tab === 'progress' && (
-          <ProgressTab
-            progress={progress}
-            exLogs={exLogs}
-            showProgressForm={showProgressForm}
-            setShowProgressForm={setShowProgressForm}
-            newProgress={newProgress}
-            setNewProgress={setNewProgress}
-            addProgress={addProgress}
-            deleteProgress={deleteProgress}
-            saving={saving}
-            s={s}
-          />
-        )}
-
-
         {/* METAS TAB — read-only para o professor */}
         {tab === 'metas' && (
           <div>
@@ -3167,12 +3154,6 @@ export default function StudentDetail() {
           </div>
         )}
 
-        {/* Avaliação movida para WorkoutEditor */}
-
-        {/* NOTES TAB — Anamnese + observações */}
-        {tab === 'notes' && (
-          <AnamneseTab studentId={studentId} teacherId={student.teacher_id} s={s} />
-        )}
       </div>
     </div>
   )
