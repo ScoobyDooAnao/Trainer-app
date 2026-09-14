@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
+import { useParams } from 'react-router-dom'
 import { supabase } from '../supabase'
+import { useAppNavigate } from '../lib/useAppNavigate'
 
 // ── Paleta Vestiário Pré-Jogo ─────────────────────────────────────────────────
 const V = {
@@ -1290,7 +1292,9 @@ function NoEquipmentSection({ onAddExercise }) {
 }
 
 // ── WorkoutEditor Principal ────────────────────────────────────────────────────
-export default function WorkoutEditor({ navigate, studentId, planId }) {
+export default function WorkoutEditor() {
+  const navigate = useAppNavigate()
+  const { studentId, planId } = useParams()
   const [plan,         setPlan]         = useState(null)
   const [days,         setDays]         = useState([])
   const [student,      setStudent]      = useState(null)
