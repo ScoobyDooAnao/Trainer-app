@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
+import { useParams } from 'react-router-dom'
 import { supabase } from '../supabase'
+import { useAppNavigate } from '../lib/useAppNavigate'
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 const FASES = {
@@ -256,7 +258,9 @@ function MacroOverview({ macro, mesos, semanaAtual, onMesoClick }) {
 }
 
 // ── Planner principal ─────────────────────────────────────────────────────────
-export default function Planner({ navigate, studentId, student: studentProp }) {
+export default function Planner({ student: studentProp }) {
+  const navigate = useAppNavigate()
+  const { studentId } = useParams()
   const [student,    setStudent]    = useState(studentProp || null)
   const [macros,     setMacros]     = useState([])
   const [mesosByMacro, setMesosByMacro] = useState({})
