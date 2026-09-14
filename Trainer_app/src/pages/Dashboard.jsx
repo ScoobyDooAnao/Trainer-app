@@ -304,6 +304,7 @@ function NavItem({ item, active, onClick }) {
 }
 
 // ── StudentCard ────────────────────────────────────────────────────────────
+const INACTIVE_THRESHOLD_DAYS = 7 // doc Fase 3: Inativo se sem interação > 7 dias
 // ── Helpers de idade ───────────────────────────────────────────────────────
 function calcAgeFromStudent(st) {
   if (st.birth_date) {
@@ -356,13 +357,9 @@ function StudentCard({ st, onClick, onDelete }) {
   const [deleting, setDeleting] = useState(false)
 
   const g      = GOAL[st.goal] || GOAL['Ganho de Massa']
-  const imc    = imcStyle(st.weight, st.height, st.imc_calc)
   const streak = streakStyle(st.streak || 0)
-  const active = (st.lastSeenDays ?? 999) < 5
+  const active = (st.lastSeenDays ?? 999) <= INACTIVE_THRESHOLD_DAYS
   const age    = calcAgeFromStudent(st)
-  const badge  = ageBadge(age)
-  const ltad   = calcLTAD(age, st.experience_years, st.sport)
-  const sport  = SPORTS.find(s => s.id === st.sport)
 
   const handleDelete = async () => {
     setDeleting(true)
@@ -415,73 +412,44 @@ function StudentCard({ st, onClick, onDelete }) {
 
         {/* Topo */}
         <div style={{ padding: '16px 18px 14px', background: `linear-gradient(135deg,${g.bg},#FFFDF0)`, borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <div style={{ width: 7, height: 7, borderRadius: '50%', background: active ? '#34D399' : '#CBD5E1', boxShadow: active ? '0 0 7px #34D399' : 'none' }} />
               <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: active ? '#065F46' : '#94A3B8' }}>
                 {active ? 'Ativo' : 'Inativo'}
               </span>
+              {!active && st.lastSeenDays < 999 && (
+                <span style={{ fontSize: 10, color: YELLOW, fontWeight: 600 }}>· {st.lastSeenDays}d sem interagir</span>
+              )}
             </div>
-            {!active && st.lastSeenDays < 999 && (
-              <span style={{ fontSize: 10, color: YELLOW, fontWeight: 600, background: 'rgba(245,200,66,0.1)', padding: '2px 8px', borderRadius: 20, border: `1px solid ${YELLOW_BORDER}`, marginRight: 24 }}>
-                {st.lastSeenDays}d sem interagir
-              </span>
-            )}
+            <div style={{ textAlign: 'right', paddingRight: 26 }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#0D1B2A', lineHeight: 1 }}>{age ?? '—'}<span style={{ fontSize: 11, color: '#7C4A00', fontWeight: 600 }}> anos</span></div>
+            </div>
           </div>
 
-          {/* Nome */}
-          <div style={{ fontSize: 18, fontWeight: 800, color: '#0D1B2A', letterSpacing: '-0.4px', lineHeight: 1.2, marginBottom: 6, paddingRight: 28 }}>{st.name}</div>
+          {/* Nome grande */}
+          <div style={{ fontSize: 19, fontWeight: 800, color: '#0D1B2A', letterSpacing: '-0.4px', lineHeight: 1.2, marginBottom: 8 }}>{st.name}</div>
 
-          {/* Badges — faixa etária + esporte + LTAD */}
-          <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:8 }}>
-            {badge && (
-              <div style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'2px 9px', borderRadius:20, background: badge.bg, border:`1px solid ${badge.color}33` }}>
-                <span style={{ fontSize:11 }}>{badge.emoji}</span>
-                <span style={{ fontSize:11, fontWeight:700, color: badge.color }}>{badge.label}</span>
-              </div>
-            )}
-            {sport && (
-              <div style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'2px 9px', borderRadius:20, background:'rgba(59,130,246,0.1)', border:'1px solid rgba(59,130,246,0.25)' }}>
-                <SportIcon id={sport.id} size={14} />
-                <span style={{ fontSize:11, fontWeight:700, color:'#3B82F6' }}>{sport.label}</span>
-              </div>
-            )}
-            {ltad && (
-              <div title={ltad.desc} style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'2px 9px', borderRadius:20, background: ltad.bg, border:`1px solid ${ltad.cor}33` }}>
-                <span style={{ width:8, height:8, borderRadius:"50%", background:ltad.cor, display:"inline-block", flexShrink:0 }} />
-                <span style={{ fontSize:11, fontWeight:700, color: ltad.cor }}>{ltad.fase}</span>
-              </div>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+          {/* Objetivo geral + específico */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginBottom: st.objetivo_especifico ? 4 : 0 }}>
             <GoalBadge goal={st.goal} />
-            {st.guardian_name && <>
-              <span style={{ fontSize: 10, color: '#CBD5E1' }}>·</span>
-              <span style={{ fontSize: 11, color: '#64748B' }}>Resp.: {st.guardian_name.split(' ')[0]}</span>
-            </>
-            }
           </div>
+          {st.objetivo_especifico && (
+            <div style={{ fontSize: 12, color: '#5C3A00', opacity: 0.85, lineHeight: 1.4 }}>{st.objetivo_especifico}</div>
+          )}
         </div>
 
-        {/* Stats */}
-        <div style={{ padding: '14px 18px', display: 'flex', gap: 8 }}>
-          {[
-            { label: 'Peso',     val: st.weight ? `${st.weight}` : '—', unit: st.weight ? 'kg' : '', color: '#431C00', sub: null },
-            { label: 'IMC',      val: imc.val,        unit: '',           color: imc.color,            sub: imc.label },
-            { label: 'Ofensiva', val: streak.display, unit: '',           color: streak.color,         sub: (st.streak || 0) > 0 ? 'dias' : null, glow: streak.glow },
-          ].map(({ label, val, unit, color, sub, glow }) => (
-            <div key={label} style={{ flex: 1, borderRadius: 10, padding: '10px 6px', textAlign: 'center', background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(255,255,255,0.6)', boxShadow: glow ? `0 0 12px ${color}35` : 'none' }}>
-              <div style={{ fontSize: 9, color: '#7C4A00', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3, fontWeight: 700 }}>{label}</div>
-              <div style={{ fontSize: val.length > 5 ? 11 : 15, fontWeight: 800, color, lineHeight: 1 }}>{val}<span style={{ fontSize: 9, color: '#94A3B8', fontWeight: 500 }}>{unit}</span></div>
-              {sub && <div style={{ fontSize: 8, color: '#431C00', opacity: 0.75, marginTop: 2, fontWeight: 700 }}>{sub}</div>}
-            </div>
-          ))}
+        {/* Ofensiva */}
+        <div style={{ padding: '12px 18px' }}>
+          <div style={{ borderRadius: 10, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(255,255,255,0.6)', boxShadow: streak.glow ? `0 0 12px ${streak.color}35` : 'none' }}>
+            <span style={{ fontSize: 10, color: '#7C4A00', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>Ofensiva</span>
+            <span style={{ fontSize: 16, fontWeight: 800, color: streak.color }}>{streak.display}{(st.streak || 0) > 0 && <span style={{ fontSize: 10, color: '#94A3B8', fontWeight: 500 }}> dias</span>}</span>
+          </div>
         </div>
 
         {/* Footer */}
         <div style={{ padding: '10px 18px', borderTop: '1px solid rgba(0,0,0,0.09)', background: hov ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, transition: 'background 0.2s' }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#431C00' }}>Ver Perfil Completo</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#431C00' }}>Acessar Ficha</span>
           <span style={{ fontSize: 13, color: '#431C00', transform: hov ? 'translateX(4px)' : 'translateX(0)', transition: 'transform 0.2s', display: 'inline-block' }}>→</span>
         </div>
       </div>
@@ -3168,6 +3136,16 @@ function imcInfo(imc) {
 }
 const OBJ_LABEL = { emagrecimento:'Perda de gordura', massa:'Ganho de massa', saude:'Saúde e disposição', performance:'Performance' }
 
+// Preparado para tipos futuros de notificação (Fase 3.3) — ainda não geradas pelo backend,
+// mas o mapa já existe para o dia em que forem implementadas (Fase 5+).
+const NOTIF_TIPO_ICON = {
+  nova_anamnese:     '🆕',
+  treino_registrado: '🏋️',
+  aniversario:       '🎂',
+  ofensiva:          '🔥',
+  meta:              '🎯',
+}
+
 function NotificacoesPanel({ notifs, onClose, onMarkRead, onConfirm, onReject, navigate }) {
   const naoLidas = notifs.filter(n => !n.lida).length
   const fmtTime = (d) => {
@@ -3240,12 +3218,13 @@ function NotificacoesPanel({ notifs, onClose, onMarkRead, onConfirm, onReject, n
                 </div>
               </div>
             )
+
             return (
               <div key={n.id} style={{ padding:'14px 20px', borderBottom:'1px solid rgba(255,255,255,0.05)', background: n.lida ? 'transparent' : 'rgba(251,191,36,0.03)' }}>
                 <div style={{ display:'flex', gap:10 }}>
                   <div style={{ width:7, height:7, borderRadius:'50%', background: n.lida ? '#334155' : '#FBBF24', flexShrink:0, marginTop:5 }}/>
                   <div>
-                    <div style={{ fontSize:13, fontWeight:700, color:'#E2E8F0', marginBottom:3 }}>{n.titulo}</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:'#E2E8F0', marginBottom:3 }}>{NOTIF_TIPO_ICON[n.tipo] ? `${NOTIF_TIPO_ICON[n.tipo]} ` : ''}{n.titulo}</div>
                     {n.corpo && <div style={{ fontSize:12, color:'#64748B', lineHeight:1.6 }}>{n.corpo}</div>}
                     <div style={{ fontSize:10, color:'#334155', marginTop:5 }}>{fmtTime(n.data)}</div>
                   </div>
@@ -3270,6 +3249,7 @@ export default function Dashboard({ session }) {
   const [showModal, setShowModal] = useState(false)
   const [search, setSearch]       = useState('')
   const [filter, setFilter]       = useState('Todos')
+  const [sortBy, setSortBy]       = useState('recente')
   const [loading, setLoading]     = useState(true)
 
   useEffect(() => { fetchAll(); fetchNotifs() }, [])
@@ -3288,12 +3268,13 @@ export default function Dashboard({ session }) {
 
     if (studs && studs.length > 0) {
       const ids = studs.map(s => s.id)
-      const [att, prog, logs, feed, plansRes] = await Promise.all([
+      const [att, prog, logs, feed, plansRes, anam] = await Promise.all([
         supabase.from('attendance').select('student_id,date').in('student_id', ids),
         supabase.from('progress_entries').select('student_id,date,weight').in('student_id', ids).order('date', { ascending: false }),
         supabase.from('exercise_logs').select('student_id,date,day_id,is_makeup,scheduled_day').in('student_id', ids),
         supabase.from('student_feedbacks').select('student_id,date').in('student_id', ids),
         supabase.from('workout_plans').select('id,student_id,title,status,updated_at').in('student_id', ids).eq('status', 'active'),
+        supabase.from('anamnese').select('student_id,objetivo_estetico').in('student_id', ids),
       ])
 
       const datesByStudent = {}
@@ -3322,6 +3303,9 @@ export default function Dashboard({ session }) {
         })
       }
 
+      const objEspecificoMap = {}
+      if (anam.data) anam.data.forEach(a => { objEspecificoMap[a.student_id] = a.objetivo_estetico })
+
       const today = new Date(); today.setHours(0, 0, 0, 0)
       const enriched = studs.map(s => {
         const dates      = datesByStudent[s.id] || []
@@ -3336,7 +3320,7 @@ export default function Dashboard({ session }) {
         const weight  = latestW ?? s.weight  // progress_entries tem prioridade
         const height  = s.height
         const imc     = (weight && height) ? +(weight / ((height / 100) ** 2)).toFixed(1) : null
-        return { ...s, weight, imc_calc: imc, streak, lastSeenDays }
+        return { ...s, weight, imc_calc: imc, streak, lastSeenDays, objetivo_especifico: objEspecificoMap[s.id] || null }
       })
       setStudents(enriched)
 
@@ -3427,11 +3411,16 @@ export default function Dashboard({ session }) {
 
   const filtered = students.filter(s => {
     const ms = s.name.toLowerCase().includes(search.toLowerCase())
-    const mf = filter === 'Todos' ? true : filter === 'Ativos' ? s.lastSeenDays < 5 : filter === 'Inativos' ? s.lastSeenDays >= 5 : s.goal === filter
+    const mf = filter === 'Todos' ? true : filter === 'Ativos' ? s.lastSeenDays <= INACTIVE_THRESHOLD_DAYS : filter === 'Inativos' ? s.lastSeenDays > INACTIVE_THRESHOLD_DAYS : s.goal === filter
     return ms && mf
+  }).sort((a, b) => {
+    if (sortBy === 'alfabetica')   return a.name.localeCompare(b.name)
+    if (sortBy === 'ofensiva')     return (b.streak || 0) - (a.streak || 0)
+    if (sortBy === 'sem_treinar')  return (b.lastSeenDays ?? 999) - (a.lastSeenDays ?? 999)
+    return new Date(b.created_at) - new Date(a.created_at) // 'recente' (padrão)
   })
 
-  const ativos   = students.filter(s => s.lastSeenDays < 5).length
+  const ativos   = students.filter(s => s.lastSeenDays <= INACTIVE_THRESHOLD_DAYS).length
   const inativos = students.length - ativos
 
   const isMobile = useIsMobile()
@@ -3513,6 +3502,13 @@ export default function Dashboard({ session }) {
                   </button>
                 ))}
               </div>
+              <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+                style={{ padding: '9px 12px', borderRadius: 10, fontSize: 12, fontWeight: 700, color: '#0C4A6E', background: 'rgba(255,255,255,0.75)', border: '1.5px solid rgba(255,255,255,0.9)', cursor: 'pointer', fontFamily: 'inherit' }}>
+                <option value="recente">Mais recente</option>
+                <option value="sem_treinar">Mais tempo sem treinar</option>
+                <option value="alfabetica">Alfabética</option>
+                <option value="ofensiva">Maior ofensiva</option>
+              </select>
             </div>
 
             {/* Legenda ofensiva */}
