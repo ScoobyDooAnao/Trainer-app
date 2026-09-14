@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabase'
-import { criarAlunoPendente } from '../lib/alunos'
+import { criarAlunoPendente, nivelFromExperiencia } from '../lib/alunos'
 
 const BG   = '#080F1A'
 const SURF = '#0D1117'
@@ -214,6 +214,7 @@ export default function AnamnesePublica({ token: tokenProp }) {
         goal: OBJ_MAP[D.objetivo] || D.objetivo || null,
         weight: +D.peso || null,
         height: +D.altura || null,
+        level: nivelFromExperiencia(D.experiencia),
       },
       anamneseData: {
         historico_saude: [...(D.condicao_saude||[]), D.condicao_saude_detalhe, D.medicamentos_detalhe].filter(Boolean).join(', '),
