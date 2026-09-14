@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../supabase'
 import { criarAlunoPendente, confirmarMatricula, rejeitarCandidato } from '../lib/alunos'
+import { useAppNavigate } from '../lib/useAppNavigate'
 import TabEscolinha from './TabEscolinha'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -3259,7 +3260,8 @@ function NotificacoesPanel({ notifs, onClose, onMarkRead, onConfirm, onReject, n
 }
 
 
-export default function Dashboard({ navigate, session }) {
+export default function Dashboard({ session }) {
+  const navigate = useAppNavigate()
   const [nav, setNav]             = useState('alunos')
   const [notifs,      setNotifs]      = useState([])
   const [showNotifs,  setShowNotifs]  = useState(false)
