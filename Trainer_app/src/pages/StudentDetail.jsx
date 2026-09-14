@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../supabase'
 import { confirmarMatricula } from '../lib/alunos'
+import { useAppNavigate } from '../lib/useAppNavigate'
+import { useParams } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 // ── Design tokens StudentDetail ──────────────────────────────────────────────
@@ -2770,7 +2772,9 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
   )
 }
 
-export default function StudentDetail({ navigate, studentId }) {
+export default function StudentDetail() {
+  const navigate = useAppNavigate()
+  const { id: studentId } = useParams()
   const [student, setStudent] = useState(null)
   const [plans,   setPlans]   = useState([])
   const [progress,setProgress]= useState([])
