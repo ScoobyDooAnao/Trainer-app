@@ -8,6 +8,20 @@ import { supabase } from '../supabase'
  * Nunca criar aluno fora desta função — evita status inconsistente
  * e aluno "órfão" sem notificação.
  */
+/**
+ * Transcreve a resposta da anamnese "Como você se descreve em relação
+ * ao exercício?" para o nível de experiência do aluno (mesmo campo
+ * `level` usado no WorkoutEditor para volume/frequência de referência).
+ */
+export function nivelFromExperiencia(texto) {
+  if (!texto) return null
+  const t = texto.toLowerCase()
+  if (t.includes('pratico regularmente')) return 'Avançado'
+  if (t.includes('forma irregular') || t.includes('menos de 6 meses')) return 'Intermediário'
+  if (t.includes('nunca pratiquei') || t.includes('mais de 6 meses')) return 'Iniciante'
+  return null
+}
+
 export async function criarAlunoPendente({ teacherId, studentData, anamneseData, token, notifPayload }) {
   const { data: aluno, error: alunoErr } = await supabase
     .from('students')
