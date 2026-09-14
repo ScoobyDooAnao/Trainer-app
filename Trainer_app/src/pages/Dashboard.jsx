@@ -406,8 +406,8 @@ function StudentCard({ st, onClick, onDelete }) {
           onMouseEnter={() => setHovDel(true)}
           onMouseLeave={() => setHovDel(false)}
           title="Excluir aluno"
-          style={{ position:'absolute', top:10, right:10, width:28, height:28, borderRadius:'50%', border:'none', background: hovDel ? 'rgba(239,68,68,0.18)' : 'rgba(239,68,68,0.08)', color: hovDel ? '#EF4444' : '#FCA5A5', fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.15s', zIndex:2, lineHeight:1 }}>
-          
+          style={{ position:'absolute', top:10, right:10, width:30, height:30, borderRadius:'50%', border: `2px solid ${hovDel ? '#7F1D1D' : '#991B1B'}`, background: hovDel ? '#7F1D1D' : '#B91C1C', color:'#fff', fontSize:16, fontWeight:900, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.15s', zIndex:2, lineHeight:1, boxShadow: hovDel ? '0 0 0 4px rgba(153,27,27,0.25)' : '0 2px 8px rgba(153,27,27,0.5)' }}>
+          ✕
         </button>
 
         {/* Topo */}
@@ -436,6 +436,12 @@ function StudentCard({ st, onClick, onDelete }) {
           </div>
           {st.objetivo_especifico && (
             <div style={{ fontSize: 12, color: '#5C3A00', opacity: 0.85, lineHeight: 1.4 }}>{st.objetivo_especifico}</div>
+          )}
+          {st.metrica_base && (
+            <div style={{ marginTop: 6, display:'inline-flex', alignItems:'center', gap:5, padding:'3px 10px', borderRadius:20, background:'rgba(255,255,255,0.55)', border:'1px solid rgba(255,255,255,0.7)' }}>
+              <span style={{ fontSize: 10, color: '#7C4A00', fontWeight:700, textTransform:'uppercase' }}>{st.metrica_base.label}:</span>
+              <span style={{ fontSize: 12, color: '#431C00', fontWeight:800 }}>{st.metrica_base.value}</span>
+            </div>
           )}
         </div>
 
@@ -3268,13 +3274,14 @@ export default function Dashboard({ session }) {
 
     if (studs && studs.length > 0) {
       const ids = studs.map(s => s.id)
-      const [att, prog, logs, feed, plansRes, anam] = await Promise.all([
+      const [att, prog, logs, feed, plansRes, anam, measures] = await Promise.all([
         supabase.from('attendance').select('student_id,date').in('student_id', ids),
         supabase.from('progress_entries').select('student_id,date,weight').in('student_id', ids).order('date', { ascending: false }),
         supabase.from('exercise_logs').select('student_id,date,day_id,is_makeup,scheduled_day').in('student_id', ids),
         supabase.from('student_feedbacks').select('student_id,date').in('student_id', ids),
         supabase.from('workout_plans').select('id,student_id,title,status,updated_at').in('student_id', ids).eq('status', 'active'),
         supabase.from('anamnese').select('student_id,objetivo_estetico').in('student_id', ids),
+        supabase.from('measure_logs').select('student_id,date,waist,tests').in('student_id', ids).order('date', { ascending:false }),
       ])
 
       const datesByStudent = {}
@@ -3306,6 +3313,42 @@ export default function Dashboard({ session }) {
       const objEspecificoMap = {}
       if (anam.data) anam.data.forEach(a => { objEspecificoMap[a.student_id] = a.objetivo_estetico })
 
+      // ── Métrica-base por objetivo (Fase 3.1) ──
+      // Emagrecimento -> Waist-to-Height Ratio (WHtR) via measure_logs.waist
+      // Ganho de Massa -> 1RM (supino/legpress) via measure_logs.tests
+      // Saúde/Bem-Estar -> VO2 Máx via measure_logs.tests
+      // Força e Performance (atletas de rendimento) -> fora por enquanto
+      const measuresByStudent = {}
+      ;(measures.data || []).forEach(m => {
+        if (!measuresByStudent[m.student_id]) measuresByStudent[m.student_id] = []
+        measuresByStudent[m.student_id].push(m)
+      })
+      const metricaBase = {}
+      Object.entries(measuresByStudent).forEach(([sid, regs]) => {
+        const st = studs.find(s => s.id === sid)
+        if (!st) return
+        if (st.goal === 'Emagrecimento') {
+          const comWaist = regs.find(r => r.waist)
+          if (comWaist && st.height) {
+            const whtr = (comWaist.waist / st.height).toFixed(2)
+            metricaBase[sid] = { label: 'WHtR (Cintura/Altura)', value: whtr }
+          }
+        } else if (st.goal === 'Ganho de Massa') {
+          const comRM = regs.find(r => r.tests && Object.keys(r.tests).some(k => /rm/i.test(k)))
+          if (comRM) {
+            const key = Object.keys(comRM.tests).find(k => /rm/i.test(k))
+            metricaBase[sid] = { label: key, value: comRM.tests[key] }
+          }
+        } else if (st.goal === 'Saúde e Bem-Estar') {
+          const comVO2 = regs.find(r => r.tests && Object.keys(r.tests).some(k => /vo2/i.test(k)))
+          if (comVO2) {
+            const key = Object.keys(comVO2.tests).find(k => /vo2/i.test(k))
+            metricaBase[sid] = { label: key, value: comVO2.tests[key] }
+          }
+        }
+        // 'Força e Performance' (atletas de rendimento) fica de fora por enquanto
+      })
+
       const today = new Date(); today.setHours(0, 0, 0, 0)
       const enriched = studs.map(s => {
         const dates      = datesByStudent[s.id] || []
@@ -3320,7 +3363,7 @@ export default function Dashboard({ session }) {
         const weight  = latestW ?? s.weight  // progress_entries tem prioridade
         const height  = s.height
         const imc     = (weight && height) ? +(weight / ((height / 100) ** 2)).toFixed(1) : null
-        return { ...s, weight, imc_calc: imc, streak, lastSeenDays, objetivo_especifico: objEspecificoMap[s.id] || null }
+        return { ...s, weight, imc_calc: imc, streak, lastSeenDays, objetivo_especifico: objEspecificoMap[s.id] || null, metrica_base: metricaBase[s.id] || null }
       })
       setStudents(enriched)
 
