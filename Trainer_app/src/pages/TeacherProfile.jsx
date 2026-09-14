@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../supabase'
+import { useAppNavigate } from '../lib/useAppNavigate'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
@@ -472,7 +473,8 @@ function TabMinhaEvolucao({ teacherId }) {
 }
 
 // ── Main export ──────────────────────────────────────────────────────────────
-export default function TeacherProfile({ navigate, session }) {
+export default function TeacherProfile({ session }) {
+  const navigate = useAppNavigate()
   const uid = session.user.id
 
   const [profile,setProfile]     = useState(null)
