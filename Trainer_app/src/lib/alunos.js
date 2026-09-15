@@ -38,10 +38,21 @@ export async function criarAlunoPendente({ teacherId, studentData, anamneseData,
   if (alunoErr || !aluno) return { aluno: null, error: alunoErr }
 
   if (anamneseData) {
-    const { error: anamErr } = await supabase
+    let { error: anamErr } = await supabase
       .from('anamnese')
       .upsert([{ ...anamneseData, student_id: aluno.id, teacher_id: teacherId }], { onConflict: 'student_id' })
-    if (anamErr) console.error('criarAlunoPendente: falha ao salvar anamnese', anamErr)
+    if (anamErr) {
+      console.error('criarAlunoPendente: falha ao salvar anamnese (tentativa 1)', anamErr)
+      // Blindagem: se a falha for por causa de coluna nova (ex: perfil) que ainda não
+      // existe no banco, tenta de novo sem ela — nunca perder os dados brutos por isso.
+      if (anamneseData.perfil !== undefined) {
+        const { perfil, ...semPerfil } = anamneseData
+        const { error: anamErr2 } = await supabase
+          .from('anamnese')
+          .upsert([{ ...semPerfil, student_id: aluno.id, teacher_id: teacherId }], { onConflict: 'student_id' })
+        if (anamErr2) console.error('criarAlunoPendente: falha ao salvar anamnese (tentativa 2, sem perfil)', anamErr2)
+      }
+    }
   }
 
   if (token) {
