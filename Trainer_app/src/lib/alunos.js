@@ -1,5 +1,12 @@
 import { supabase } from '../supabase'
 
+/** Valores canônicos de status — nunca usar strings soltas 'pendente'/'ativo'/'rejeitado' fora daqui. */
+export const STUDENT_STATUS = {
+  PENDENTE:  'pendente',
+  ATIVO:     'ativo',
+  REJEITADO: 'rejeitado',
+}
+
 /**
  * Centraliza a criação de aluno pendente.
  * Sempre: INSERT students (status='pendente') + upsert anamnese (opcional)
@@ -25,7 +32,7 @@ export function nivelFromExperiencia(texto) {
 export async function criarAlunoPendente({ teacherId, studentData, anamneseData, token, notifPayload }) {
   const { data: aluno, error: alunoErr } = await supabase
     .from('students')
-    .insert([{ ...studentData, teacher_id: teacherId, status: 'pendente' }])
+    .insert([{ ...studentData, teacher_id: teacherId, status: STUDENT_STATUS.PENDENTE }])
     .select().single()
 
   if (alunoErr || !aluno) return { aluno: null, error: alunoErr }
@@ -63,7 +70,7 @@ export async function criarAlunoPendente({ teacherId, studentData, anamneseData,
  * deste aluno (corrige bug de marcar todas as nova_anamnese como lidas).
  */
 export async function confirmarMatricula(studentId) {
-  const { error } = await supabase.from('students').update({ status: 'ativo' }).eq('id', studentId)
+  const { error } = await supabase.from('students').update({ status: STUDENT_STATUS.ATIVO }).eq('id', studentId)
   if (error) return { error }
 
   const { data: notifs } = await supabase
@@ -80,12 +87,13 @@ export async function confirmarMatricula(studentId) {
 }
 
 /**
- * Rejeita candidato: remove notificação e deleta o aluno (mesmo
- * comportamento atual). Ver observação sobre soft-delete no relatório.
+ * Rejeita candidato: soft-delete (status -> 'rejeitado', preserva histórico
+ * para auditoria) + remove a notificação. Dashboard filtra 'rejeitado' de
+ * "Meus Alunos" (nunca aparece pro professor, mas o registro não se perde).
  */
 export async function rejeitarCandidato(studentId, notifId) {
   if (studentId) {
-    const { error } = await supabase.from('students').delete().eq('id', studentId)
+    const { error } = await supabase.from('students').update({ status: STUDENT_STATUS.REJEITADO }).eq('id', studentId)
     if (error) return { error }
   }
   if (notifId) {
