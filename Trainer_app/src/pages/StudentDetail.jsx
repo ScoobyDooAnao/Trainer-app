@@ -2640,6 +2640,40 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
         {sav ? 'Salvando...' : ok ? '✓ Salvo automaticamente' : ''}
       </div>
 
+      {/* ── Perfil Interpretado (leitura rápida pro WorkoutEditor) ── */}
+      {anamData?.perfil ? (
+        <div style={{ background:'rgba(59,130,246,0.06)', border:'1px solid rgba(59,130,246,0.25)', borderRadius:12, padding:'14px 16px', marginBottom:18 }}>
+          <div style={{ fontSize:11, fontWeight:800, color:'#3B82F6', textTransform:'uppercase', letterSpacing:0.6, marginBottom:10 }}>Perfil Interpretado</div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(140px, 1fr))', gap:10 }}>
+            {[
+              ['Nível de Atividade', anamData.perfil.nivel],
+              ['Experiência', anamData.perfil.experiencia],
+              ['Objetivo', anamData.perfil.objetivo],
+              ['Frequência', anamData.perfil.frequencia],
+              ['Local', anamData.perfil.local],
+              ['Horário', anamData.perfil.horario],
+            ].filter(([,v]) => v).map(([label, val]) => (
+              <div key={label}>
+                <div style={{ fontSize:9, color:'#64748B', fontWeight:700, textTransform:'uppercase' }}>{label}</div>
+                <div style={{ fontSize:13, color:'#E2E8F0', fontWeight:700 }}>{val}</div>
+              </div>
+            ))}
+          </div>
+          {anamData.perfil.restricoes?.length > 0 && (
+            <div style={{ marginTop:10 }}>
+              <div style={{ fontSize:9, color:'#64748B', fontWeight:700, textTransform:'uppercase', marginBottom:4 }}>Restrições</div>
+              <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+                {anamData.perfil.restricoes.map(r => (
+                  <span key={r} style={{ fontSize:11, fontWeight:700, color:'#FBBF24', background:'rgba(251,191,36,0.1)', border:'1px solid rgba(251,191,36,0.3)', borderRadius:8, padding:'2px 8px' }}>{r}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{ fontSize:11, color:'#334155', marginBottom:18, fontStyle:'italic' }}>Perfil interpretado indisponível (anamnese anterior a essa atualização).</div>
+      )}
+
       {/* ── Dados Pessoais ───────────────────────────────── */}
       {SECTION('Dados Pessoais')}
 
@@ -2828,9 +2862,13 @@ export default function StudentDetail() {
       }
 
       if (plRes.data) setPlans(plRes.data)
-      // Load anamnese
-      const { data: anam } = await supabase.from('anamnese').select('*').eq('student_id', studentId).single()
-      if (anam) setAnamData(anam)
+      // Load anamnese — .single() falha (silenciosamente) se houver 0 ou 2+ linhas
+      // pro mesmo student_id; usamos order+limit pra pegar a mais recente sempre.
+      const { data: anamRows, error: anamErr } = await supabase
+        .from('anamnese').select('*').eq('student_id', studentId)
+        .order('created_at', { ascending: false }).limit(1)
+      if (anamErr) console.error('fetchAll: falha ao buscar anamnese', anamErr)
+      if (anamRows && anamRows[0]) setAnamData(anamRows[0])
       if (elRes.data) {
         // Enrich with exercise names from exercises table
         const exIds = [...new Set((elRes.data||[]).map(l => l.exercise_id).filter(Boolean))]
