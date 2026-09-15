@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabase'
 import { criarAlunoPendente, nivelFromExperiencia } from '../lib/alunos'
+import { montarPerfilInterpretado } from '../lib/anamneseInterpret'
 
 const BG   = '#080F1A'
 const SURF = '#0D1117'
@@ -217,6 +218,7 @@ export default function AnamnesePublica({ token: tokenProp }) {
         level: nivelFromExperiencia(D.experiencia),
       },
       anamneseData: {
+        perfil: montarPerfilInterpretado(D, OBJ_MAP[D.objetivo] || D.objetivo),
         historico_saude: [...(D.condicao_saude||[]), D.condicao_saude_detalhe, D.medicamentos_detalhe].filter(Boolean).join(', '),
         alcool_cigarro: [
           D.alcool ? `Álcool: ${D.alcool} (${D.alcool_freq||'freq. não informada'})` : '',
