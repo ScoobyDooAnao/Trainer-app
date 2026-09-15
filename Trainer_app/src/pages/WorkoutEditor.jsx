@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { useAppNavigate } from '../lib/useAppNavigate'
@@ -214,7 +214,7 @@ const MODALITY_COLORS = {
 const STATUS_OPTIONS = ['draft','active','archived']
 const STATUS_LABEL   = { draft:'Rascunho', active:'Ativo', archived:'Arquivado' }
 const DAY_COLORS     = ['#D97706','#F97316','#FBBF24','#B45309','#D97706','#F59E0B']
-const emptyEx        = { name:'', sets:'3', reps:'10-12', rest:'60s', tip:'', type:'Peito' }
+const emptyEx        = { name:'', sets:'3', reps:'10-12', rest:'60s', rir:'2', tip:'', type:'Peito' }
 
 const getAgeGroup = (birthDate, age) => {
   const a = birthDate
@@ -1305,6 +1305,8 @@ export default function WorkoutEditor() {
   const [showTemplate, setShowTemplate] = useState(false)
   const [semAcademia,  setSemAcademia]  = useState(false)
   const [showAval,     setShowAval]     = useState(false)
+  const [showVolume,   setShowVolume]   = useState(false)
+  const [historico,    setHistorico]    = useState({}) // { nomeExercicioLower: { last, sugestao } }
 
   const ageGroup   = getAgeGroup(student?.birth_date, student?.age)
   const studentAge = student?.birth_date
@@ -1312,7 +1314,59 @@ export default function WorkoutEditor() {
     : student?.age ? parseInt(student.age) : null
   const suggestedTypes = getSuggestedTypes(student?.goal || '', student?.sport || '')
 
+  // ── 4.1: volume semanal por grupo muscular, em tempo real ──
+  const volumePorGrupo = useMemo(() => {
+    const vol = {}
+    days.forEach(day => {
+      (day.exercises || []).forEach(ex => {
+        const n = parseInt(ex.sets) || 0
+        if (!n || !ex.type) return
+        vol[ex.type] = (vol[ex.type] || 0) + n
+      })
+    })
+    return Object.entries(vol).sort((a,b) => b[1]-a[1])
+  }, [days])
+
   useEffect(() => { fetchAll() }, [planId])
+  useEffect(() => { if (studentId) fetchHistorico() }, [studentId])
+
+  // ── 4.1: histórico de cargas do aluno (todos os planos) p/ sugestão de progressão ──
+  const fetchHistorico = async () => {
+    const { data: plansIds }  = await supabase.from('workout_plans').select('id').eq('student_id', studentId)
+    if (!plansIds?.length) return
+    const { data: daysIds }   = await supabase.from('workout_days').select('id').in('plan_id', plansIds.map(p => p.id))
+    if (!daysIds?.length) return
+    const { data: exs }       = await supabase.from('exercises').select('id,name').in('day_id', daysIds.map(d => d.id))
+    if (!exs?.length) return
+    const { data: logs }      = await supabase.from('exercise_logs').select('exercise_id,date,sets').eq('student_id', studentId).order('date', { ascending:false })
+    if (!logs?.length) return
+
+    const idToName = {}
+    exs.forEach(e => { idToName[e.id] = e.name.trim().toLowerCase() })
+
+    const porNome = {}
+    logs.forEach(l => {
+      const nome = idToName[l.exercise_id]
+      if (!nome || porNome[nome]) return // já temos o mais recente (logs vem ordenado desc)
+      porNome[nome] = l
+    })
+
+    const result = {}
+    Object.entries(porNome).forEach(([nome, log]) => {
+      const pesos = (log.sets || []).map(s => +s.weight || 0).filter(Boolean)
+      const reps  = (log.sets || []).map(s => +s.reps || 0).filter(Boolean)
+      if (!pesos.length) return
+      const maxPeso = Math.max(...pesos)
+      const rirs = (log.sets || []).map(s => s.rir != null ? +s.rir : null).filter(v => v !== null && !isNaN(v))
+      const avgRir = rirs.length ? rirs.reduce((a,b) => a+b, 0) / rirs.length : null
+      let sugestao
+      if (avgRir !== null && avgRir >= 3) sugestao = `RIR alto — pode subir ~${Math.round(maxPeso*0.05*2)/2}kg`
+      else if (avgRir !== null && avgRir <= 1) sugestao = `RIR baixo — manter ${maxPeso}kg`
+      else sugestao = `manter ou +${Math.round(maxPeso*0.025*2)/2}kg`
+      result[nome] = { last: { peso: maxPeso, reps: reps[0] || null, date: log.date, rir: avgRir }, sugestao }
+    })
+    setHistorico(result)
+  }
 
   const fetchAll = async () => {
     setLoading(true)
@@ -1666,7 +1720,7 @@ export default function WorkoutEditor() {
     if (!form.name?.trim()) return
     const { data } = await supabase.from('exercises').insert([{
       day_id:dayId, name:form.name, sets:form.sets, reps:form.reps,
-      rest:form.rest, tip:form.tip||'', type:form.type,
+      rest:form.rest, rir:form.rir||'2', tip:form.tip||'', type:form.type,
       order_index:(days.find(d => d.id === dayId)?.exercises?.length || 0),
     }]).select().single()
     if (data) {
@@ -1778,10 +1832,40 @@ export default function WorkoutEditor() {
               style={{ padding:'7px 14px', borderRadius:8, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:6, border: showAval ? '1.5px solid #34D399' : `1px solid ${V.border}`, background: showAval ? 'rgba(52,211,153,0.12)' : V.accentFaint, color: showAval ? '#34D399' : V.textSub, transition:'all 0.2s' }}>
               {showAval ? '✓ Avaliando' : '🔍 Avaliar Plano'}
             </button>
+            <button onClick={() => setShowVolume(v => !v)}
+              style={{ padding:'7px 14px', borderRadius:8, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:6, border: showVolume ? '1.5px solid #60A5FA' : `1px solid ${V.border}`, background: showVolume ? 'rgba(96,165,250,0.12)' : V.accentFaint, color: showVolume ? '#60A5FA' : V.textSub, transition:'all 0.2s' }}>
+              📊 Volume Semanal
+            </button>
             <div style={{ fontSize:11, color:V.textMuted }}>
               {saving ? <span style={{ color:V.accentBr }}>Salvando...</span> : 'Salvo automaticamente'}
             </div>
           </div>
+
+          {/* Painel de volume semanal por grupo muscular (4.1) */}
+          {showVolume && (
+            <div style={{ padding:'12px 16px', marginBottom:14, background:'rgba(96,165,250,0.06)', border:'1px solid rgba(96,165,250,0.25)', borderRadius:10 }}>
+              <div style={{ fontSize:11, fontWeight:800, color:'#60A5FA', textTransform:'uppercase', letterSpacing:0.6, marginBottom:8 }}>Volume Semanal por Grupo Muscular (séries totais no plano)</div>
+              {volumePorGrupo.length === 0 ? (
+                <div style={{ fontSize:12, color:V.textMuted }}>Adicione exercícios para ver o volume.</div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                  {volumePorGrupo.map(([tipo, n]) => {
+                    const max = volumePorGrupo[0][1]
+                    const cor = getTypeColor(tipo)
+                    return (
+                      <div key={tipo} style={{ display:'flex', alignItems:'center', gap:8 }}>
+                        <span style={{ fontSize:11, color:V.textSub, width:100, flexShrink:0 }}>{tipo}</span>
+                        <div style={{ flex:1, height:8, borderRadius:4, background:'rgba(255,255,255,0.06)', overflow:'hidden' }}>
+                          <div style={{ width:`${(n/max)*100}%`, height:'100%', background:cor, borderRadius:4 }} />
+                        </div>
+                        <span style={{ fontSize:12, fontWeight:800, color:cor, width:34, textAlign:'right' }}>{n}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Warning de faixa etária */}
           {ageRestr?.warning && (
@@ -1927,16 +2011,27 @@ export default function WorkoutEditor() {
                                 {NEW_TYPES.map(t => <option key={t}>{t}</option>)}
                               </optgroup>
                             </select>
-                            {[['sets','3'],['reps','10-12'],['rest','60s']].map(([field, ph]) => {
+                            {[['sets','3'],['reps','10-12'],['rest','60s'],['rir','2']].map(([field, ph]) => {
                               const fData = exFields?.[field]
                               const fcol = fData?.status==='critico' ? '#F87171' : fData?.status==='atencao' ? '#FBBF24' : 'transparent'
                               return (
                                 <div key={field} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, flexShrink:0 }}>
-                                  <input style={{ ...ss.smallInput, width:58, outline: fData && fData.status!=='ok' ? `1.5px solid ${fcol}` : 'none' }} value={ex[field]||''} onChange={e => updateExercise(day.id, ex.id, field, e.target.value)} placeholder={ph} />
+                                  {field==='rir' && <span style={{ fontSize:8, color:V.textMuted, textTransform:'uppercase', fontWeight:700 }}>RIR</span>}
+                                  <input style={{ ...ss.smallInput, width:field==='rir'?40:58, outline: fData && fData.status!=='ok' ? `1.5px solid ${fcol}` : 'none' }} value={ex[field]||''} onChange={e => updateExercise(day.id, ex.id, field, e.target.value)} placeholder={ph} />
                                 </div>
                               )
                             })}
                           </div>
+                          {/* Histórico + sugestão de progressão (4.1) */}
+                          {historico[ex.name?.trim().toLowerCase()] && (
+                            <div style={{ padding:'4px 16px 8px', display:'flex', gap:10, alignItems:'center', flexWrap:'wrap' }}>
+                              <span style={{ fontSize:10, color:V.textMuted }}>
+                                Último: <strong style={{ color:V.text }}>{historico[ex.name.trim().toLowerCase()].last.peso}kg</strong>
+                                {historico[ex.name.trim().toLowerCase()].last.reps ? ` × ${historico[ex.name.trim().toLowerCase()].last.reps}` : ''}
+                              </span>
+                              <span style={{ fontSize:10, color:'#60A5FA', fontWeight:700 }}>💡 {historico[ex.name.trim().toLowerCase()].sugestao}</span>
+                            </div>
+                          )}
                           {openCalc === ex.id && (
                             <div style={{ padding:'0 16px 4px' }}>
                               <OneRMCalc
