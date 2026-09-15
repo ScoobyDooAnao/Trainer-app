@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../supabase'
-import { confirmarMatricula, nivelFromExperiencia } from '../lib/alunos'
+import { nivelFromExperiencia, STUDENT_STATUS } from '../lib/alunos'
+import { useConfirmarMatricula } from '../lib/queries'
 import { useAppNavigate } from '../lib/useAppNavigate'
 import { useParams } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
@@ -2779,6 +2780,7 @@ export default function StudentDetail() {
   const navigate = useAppNavigate()
   const { id: studentId } = useParams()
   const [student, setStudent] = useState(null)
+  const confirmarMatriculaMut = useConfirmarMatricula(student?.teacher_id)
   const [plans,   setPlans]   = useState([])
   const [progress,setProgress]= useState([])
   const [exLogs,  setExLogs]  = useState([])
@@ -2924,6 +2926,8 @@ export default function StudentDetail() {
     </div>
   )
 
+  const isPendente = student?.status === STUDENT_STATUS.PENDENTE
+
   const imc = student.weight && student.height ? (student.weight / ((student.height / 100) ** 2)).toFixed(1) : '—'
 
   return (
@@ -2933,15 +2937,14 @@ export default function StudentDetail() {
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20, gap:10 }}>
           <button style={s.back} onClick={() => navigate('dashboard')}>← Voltar ao Painel</button>
           <div style={{ display:'flex', gap:10 }}>
-            {((student.status === 'pendente' || !student.status) || student.status === null || student.status === undefined) && (
-              <button onClick={async () => {
-                const { error: upErr } = await confirmarMatricula(studentId)
-                if (!upErr) {
-                  setStudent(p => ({ ...p, status:'ativo' }))
-                  setEditing(false)
-                }
-              }} style={{ padding:'10px 24px', borderRadius:10, border:'none', background:'#22C55E', color:'#fff', fontWeight:800, fontSize:14, cursor:'pointer', fontFamily:'inherit', boxShadow:'0 4px 14px rgba(34,197,94,0.35)' }}>
-                Confirmar Matrícula
+            {isPendente && (
+              <button onClick={() => {
+                confirmarMatriculaMut.mutate(studentId, {
+                  onSuccess: () => setStudent(p => ({ ...p, status: STUDENT_STATUS.ATIVO })),
+                  onError: (err) => alert('Não foi possível confirmar a matrícula: ' + err.message),
+                })
+              }} disabled={confirmarMatriculaMut.isPending} style={{ padding:'10px 24px', borderRadius:10, border:'none', background:'#22C55E', color:'#fff', fontWeight:800, fontSize:14, cursor:'pointer', fontFamily:'inherit', boxShadow:'0 4px 14px rgba(34,197,94,0.35)' }}>
+                {confirmarMatriculaMut.isPending ? 'Confirmando...' : 'Confirmar Matrícula'}
               </button>
             )}
             <button onClick={() => setEditing(p => !p)} style={{ padding:'10px 24px', borderRadius:10, border:'none', background:'#22C55E', color:'#fff', fontWeight:800, fontSize:14, cursor:'pointer', fontFamily:'inherit', boxShadow:'0 4px 14px rgba(34,197,94,0.35)' }}>
@@ -2956,7 +2959,7 @@ export default function StudentDetail() {
             <div>
               <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
                 <div style={{ fontSize: 10, color: C.blue, letterSpacing: 2, textTransform: 'uppercase' }}>Ficha do Aluno</div>
-                {(student.status === 'pendente' || !student.status) && (
+                {isPendente && (
                   <div style={{ display:'flex', alignItems:'center', gap:4 }}>
                     <div style={{ width:18, height:2, background:'#EF4444', borderRadius:99 }}/>
                     <span style={{ fontSize:11, fontWeight:800, color:'#F87171', textTransform:'uppercase', letterSpacing:0.8, background:'rgba(239,68,68,0.15)', border:'1.5px solid rgba(239,68,68,0.4)', borderRadius:20, padding:'3px 12px' }}>Em Análise</span>
@@ -3052,7 +3055,7 @@ export default function StudentDetail() {
         </div>
 
         {/* Banner pendente */}
-        {(student.status === 'pendente' || !student.status) && (
+        {isPendente && (
           <div style={{ marginBottom:12, padding:'11px 16px', background:'rgba(251,191,36,0.08)', border:'1px solid rgba(251,191,36,0.25)', borderRadius:12, display:'flex', alignItems:'center', gap:10 }}>
             <div style={{ width:8, height:8, borderRadius:'50%', background:'#FBBF24', flexShrink:0 }}/>
             <div style={{ fontSize:13, color:'#FBBF24', fontWeight:600 }}>Candidatura pendente — revise a anamnese na Ficha do Aluno (aba "Dados") e confirme o aluno para iniciar a prescrição.</div>
