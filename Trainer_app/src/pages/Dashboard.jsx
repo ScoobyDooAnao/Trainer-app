@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../supabase'
-import { criarAlunoPendente, confirmarMatricula, rejeitarCandidato } from '../lib/alunos'
+import { criarAlunoPendente, STUDENT_STATUS } from '../lib/alunos'
+import { useConfirmarMatricula, useRejeitarCandidato } from '../lib/queries'
 import { useAppNavigate } from '../lib/useAppNavigate'
 import TabEscolinha from './TabEscolinha'
 import {
@@ -3247,6 +3248,8 @@ function NotificacoesPanel({ notifs, onClose, onMarkRead, onConfirm, onReject, n
 
 export default function Dashboard({ session }) {
   const navigate = useAppNavigate()
+  const confirmarMatriculaMut = useConfirmarMatricula(session?.user?.id)
+  const rejeitarCandidatoMut  = useRejeitarCandidato(session?.user?.id)
   const [nav, setNav]             = useState('alunos')
   const [notifs,      setNotifs]      = useState([])
   const [showNotifs,  setShowNotifs]  = useState(false)
@@ -3270,7 +3273,7 @@ export default function Dashboard({ session }) {
   const fetchAll = async () => {
     setLoading(true)
     const uid = session.user.id
-    const { data: studs } = await supabase.from('students').select('*').eq('teacher_id', uid).neq('status','pendente').order('created_at', { ascending: false })
+    const { data: studs } = await supabase.from('students').select('*').eq('teacher_id', uid).eq('status', STUDENT_STATUS.ATIVO).order('created_at', { ascending: false })
 
     if (studs && studs.length > 0) {
       const ids = studs.map(s => s.id)
@@ -3437,17 +3440,19 @@ export default function Dashboard({ session }) {
     setNotifs(p => p.map(n => n.tipo === 'nova_anamnese' ? n : { ...n, lida: true }))
   }
 
-  const rejeitarAluno = async (notif) => {
-    if (!window.confirm('Recusar este candidato? O perfil será removido.')) return
-    await rejeitarCandidato(notif.payload?.student_id, notif.id)
-    setNotifs(p => p.filter(n => n.id !== notif.id))
-    fetchAll()
+  const rejeitarAluno = (notif) => {
+    if (!window.confirm('Recusar este candidato? O perfil será marcado como rejeitado.')) return
+    rejeitarCandidatoMut.mutate({ studentId: notif.payload?.student_id, notifId: notif.id }, {
+      onSuccess: () => { setNotifs(p => p.filter(n => n.id !== notif.id)); fetchAll() },
+      onError:   (err) => alert('Não foi possível rejeitar: ' + err.message),
+    })
   }
 
-  const confirmarAluno = async (notif) => {
-    await confirmarMatricula(notif.payload?.student_id)
-    setNotifs(p => p.map(n => n.id === notif.id ? { ...n, lida: true } : n))
-    fetchAll()
+  const confirmarAluno = (notif) => {
+    confirmarMatriculaMut.mutate(notif.payload?.student_id, {
+      onSuccess: () => { setNotifs(p => p.map(n => n.id === notif.id ? { ...n, lida: true } : n)); fetchAll() },
+      onError:   (err) => alert('Não foi possível confirmar: ' + err.message),
+    })
   }
 
   const logout = async () => { await supabase.auth.signOut(); window.location.reload() }
