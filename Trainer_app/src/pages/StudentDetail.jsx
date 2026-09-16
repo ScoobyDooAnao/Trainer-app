@@ -2862,11 +2862,11 @@ export default function StudentDetail() {
       }
 
       if (plRes.data) setPlans(plRes.data)
-      // Load anamnese — .single() falha (silenciosamente) se houver 0 ou 2+ linhas
-      // pro mesmo student_id; usamos order+limit pra pegar a mais recente sempre.
+      // Load anamnese — tabela não tem created_at, e como há UNIQUE em
+      // student_id só pode existir 1 linha; .single() ainda assim evitado
+      // pra nunca voltar a quebrar silenciosamente se isso mudar.
       const { data: anamRows, error: anamErr } = await supabase
-        .from('anamnese').select('*').eq('student_id', studentId)
-        .order('created_at', { ascending: false }).limit(1)
+        .from('anamnese').select('*').eq('student_id', studentId).limit(1)
       if (anamErr) console.error('fetchAll: falha ao buscar anamnese', anamErr)
       if (anamRows && anamRows[0]) setAnamData(anamRows[0])
       if (elRes.data) {
