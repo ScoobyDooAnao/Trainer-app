@@ -3211,40 +3211,52 @@ export default function StudentDetail() {
             {goals.length === 0 ? (
               <div style={{ ...s.card, textAlign: 'center', padding: '40px 20px' }}>
                 <div style={{ fontSize: 32, marginBottom: 8 }}>🎯</div>
-                <div style={{ fontSize: 14, color: '#475569' }}>O aluno ainda não cadastrou nenhuma meta.</div>
+                <div style={{ fontSize: 14, color: '#475569' }}>Nenhuma meta cadastrada ainda.</div>
               </div>
             ) : (
               <>
-                {['ativa','concluida'].map(status => {
-                  const list = goals.filter(g => g.status === status && (status !== 'concluida' || !g.completed_at || (Date.now() - new Date(g.completed_at).getTime()) < 2*86400000))
-                  if (!list.length) return null
-                  const statusLabel = status === 'ativa' ? 'Em andamento' : 'Concluídas ✅'
+                {[
+                  { key:'aluno',     label:'🧑 Metas do Aluno',     filtro: g => g.created_by !== 'professor' },
+                  { key:'professor', label:'🎓 Metas do Professor', filtro: g => g.created_by === 'professor' },
+                ].map(grupo => {
+                  const goalsGrupo = goals.filter(grupo.filtro)
+                  if (!goalsGrupo.length) return null
                   return (
-                    <div key={status} style={{ marginBottom: 18 }}>
-                      <div style={{ fontSize: 11, color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>{statusLabel}</div>
-                      {list.map(g => {
-                        const catColors = { peso:'#34D399', imc:'#60A5FA', medida:'#A78BFA', forca:'#FBBF24', cardio:'#F87171', habito:'#F5C842', outro:'#94A3B8' }
-                        const isDourada = status === 'concluida'
-                        const cc = isDourada ? '#F5C842' : (catColors[g.category] || '#94A3B8')
-                        const daysLeft = g.deadline ? Math.ceil((new Date(g.deadline) - new Date()) / 86400000) : null
+                    <div key={grupo.key} style={{ marginBottom: 24 }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: '#94A3B8', marginBottom: 10 }}>{grupo.label}</div>
+                      {['ativa','concluida'].map(status => {
+                        const list = goalsGrupo.filter(g => g.status === status && (status !== 'concluida' || !g.completed_at || (Date.now() - new Date(g.completed_at).getTime()) < 2*86400000))
+                        if (!list.length) return null
+                        const statusLabel = status === 'ativa' ? 'Em andamento' : 'Concluídas ✅'
                         return (
-                          <div key={g.id} style={{ ...s.card, marginBottom: 8, borderLeft: `3px solid ${cc}`, background: isDourada ? 'linear-gradient(135deg, rgba(245,200,66,0.1), transparent)' : s.card.background, opacity: 1 }}>
-                            <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:8 }}>
-                              <div>
-                                <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:4 }}>
-                                  <span style={{ fontSize:13, fontWeight:800, color: isDourada ? '#F5C842' : '#CBD5E1' }}>{g.title}</span>
-                                  <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:20, background:`${cc}18`, color:cc, border:`1px solid ${cc}35` }}>{g.category}</span>
-                                </div>
-                                {g.target_value && <div style={{ fontSize:12, color:'#64748B' }}>Alvo: <strong style={{ color:cc }}>{g.target_value} {g.target_unit}</strong></div>}
-                                {g.description && g.description !== g.title && <div style={{ fontSize:11, color:'#475569', marginTop:3, fontStyle:'italic' }}>{g.description}</div>}
-                                {daysLeft !== null && status === 'ativa' && (
-                                  <div style={{ fontSize:11, color: daysLeft<7?'#F87171':daysLeft<30?'#FBBF24':'#475569', fontWeight:600, marginTop:4 }}>
-                                    {daysLeft>0 ? `⏳ ${daysLeft} dias restantes` : daysLeft===0 ? '🔔 Prazo hoje!' : `⚠️ ${Math.abs(daysLeft)}d em atraso`}
+                          <div key={status} style={{ marginBottom: 18 }}>
+                            <div style={{ fontSize: 11, color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>{statusLabel}</div>
+                            {list.map(g => {
+                              const catColors = { peso:'#34D399', imc:'#60A5FA', medida:'#A78BFA', forca:'#FBBF24', cardio:'#F87171', habito:'#F5C842', outro:'#94A3B8' }
+                              const isDourada = status === 'concluida'
+                              const cc = isDourada ? '#F5C842' : (catColors[g.category] || '#94A3B8')
+                              const daysLeft = g.deadline ? Math.ceil((new Date(g.deadline) - new Date()) / 86400000) : null
+                              return (
+                                <div key={g.id} style={{ ...s.card, marginBottom: 8, borderLeft: `3px solid ${cc}`, background: isDourada ? 'linear-gradient(135deg, rgba(245,200,66,0.1), transparent)' : s.card.background, opacity: 1 }}>
+                                  <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:8 }}>
+                                    <div>
+                                      <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:4 }}>
+                                        <span style={{ fontSize:13, fontWeight:800, color: isDourada ? '#F5C842' : '#CBD5E1' }}>{g.title}</span>
+                                        <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:20, background:`${cc}18`, color:cc, border:`1px solid ${cc}35` }}>{g.category}</span>
+                                      </div>
+                                      {g.target_value && <div style={{ fontSize:12, color:'#64748B' }}>Alvo: <strong style={{ color:cc }}>{g.target_value} {g.target_unit}</strong></div>}
+                                      {g.description && g.description !== g.title && <div style={{ fontSize:11, color:'#475569', marginTop:3, fontStyle:'italic' }}>{g.description}</div>}
+                                      {daysLeft !== null && status === 'ativa' && (
+                                        <div style={{ fontSize:11, color: daysLeft<7?'#F87171':daysLeft<30?'#FBBF24':'#475569', fontWeight:600, marginTop:4 }}>
+                                          {daysLeft>0 ? `⏳ ${daysLeft} dias restantes` : daysLeft===0 ? '🔔 Prazo hoje!' : `⚠️ ${Math.abs(daysLeft)}d em atraso`}
+                                        </div>
+                                      )}
+                                    </div>
+                                    {isDourada && <span style={{ fontSize:18 }}>🏆</span>}
                                   </div>
-                                )}
-                              </div>
-                              {isDourada && <span style={{ fontSize:18 }}>🏆</span>}
-                            </div>
+                                </div>
+                              )
+                            })}
                           </div>
                         )
                       })}
