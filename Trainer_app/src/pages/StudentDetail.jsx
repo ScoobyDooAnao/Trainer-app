@@ -2831,6 +2831,26 @@ export default function StudentDetail() {
   const [saving, setSaving] = useState(false)
   const [shareLink, setShareLink] = useState('')
   const [goals, setGoals] = useState([])
+  const [showAddGoal, setShowAddGoal] = useState(false)
+  const [savingMeta, setSavingMeta] = useState(false)
+  const [novaMeta, setNovaMeta] = useState({ title:'', category:'outro', deadline:'', target_value:'', target_unit:'' })
+
+  const salvarMeta = async () => {
+    if (!novaMeta.title.trim()) return
+    setSavingMeta(true)
+    const { data, error } = await supabase.from('student_goals').insert([{
+      student_id: studentId, title: novaMeta.title.trim(), description: novaMeta.title.trim(),
+      category: novaMeta.category, deadline: novaMeta.deadline || null,
+      target_value: novaMeta.target_value ? +novaMeta.target_value : null,
+      target_unit: novaMeta.target_unit || null, status: 'ativa', created_by: 'professor',
+    }]).select().single()
+    setSavingMeta(false)
+    if (!error && data) {
+      setGoals(p => [data, ...p])
+      setNovaMeta({ title:'', category:'outro', deadline:'', target_value:'', target_unit:'' })
+      setShowAddGoal(false)
+    }
+  }
   const [duplicarPlan, setDuplicarPlan] = useState(null)
   const [loadingPage, setLoadingPage] = useState(true)
   const [fetchError, setFetchError] = useState(null)
@@ -3146,8 +3166,48 @@ export default function StudentDetail() {
           <div>
             <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: '#94A3B8' }}>🎯 Metas do Aluno</div>
-              <span style={{ fontSize: 11, color: '#334155', background: 'rgba(255,255,255,0.04)', padding: '4px 10px', borderRadius: 20, border: '1px solid rgba(255,255,255,0.07)' }}>👁️ Somente visualização</span>
+              <button onClick={() => setShowAddGoal(v => !v)} style={{ fontSize: 11, fontWeight:700, color: showAddGoal ? '#F87171' : '#34D399', background: showAddGoal ? 'rgba(248,113,113,0.1)' : 'rgba(52,211,153,0.1)', padding: '6px 12px', borderRadius: 20, border: `1px solid ${showAddGoal ? 'rgba(248,113,113,0.3)' : 'rgba(52,211,153,0.3)'}`, cursor:'pointer' }}>
+                {showAddGoal ? '✕ Cancelar' : '+ Adicionar Meta'}
+              </button>
             </div>
+
+            {showAddGoal && (
+              <div style={{ ...s.card, marginBottom: 16, padding: 16 }}>
+                {(() => {
+                  const mInp = { width:'100%', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'9px 12px', color:'#E2E8F0', fontSize:13, outline:'none', boxSizing:'border-box', fontFamily:'inherit' }
+                  return (
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+                  <div style={{ gridColumn:'1 / -1' }}>
+                    <label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Título</label>
+                    <input style={mInp} value={novaMeta.title} onChange={e=>setNovaMeta(p=>({...p,title:e.target.value}))} placeholder="Ex: Perder 5kg" />
+                  </div>
+                  <div>
+                    <label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Categoria</label>
+                    <select style={mInp} value={novaMeta.category} onChange={e=>setNovaMeta(p=>({...p,category:e.target.value}))}>
+                      {['peso','imc','medida','forca','cardio','habito','outro'].map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Prazo</label>
+                    <input type="date" style={mInp} value={novaMeta.deadline} onChange={e=>setNovaMeta(p=>({...p,deadline:e.target.value}))} />
+                  </div>
+                  <div>
+                    <label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Valor Alvo</label>
+                    <input type="number" style={mInp} value={novaMeta.target_value} onChange={e=>setNovaMeta(p=>({...p,target_value:e.target.value}))} />
+                  </div>
+                  <div>
+                    <label style={{fontSize:10,color:'#64748B',fontWeight:700,textTransform:'uppercase',display:'block',marginBottom:4}}>Unidade</label>
+                    <input style={mInp} value={novaMeta.target_unit} onChange={e=>setNovaMeta(p=>({...p,target_unit:e.target.value}))} placeholder="kg, cm, reps..." />
+                  </div>
+                </div>
+                  )
+                })()}
+                <button onClick={salvarMeta} disabled={savingMeta || !novaMeta.title.trim()} style={{ width:'100%', padding:'10px', borderRadius:10, border:'none', background:'#22C55E', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer' }}>
+                  {savingMeta ? 'Salvando...' : '✓ Adicionar Meta'}
+                </button>
+              </div>
+            )}
+
             {goals.length === 0 ? (
               <div style={{ ...s.card, textAlign: 'center', padding: '40px 20px' }}>
                 <div style={{ fontSize: 32, marginBottom: 8 }}>🎯</div>
@@ -3156,7 +3216,7 @@ export default function StudentDetail() {
             ) : (
               <>
                 {['ativa','concluida'].map(status => {
-                  const list = goals.filter(g => g.status === status)
+                  const list = goals.filter(g => g.status === status && (status !== 'concluida' || !g.completed_at || (Date.now() - new Date(g.completed_at).getTime()) < 2*86400000))
                   if (!list.length) return null
                   const statusLabel = status === 'ativa' ? 'Em andamento' : 'Concluídas ✅'
                   return (
@@ -3164,14 +3224,15 @@ export default function StudentDetail() {
                       <div style={{ fontSize: 11, color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>{statusLabel}</div>
                       {list.map(g => {
                         const catColors = { peso:'#34D399', imc:'#60A5FA', medida:'#A78BFA', forca:'#FBBF24', cardio:'#F87171', habito:'#F5C842', outro:'#94A3B8' }
-                        const cc = catColors[g.category] || '#94A3B8'
+                        const isDourada = status === 'concluida'
+                        const cc = isDourada ? '#F5C842' : (catColors[g.category] || '#94A3B8')
                         const daysLeft = g.deadline ? Math.ceil((new Date(g.deadline) - new Date()) / 86400000) : null
                         return (
-                          <div key={g.id} style={{ ...s.card, marginBottom: 8, borderLeft: `3px solid ${cc}`, opacity: status === 'concluida' ? 0.65 : 1 }}>
+                          <div key={g.id} style={{ ...s.card, marginBottom: 8, borderLeft: `3px solid ${cc}`, background: isDourada ? 'linear-gradient(135deg, rgba(245,200,66,0.1), transparent)' : s.card.background, opacity: 1 }}>
                             <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:8 }}>
                               <div>
                                 <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:4 }}>
-                                  <span style={{ fontSize:13, fontWeight:800, color:'#CBD5E1', textDecoration: status==='concluida'?'line-through':'none' }}>{g.title}</span>
+                                  <span style={{ fontSize:13, fontWeight:800, color: isDourada ? '#F5C842' : '#CBD5E1' }}>{g.title}</span>
                                   <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:20, background:`${cc}18`, color:cc, border:`1px solid ${cc}35` }}>{g.category}</span>
                                 </div>
                                 {g.target_value && <div style={{ fontSize:12, color:'#64748B' }}>Alvo: <strong style={{ color:cc }}>{g.target_value} {g.target_unit}</strong></div>}
@@ -3182,7 +3243,7 @@ export default function StudentDetail() {
                                   </div>
                                 )}
                               </div>
-                              {status === 'concluida' && <span style={{ fontSize:18 }}>✅</span>}
+                              {isDourada && <span style={{ fontSize:18 }}>🏆</span>}
                             </div>
                           </div>
                         )
