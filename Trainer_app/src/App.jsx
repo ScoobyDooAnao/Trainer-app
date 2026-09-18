@@ -9,6 +9,7 @@ import StudentView from './pages/StudentView'
 import ParentView from './pages/ParentView'
 import TeacherProfile from './pages/TeacherProfile'
 import Planner from './pages/Planner'
+import ExerciseLibrary from './pages/ExerciseLibrary'
 import AnamnesePublica from './pages/AnamnesePublica'
 
 // ── Wrappers que leem params da URL e repassam no formato que cada página já espera ──
@@ -80,6 +81,9 @@ export default function App() {
         } />
         <Route path="/perfil" element={
           <ProtectedLayout session={session} loading={loading}><TeacherProfile session={session} /></ProtectedLayout>
+        } />
+        <Route path="/biblioteca-exercicios" element={
+          <ProtectedLayout session={session} loading={loading}><ExerciseLibrary /></ProtectedLayout>
         } />
 
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
