@@ -3505,6 +3505,7 @@ export default function Dashboard({ session }) {
           </nav>
           <WaveDivider />
           <div style={{ padding: '4px 10px 26px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <NavItem item={{ id: 'biblioteca', icon: null, label: 'Biblioteca de Exercícios' }} active={false} onClick={() => navigate('exercise-library')} />
             <NavItem item={{ id: 'perfil', icon: null, label: 'Meu Perfil' }}   active={false} onClick={() => navigate('teacher-profile')} />
             <NavItem item={{ id: 'sair',   icon: '', label: 'Sair' }}         active={false} onClick={logout} />
           </div>
