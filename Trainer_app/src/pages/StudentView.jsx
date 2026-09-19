@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../supabase'
+import FichaAvaliacao from './FichaAvaliacao'
 
 // ── Responsividade ────────────────────────────────────────────────────────────
 function useIsMobile() {
@@ -1259,6 +1260,7 @@ function ExerciseLogRow({ ex, studentId, dayColor, isMobile }) {
                 {saved ? '✅ Salvo hoje' : open ? '▲ Fechar' : '⚖️ Registrar carga'}
               </button>
             </div>
+
             <div style={{ fontWeight: 700, color: dayColor, fontSize: 15, paddingTop: 20 }}>{ex.sets}x</div>
             <div style={{ fontWeight: 600, fontSize: 13, color: '#CBD5E1', paddingTop: 20 }}>{ex.reps}</div>
             <div style={{ fontSize: 12, color: '#64748B', paddingTop: 20 }}>{ex.rest}</div>
@@ -2087,6 +2089,17 @@ export default function StudentView({ studentId }) {
   const [confirming,     setConfirming]     = useState(false)
   const [showMakeup,     setShowMakeup]     = useState(false)
   const [missedDays,     setMissedDays]     = useState([]) // dias perdidos da semana
+  const [anamData,        setAnamData]        = useState(null)
+  const [avaliacoesProf,  setAvaliacoesProf]  = useState([])
+  const [openAvalId,      setOpenAvalId]      = useState(null)
+
+  useEffect(() => {
+    if (!studentId) return
+    supabase.from('anamnese').select('*').eq('student_id', studentId).limit(1)
+      .then(({ data }) => { if (data?.[0]) setAnamData(data[0]) })
+    supabase.from('measure_logs').select('*').eq('student_id', studentId).not('medidas','is',null).order('date', { ascending:false })
+      .then(({ data }) => setAvaliacoesProf(data || []))
+  }, [studentId])
 
   useEffect(() => {
     if (!studentId) { setLoading(false); return }
@@ -2394,6 +2407,30 @@ export default function StudentView({ studentId }) {
                   fontWeight:800, fontSize:13, boxShadow:'0 4px 16px rgba(52,211,153,0.3)',
                 }}>+ Medidas</button>
             </div>
+
+            {/* ── Avaliações do professor (somente leitura) ── */}
+            {avaliacoesProf.length > 0 && (
+              <div style={{ marginBottom:20 }}>
+                <div style={{ fontSize:12, color:'#64748B', fontWeight:700, textTransform:'uppercase', marginBottom:8 }}>Avaliações do Professor</div>
+                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                  {avaliacoesProf.map(a => (
+                    <button key={a.id} onClick={() => setOpenAvalId(a.id)} style={{ textAlign:'left', background:'#111827', borderRadius:10, padding:'12px 14px', border:'1px solid rgba(255,255,255,0.06)', cursor:'pointer', color:'inherit', fontFamily:'inherit', width:'100%' }}>
+                      <div style={{ fontSize:13, fontWeight:700, color:'#E2E8F0' }}>Avaliação Antropométrica do dia {a.date?.split('-').reverse().join('/')}{a.hora ? `, ${a.hora}` : ''}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {openAvalId && (
+              <FichaAvaliacao
+                avaliacaoId={openAvalId}
+                studentId={studentId}
+                student={student}
+                anamData={anamData}
+                readOnly={true}
+                onClose={() => setOpenAvalId(null)}
+              />
+            )}
 
             {progress.length === 0 ? (
               <div style={{ ...CARD, textAlign:'center', padding:'48px 20px' }}>
