@@ -5,6 +5,7 @@ import { useConfirmarMatricula } from '../lib/queries'
 import { useAppNavigate } from '../lib/useAppNavigate'
 import { useParams } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import FichaAvaliacao from './FichaAvaliacao'
 
 // ── Design tokens StudentDetail ──────────────────────────────────────────────
 const C = {
@@ -2360,6 +2361,8 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
 
   // ── Página 2: Avaliações Físicas (medidas do aluno + testes do professor) ──
   const [avaliacoes, setAvaliacoes] = useState([])
+  const [openAvaliacaoId, setOpenAvaliacaoId] = useState(null)
+  const [criandoAval, setCriandoAval] = useState(false)
   const [loadingAval, setLoadingAval] = useState(false)
   const [showTesteForm, setShowTesteForm] = useState(false)
   const [novoTeste, setNovoTeste] = useState({ date: new Date().toISOString().slice(0,10), label:'', value:'' })
@@ -2371,6 +2374,24 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
     supabase.from('measure_logs').select('*').eq('student_id', studentId).order('date', { ascending:false })
       .then(({ data, error }) => { if (!error) setAvaliacoes(data || []); setLoadingAval(false) })
   }, [fichaPage, studentId])
+
+  const criarNovaAvaliacao = async () => {
+    setCriandoAval(true)
+    const jaTemPrimeira = avaliacoes.some(a => a.is_primeira)
+    const agora = new Date()
+    const { data, error } = await supabase.from('measure_logs').insert([{
+      student_id: studentId, teacher_id: student?.teacher_id,
+      date: agora.toISOString().slice(0,10),
+      hora: agora.toTimeString().slice(0,5),
+      is_primeira: !jaTemPrimeira,
+      medidas: {},
+    }]).select().single()
+    setCriandoAval(false)
+    if (!error && data) {
+      setAvaliacoes(p => [data, ...p])
+      setOpenAvaliacaoId(data.id)
+    }
+  }
 
   const salvarTeste = async () => {
     if (!novoTeste.label || !novoTeste.value) return
@@ -2545,44 +2566,29 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
       {fichaPage===2 && (
         <div style={{ padding:'8px 0' }}>
           {(() => {
-            const medidas = avaliacoes.filter(a => !(a.tests && Object.keys(a.tests).length))
             const testes  = avaliacoes.filter(a => a.tests && Object.keys(a.tests).length)
+            const antropometricas = avaliacoes.filter(a => a.medidas != null)
             return (
               <>
-                {/* ── Medidas Corporais (só o aluno registra, via StudentView) ── */}
-                {SECTION('Medidas Corporais')}
-                <div style={{ fontSize:11, color:'#475569', marginBottom:10 }}>Registradas pelo próprio aluno no app — sincronizado automaticamente.</div>
+                {/* ── Avaliações Antropométricas ── */}
+                {SECTION('Avaliações Antropométricas')}
+                <button onClick={criarNovaAvaliacao} disabled={criandoAval} style={{ padding:'9px 16px', borderRadius:10, border:'1px solid rgba(59,130,246,0.4)', background:'rgba(59,130,246,0.1)', color:'#3B82F6', fontWeight:700, fontSize:12, cursor:'pointer', marginBottom:12 }}>
+                  {criandoAval ? 'Criando...' : '+ Nova Avaliação'}
+                </button>
+
                 {loadingAval ? (
                   <div style={{ textAlign:'center', color:'#475569', fontSize:12, padding:20 }}>Carregando...</div>
-                ) : medidas.length === 0 ? (
-                  <div style={{ textAlign:'center', color:'#334155', fontSize:12, padding:20 }}>Nenhuma medida registrada pelo aluno ainda.</div>
+                ) : antropometricas.length === 0 ? (
+                  <div style={{ textAlign:'center', color:'#334155', fontSize:12, padding:20 }}>Nenhuma avaliação registrada ainda.</div>
                 ) : (
-                  <>
-                    {medidas.length >= 2 && (
-                      <div style={{ height:200, background:'#111827', borderRadius:10, padding:'10px 14px', border:'1px solid rgba(255,255,255,0.07)', marginBottom:14 }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={[...medidas].reverse()}>
-                            <XAxis dataKey="date" tick={{ fontSize:10, fill:'#64748B' }} />
-                            <YAxis tick={{ fontSize:10, fill:'#64748B' }} />
-                            <Tooltip contentStyle={{ background:'#0D1117', border:'1px solid rgba(255,255,255,0.1)', fontSize:12 }} />
-                            <Line type="monotone" dataKey="weight" name="Peso" stroke="#3B82F6" strokeWidth={2} dot={{ r:3 }} />
-                            <Line type="monotone" dataKey="body_fat" name="% Gordura" stroke="#FBBF24" strokeWidth={2} dot={{ r:3 }} />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </div>
-                    )}
-                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                      {medidas.map(a => (
-                        <div key={a.id} style={{ background:'#111827', borderRadius:10, padding:'10px 14px', border:'1px solid rgba(255,255,255,0.06)' }}>
-                          <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
-                            <span style={{ fontSize:12, fontWeight:700, color:'#E2E8F0' }}>{a.date}</span>
-                            <span style={{ fontSize:11, color:'#64748B' }}>{a.weight ? `${a.weight}kg` : ''} {a.body_fat ? `· ${a.body_fat}% gordura` : ''}</span>
-                          </div>
-                          {a.notes && <div style={{ fontSize:12, color:'#94A3B8' }}>{a.notes}</div>}
-                        </div>
-                      ))}
-                    </div>
-                  </>
+                  <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:20 }}>
+                    {antropometricas.map(a => (
+                      <button key={a.id} onClick={() => setOpenAvaliacaoId(a.id)} style={{ textAlign:'left', background:'#111827', borderRadius:10, padding:'12px 14px', border:'1px solid rgba(255,255,255,0.06)', cursor:'pointer', color:'inherit', fontFamily:'inherit' }}>
+                        <div style={{ fontSize:13, fontWeight:700, color:'#E2E8F0' }}>Avaliação Antropométrica do dia {a.date?.split('-').reverse().join('/')}{a.hora ? `, ${a.hora}` : ''}</div>
+                        {a.is_primeira && <span style={{ fontSize:10, color:'#60A5FA', fontWeight:700 }}>Avaliação inicial (completa)</span>}
+                      </button>
+                    ))}
+                  </div>
                 )}
 
                 {/* ── Testes de Performance (professor registra) ── */}
@@ -2633,6 +2639,16 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
             )
           })()}
         </div>
+      )}
+      {openAvaliacaoId && (
+        <FichaAvaliacao
+          avaliacaoId={openAvaliacaoId}
+          studentId={studentId}
+          student={student}
+          anamData={anamData}
+          readOnly={false}
+          onClose={() => { setOpenAvaliacaoId(null); fetchAll() }}
+        />
       )}
       {fichaPage===0 && <>
       {/* Status de salvamento automático */}
