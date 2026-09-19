@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../supabase'
-import { nivelFromExperiencia, STUDENT_STATUS } from '../lib/alunos'
+import { nivelFromExperiencia, STUDENT_STATUS, upsertAnamnese } from '../lib/alunos'
 import { useConfirmarMatricula } from '../lib/queries'
 import { useAppNavigate } from '../lib/useAppNavigate'
 import { useParams } from 'react-router-dom'
@@ -2375,8 +2375,13 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
       .then(({ data, error }) => { if (!error) setAvaliacoes(data || []); setLoadingAval(false) })
   }, [fichaPage, studentId])
 
-  const criarNovaAvaliacao = async () => {
-    setCriandoAval(true)
+  const excluirAvaliacao = async (id) => {
+    if (!window.confirm('Excluir esta avaliação permanentemente?')) return
+    await supabase.from('measure_logs').delete().eq('id', id)
+    setAvaliacoes(p => p.filter(a => a.id !== id))
+  }
+
+  const criarNovaAvaliacao = async () => {    setCriandoAval(true)
     const jaTemPrimeira = avaliacoes.some(a => a.is_primeira)
     const agora = new Date()
     const { data, error } = await supabase.from('measure_logs').insert([{
@@ -2468,8 +2473,7 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
       guardian_phone: F.whatsapp, level: F.nivel || null,
     }).eq('id', studentId)
 
-    await supabase.from('anamnese').upsert([{
-      student_id: studentId,
+    await upsertAnamnese(studentId, {
       qualidade_sono: F.qualidade_sono, horas_sono: F.horas_sono,
       alimentacao: `${F.refeicoes} refeições/dia — qualidade: ${F.qualidade_alimentacao}`,
       alcool_cigarro: [
@@ -2483,7 +2487,7 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
       motivacao_inicio: F.motivacao, notas: F.notas_professor,
       profissao: [F.rotina_trabalho, F.lazer?`Lazer: ${F.lazer}`:''].filter(Boolean).join(' | '),
       parq: { medicamentos: F.medicamentos },
-    }], { onConflict:'student_id' })
+    })
 
     setSav(false); setOk(true); setTimeout(()=>setOk(false),2000)
     onSaved?.()
@@ -2583,10 +2587,16 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
                 ) : (
                   <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:20 }}>
                     {antropometricas.map(a => (
-                      <button key={a.id} onClick={() => setOpenAvaliacaoId(a.id)} style={{ textAlign:'left', background:'#111827', borderRadius:10, padding:'12px 14px', border:'1px solid rgba(255,255,255,0.06)', cursor:'pointer', color:'inherit', fontFamily:'inherit' }}>
-                        <div style={{ fontSize:13, fontWeight:700, color:'#E2E8F0' }}>Avaliação Antropométrica do dia {a.date?.split('-').reverse().join('/')}{a.hora ? `, ${a.hora}` : ''}</div>
-                        {a.is_primeira && <span style={{ fontSize:10, color:'#60A5FA', fontWeight:700 }}>Avaliação inicial (completa)</span>}
-                      </button>
+                      <div key={a.id} style={{ display:'flex', alignItems:'stretch', gap:8 }}>
+                        <button onClick={() => setOpenAvaliacaoId(a.id)} style={{ flex:1, textAlign:'left', background:'#111827', borderRadius:10, padding:'12px 14px', border:'1px solid rgba(255,255,255,0.06)', cursor:'pointer', color:'inherit', fontFamily:'inherit' }}>
+                          <div style={{ fontSize:13, fontWeight:700, color:'#E2E8F0' }}>Avaliação Antropométrica do dia {a.date?.split('-').reverse().join('/')}{a.hora ? `, ${a.hora}` : ''}</div>
+                          {a.is_primeira && <span style={{ fontSize:10, color:'#60A5FA', fontWeight:700 }}>Avaliação inicial (completa)</span>}
+                        </button>
+                        <button onClick={() => excluirAvaliacao(a.id)} title="Excluir avaliação"
+                          style={{ width:40, borderRadius:10, border:'1px solid rgba(239,68,68,0.3)', background:'rgba(239,68,68,0.08)', color:'#F87171', fontSize:16, cursor:'pointer', flexShrink:0 }}>
+                          ✕
+                        </button>
+                      </div>
                     ))}
                   </div>
                 )}
