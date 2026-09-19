@@ -8,6 +8,21 @@ export const STUDENT_STATUS = {
 }
 
 /**
+ * Salva (cria ou atualiza) a anamnese de um aluno SEM depender de nenhuma
+ * constraint UNIQUE no banco — faz select primeiro, depois update (se já
+ * existir linha) ou insert (se não existir). Isso corrige o bug recorrente
+ * de "anamnese não salva" quando o upsert com onConflict falhava
+ * silenciosamente por falta/duplicidade da constraint.
+ */
+export async function upsertAnamnese(studentId, fields) {
+  const { data: existente } = await supabase.from('anamnese').select('id').eq('student_id', studentId).limit(1)
+  if (existente?.[0]) {
+    return supabase.from('anamnese').update(fields).eq('id', existente[0].id)
+  }
+  return supabase.from('anamnese').insert([{ ...fields, student_id: studentId }])
+}
+
+/**
  * Centraliza a criação de aluno pendente.
  * Sempre: INSERT students (status='pendente') + upsert anamnese (opcional)
  * + marca token como respondido (opcional) + cria notificação nova_anamnese.
@@ -38,21 +53,8 @@ export async function criarAlunoPendente({ teacherId, studentData, anamneseData,
   if (alunoErr || !aluno) return { aluno: null, error: alunoErr }
 
   if (anamneseData) {
-    let { error: anamErr } = await supabase
-      .from('anamnese')
-      .upsert([{ ...anamneseData, student_id: aluno.id, teacher_id: teacherId }], { onConflict: 'student_id' })
-    if (anamErr) {
-      console.error('criarAlunoPendente: falha ao salvar anamnese (tentativa 1)', anamErr)
-      // Blindagem: se a falha for por causa de coluna nova (ex: perfil) que ainda não
-      // existe no banco, tenta de novo sem ela — nunca perder os dados brutos por isso.
-      if (anamneseData.perfil !== undefined) {
-        const { perfil, ...semPerfil } = anamneseData
-        const { error: anamErr2 } = await supabase
-          .from('anamnese')
-          .upsert([{ ...semPerfil, student_id: aluno.id, teacher_id: teacherId }], { onConflict: 'student_id' })
-        if (anamErr2) console.error('criarAlunoPendente: falha ao salvar anamnese (tentativa 2, sem perfil)', anamErr2)
-      }
-    }
+    const { error: anamErr } = await upsertAnamnese(aluno.id, { ...anamneseData, teacher_id: teacherId })
+    if (anamErr) console.error('criarAlunoPendente: falha ao salvar anamnese', anamErr)
   }
 
   if (token) {
