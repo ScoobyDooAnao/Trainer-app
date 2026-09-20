@@ -154,16 +154,6 @@ export default function FichaAvaliacao({ avaliacaoId, studentId, student, anamDa
             {idade != null ? `${idade} anos` : ''}{sexo ? ` · ${sexo === 'M' ? 'Masculino' : 'Feminino'}` : ''}
           </div>
 
-          {!readOnly && !student?.sexo && (
-            <div style={{ marginBottom:10 }}>
-              <select value={sexo} onChange={e => setSexo(e.target.value)} style={{ ...cellInp, width:140, textAlign:'left' }}>
-                <option value="">Sexo...</option>
-                <option value="M">Masculino</option>
-                <option value="F">Feminino</option>
-              </select>
-            </div>
-          )}
-
           {perfil && (
             <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:10 }}>
               {[perfil.nivel, perfil.experiencia, perfil.objetivo].filter(Boolean).map(v => (
