@@ -1149,6 +1149,176 @@ function RestTimer({ seconds, dayColor, onDone }) {
   )
 }
 
+// ── Sessão de treino ativa — timer geral + cards de série por exercício ──────
+function fmtDuracao(seg) {
+  const m = Math.floor(seg / 60), s = seg % 60
+  return `${m}min ${String(s).padStart(2,'0')}s`
+}
+
+function ExerciseSetsCard({ ex, dayColor, sets, todayLog, lastLog, onChangeSets, onAddSet }) {
+  const typeColor = TYPE_COLORS[ex.type] || '#64748B'
+  const [activeTimerIdx, setActiveTimerIdx] = useState(null)
+  const [restKey, setRestKey] = useState(0)
+
+  const updateSet = (idx, field, val) => onChangeSets(sets.map((s,i) => i===idx ? { ...s, [field]:val } : s))
+  const toggleChecked = (idx) => updateSet(idx, 'checked', !sets[idx].checked)
+
+  return (
+    <div style={{ marginBottom: 22, paddingBottom: 18, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4, flexWrap:'wrap' }}>
+        {ex.type && <span style={{ fontSize:10, padding:'2px 8px', borderRadius:20, fontWeight:700, background:`${typeColor}22`, color:typeColor, border:`1px solid ${typeColor}40` }}>{ex.type}</span>}
+        <span style={{ fontWeight:800, fontSize:16, color:'#E2E8F0' }}>{ex.name}</span>
+      </div>
+      {ex.tip && <div style={{ fontSize:12, color:'#475569', marginBottom:8 }}>💡 {ex.tip}</div>}
+
+      {ex.rest && (
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+          <span style={{ fontSize:12, color:dayColor, fontWeight:700 }}>⏱ Descanso: {ex.rest}</span>
+          <button onClick={() => { setActiveTimerIdx(0); setRestKey(k=>k+1) }} style={{ fontSize:10, color:dayColor, background:'none', border:`1px solid ${dayColor}50`, borderRadius:8, padding:'2px 8px', cursor:'pointer' }}>Iniciar</button>
+        </div>
+      )}
+      {activeTimerIdx === 0 && <div style={{ marginBottom:10 }}><RestTimer key={restKey} seconds={parseRestSeconds(ex.rest)} dayColor={dayColor} onDone={() => {}} /></div>}
+
+      <div style={{ display:'grid', gridTemplateColumns:'34px 62px 1fr 1fr 40px 34px', gap:6, marginBottom:6 }}>
+        {['Série','Anterior','Kg','Reps','RIR',''].map(h => (
+          <div key={h} style={{ fontSize:9, color:'#334155', textTransform:'uppercase', letterSpacing:0.6, textAlign: h==='Anterior'?'center':undefined }}>{h}</div>
+        ))}
+      </div>
+
+      {sets.map((s, idx) => {
+        const ant = lastLog?.sets?.[idx]
+        return (
+          <div key={idx} style={{ display:'grid', gridTemplateColumns:'34px 62px 1fr 1fr 40px 34px', gap:6, marginBottom:8, alignItems:'center' }}>
+            <div style={{ width:28, height:28, borderRadius:8, background:'#1E293B', color:dayColor, fontWeight:800, fontSize:13, display:'flex', alignItems:'center', justifyContent:'center' }}>{s.set}</div>
+            <div style={{ fontSize:11, color:'#475569', textAlign:'center' }}>
+              {ant ? `${ant.weight||'—'}×${ant.reps||'—'}` : '—'}
+            </div>
+            <input type="number" inputMode="decimal" placeholder="0" value={s.weight}
+              onChange={e => updateSet(idx,'weight',e.target.value)}
+              style={{ background:'#161B27', border:`1px solid ${s.checked?'#34D39960':'rgba(255,255,255,0.08)'}`, borderRadius:8, padding:'10px 4px', color:'#E2E8F0', fontSize:15, textAlign:'center', outline:'none', width:'100%', fontWeight:700, boxSizing:'border-box' }} />
+            <input type="number" inputMode="numeric" placeholder="0" value={s.reps}
+              onChange={e => updateSet(idx,'reps',e.target.value)}
+              style={{ background:'#161B27', border:`1px solid ${s.checked?'#34D39960':'rgba(255,255,255,0.08)'}`, borderRadius:8, padding:'10px 4px', color:'#E2E8F0', fontSize:15, textAlign:'center', outline:'none', width:'100%', fontWeight:700, boxSizing:'border-box' }} />
+            <input type="number" inputMode="numeric" min="0" max="5" placeholder="—" value={s.rir||''}
+              onChange={e => updateSet(idx,'rir',e.target.value)} title="RIR"
+              style={{ background:'#161B27', border:'1px solid rgba(255,255,255,0.08)', borderRadius:8, padding:'10px 2px', color:'#94A3B8', fontSize:12, textAlign:'center', outline:'none', width:'100%', boxSizing:'border-box' }} />
+            <button onClick={() => toggleChecked(idx)}
+              style={{ width:30, height:30, borderRadius:8, border:'none', background: s.checked ? '#34D399' : 'rgba(255,255,255,0.06)', color: s.checked ? '#022c22' : '#475569', fontSize:15, fontWeight:900, cursor:'pointer' }}>
+              ✓
+            </button>
+          </div>
+        )
+      })}
+
+      <button onClick={onAddSet} style={{ width:'100%', marginTop:4, padding:'9px', borderRadius:8, border:'1px dashed rgba(255,255,255,0.15)', background:'transparent', color:'#475569', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+        + Adicionar série
+      </button>
+    </div>
+  )
+}
+
+function TrainingSessionView({ day, studentId, dayColor, onClose, onConfirm, confirming }) {
+  const [startedAt] = useState(Date.now())
+  const [elapsed, setElapsed] = useState(0)
+  const [logsByEx, setLogsByEx] = useState({}) // { [exId]: { sets:[], todayLogId, lastLog } }
+  const [loading, setLoading] = useState(true)
+  const [showFeedback, setShowFeedback] = useState(false)
+  const saveTimers = useRef({})
+
+  useEffect(() => {
+    const t = setInterval(() => setElapsed(Math.floor((Date.now() - startedAt) / 1000)), 1000)
+    return () => clearInterval(t)
+  }, [startedAt])
+
+  useEffect(() => {
+    const exIds = (day.exercises || []).map(e => e.id)
+    if (!exIds.length) { setLoading(false); return }
+    supabase.from('exercise_logs').select('*').eq('student_id', studentId).in('exercise_id', exIds).order('date', { ascending:false })
+      .then(({ data }) => {
+        const map = {}
+        ;(day.exercises || []).forEach(ex => {
+          const logs = (data || []).filter(l => l.exercise_id === ex.id)
+          const todayL = logs.find(l => l.date === today())
+          const lastL  = logs.find(l => l.date !== today())
+          map[ex.id] = {
+            sets: todayL ? todayL.sets.map(s => ({ ...s, checked: !!(s.weight || s.reps) })) : parseSets(ex.sets),
+            todayLogId: todayL?.id || null,
+            lastLog: lastL || null,
+          }
+        })
+        setLogsByEx(map)
+        setLoading(false)
+      })
+  }, [day.id])
+
+  const persist = (exId) => {
+    clearTimeout(saveTimers.current[exId])
+    saveTimers.current[exId] = setTimeout(async () => {
+      const entry = logsByEx[exId]
+      if (!entry) return
+      const payload = { student_id: studentId, exercise_id: exId, date: today(),
+        sets: entry.sets.map(s => ({ set:s.set, weight:s.weight||null, reps:s.reps||null, rir: s.rir!=='' && s.rir!=null ? +s.rir : null })) }
+      if (entry.todayLogId) {
+        await supabase.from('exercise_logs').update({ sets: payload.sets }).eq('id', entry.todayLogId)
+      } else {
+        const { data } = await supabase.from('exercise_logs').insert(payload).select().single()
+        if (data) setLogsByEx(p => ({ ...p, [exId]: { ...p[exId], todayLogId: data.id } }))
+      }
+    }, 500)
+  }
+
+  const updateExSets = (exId, newSets) => {
+    setLogsByEx(p => ({ ...p, [exId]: { ...p[exId], sets:newSets } }))
+    persist(exId)
+  }
+  const addSet = (exId) => {
+    const entry = logsByEx[exId]
+    const nextNum = (entry.sets[entry.sets.length-1]?.set || entry.sets.length) + 1
+    updateExSets(exId, [...entry.sets, { set:nextNum, weight:'', reps:'', rir:'', checked:false }])
+  }
+
+  const volume = Object.values(logsByEx).reduce((tot, e) => tot + (e.sets||[]).reduce((s,x) => s + (x.checked ? (+x.weight||0)*(+x.reps||0) : 0), 0), 0)
+  const seriesCount = Object.values(logsByEx).reduce((tot, e) => tot + (e.sets||[]).filter(x => x.checked).length, 0)
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'#080B12', zIndex:300, overflowY:'auto' }}>
+      <div style={{ position:'sticky', top:0, background:'#0D1117', borderBottom:'1px solid rgba(255,255,255,0.08)', padding:'14px 16px', display:'flex', justifyContent:'space-between', alignItems:'center', zIndex:2 }}>
+        <button onClick={onClose} style={{ background:'none', border:'none', color:'#64748B', fontSize:14, fontWeight:700, cursor:'pointer' }}>▾ {day.focus || day.name || 'Treino'}</button>
+        <button onClick={() => setShowFeedback(true)} disabled={confirming}
+          style={{ padding:'9px 20px', borderRadius:10, border:'none', background:dayColor, color:'#0B0F17', fontWeight:800, fontSize:14, cursor:'pointer' }}>
+          Concluir
+        </button>
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, padding:'16px' }}>
+        <div><div style={{ fontSize:10, color:'#475569', textTransform:'uppercase' }}>Duração</div><div style={{ fontSize:16, fontWeight:800, color:dayColor }}>{fmtDuracao(elapsed)}</div></div>
+        <div><div style={{ fontSize:10, color:'#475569', textTransform:'uppercase' }}>Volume</div><div style={{ fontSize:16, fontWeight:800, color:'#E2E8F0' }}>{volume} kg</div></div>
+        <div><div style={{ fontSize:10, color:'#475569', textTransform:'uppercase' }}>Séries</div><div style={{ fontSize:16, fontWeight:800, color:'#E2E8F0' }}>{seriesCount}</div></div>
+      </div>
+
+      <div style={{ padding:'0 16px 100px' }}>
+        {loading ? (
+          <div style={{ textAlign:'center', color:'#475569', padding:40 }}>Carregando...</div>
+        ) : (day.exercises || []).map(ex => (
+          <ExerciseSetsCard key={ex.id} ex={ex} dayColor={dayColor}
+            sets={logsByEx[ex.id]?.sets || []}
+            todayLog={logsByEx[ex.id]?.todayLogId}
+            lastLog={logsByEx[ex.id]?.lastLog}
+            onChangeSets={(s) => updateExSets(ex.id, s)}
+            onAddSet={() => addSet(ex.id)}
+          />
+        ))}
+      </div>
+
+      {showFeedback && (
+        <FeedbackModal studentId={studentId} confirming={confirming}
+          onClose={() => setShowFeedback(false)}
+          onConfirm={async () => { await onConfirm(); setShowFeedback(false); onClose() }} />
+      )}
+    </div>
+  )
+}
+
 function ExerciseLogRow({ ex, studentId, dayColor, isMobile }) {
   const [open,    setOpen]    = useState(false)
   const [sets,    setSets]    = useState(parseSets(ex.sets))
@@ -1901,6 +2071,7 @@ function FeedbackModal({ studentId, onConfirm, onClose, confirming }) {
 // ── WorkoutCarousel — carrossel semanal de treinos ───────────────────────────
 function WorkoutCarousel({ days, activePlan, confirmedToday, confirming, confirmWorkout, missedDays, showMakeup, setShowMakeup, studentId, isMobile }) {
   const [showFeedback, setShowFeedback] = useState(false)
+  const [sessionActive, setSessionActive] = useState(false)
   const DIAS_SEMANA = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
   const DAY_COLORS = ['#60A5FA','#34D399','#F59E0B','#A78BFA','#F87171','#38BDF8','#FB923C']
 
@@ -1996,36 +2167,58 @@ function WorkoutCarousel({ days, activePlan, confirmedToday, confirming, confirm
           </div>
         ) : (
           <div>
-            {/* Column headers desktop */}
-            {!isMobile && (
-              <div style={{ display:'grid', gridTemplateColumns:'2fr 0.5fr 0.7fr 0.6fr', gap:8, padding:'8px 16px', borderBottom:'1px solid rgba(255,255,255,0.04)' }}>
-                {['Exercício','Séries','Reps','Descanso'].map(h => (
-                  <div key={h} style={{ fontSize:9, color:'#334155', textTransform:'uppercase', letterSpacing:1 }}>{h}</div>
+            {isToday && !confirmedToday ? (
+              <div style={{ padding:'16px' }}>
+                {workout.exercises.map(ex => {
+                  const tc = TYPE_COLORS[ex.type] || '#64748B'
+                  return (
+                    <div key={ex.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 0', borderBottom:'1px solid rgba(255,255,255,0.04)' }}>
+                      {ex.type && <span style={{ fontSize:9, padding:'2px 7px', borderRadius:20, fontWeight:700, background:`${tc}20`, color:tc, border:`1px solid ${tc}40` }}>{ex.type}</span>}
+                      <span style={{ fontSize:13, fontWeight:600, color:'#CBD5E1', flex:1 }}>{ex.name}</span>
+                      <span style={{ fontSize:12, color:'#475569' }}>{ex.sets}×{ex.reps}</span>
+                    </div>
+                  )
+                })}
+                <button onClick={() => setSessionActive(true)}
+                  style={{ width:'100%', marginTop:14, padding:'15px', borderRadius:12, border:'none', background:`linear-gradient(135deg, ${color}, ${color}cc)`, color:'#fff', fontWeight:800, fontSize:15, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                  ▶ Iniciar Treino
+                </button>
+              </div>
+            ) : (
+              <div>
+                {/* Column headers desktop */}
+                {!isMobile && (
+                  <div style={{ display:'grid', gridTemplateColumns:'2fr 0.5fr 0.7fr 0.6fr', gap:8, padding:'8px 16px', borderBottom:'1px solid rgba(255,255,255,0.04)' }}>
+                    {['Exercício','Séries','Reps','Descanso'].map(h => (
+                      <div key={h} style={{ fontSize:9, color:'#334155', textTransform:'uppercase', letterSpacing:1 }}>{h}</div>
+                    ))}
+                  </div>
+                )}
+                {workout.exercises.map(ex => (
+                  <ExerciseLogRow key={ex.id} ex={ex} studentId={studentId} dayColor={color} isMobile={isMobile} />
                 ))}
               </div>
             )}
-            {workout.exercises.map(ex => (
-              <ExerciseLogRow key={ex.id} ex={ex} studentId={studentId} dayColor={color} isMobile={isMobile} />
-            ))}
           </div>
         )}
       </div>
 
-      {/* Confirm button — only for today's workout */}
-      {isToday && workout && (
+      {sessionActive && (
+        <TrainingSessionView
+          day={workout} studentId={studentId} dayColor={color}
+          confirming={confirming}
+          onClose={() => setSessionActive(false)}
+          onConfirm={confirmWorkout}
+        />
+      )}
+
+      {/* Status — botão de concluir agora vive dentro da sessão de treino */}
+      {isToday && workout && confirmedToday && (
         <div style={{ marginTop:14 }}>
-          {confirmedToday ? (
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, padding:'16px', borderRadius:14, background:'rgba(52,211,153,0.1)', border:'1px solid rgba(52,211,153,0.25)' }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="#34D399"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-              <span style={{ fontSize:15, fontWeight:700, color:'#34D399' }}>Treino confirmado hoje!</span>
-            </div>
-          ) : (
-            <button onClick={() => setShowFeedback(true)} disabled={confirming}
-              style={{ width:'100%', padding:'16px', borderRadius:14, border:'none', cursor: confirming ? 'not-allowed' : 'pointer', background: confirming ? 'rgba(52,211,153,0.3)' : 'linear-gradient(135deg,#34D399,#059669)', color:'#022c22', fontWeight:800, fontSize:15, boxShadow: confirming ? 'none' : '0 4px 20px rgba(52,211,153,0.4)', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-              {confirming ? 'Confirmando...' : 'Concluir Dia de Treino'}
-            </button>
-          )}
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, padding:'16px', borderRadius:14, background:'rgba(52,211,153,0.1)', border:'1px solid rgba(52,211,153,0.25)' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#34D399"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+            <span style={{ fontSize:15, fontWeight:700, color:'#34D399' }}>Treino confirmado hoje!</span>
+          </div>
         </div>
       )}
 
