@@ -2349,6 +2349,7 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
     local_treino:          an?.local_treino || '',
     experiencia:           an?.historico || '',
     nivel:                 st?.level || nivelFromExperiencia(an?.historico) || '',
+    sexo:                  st?.sexo || '',
     motivacao:             an?.motivacao_inicio || '',
     notas_professor:       an?.notas || '',
   })
@@ -2470,7 +2471,7 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
     await supabase.from('students').update({
       name: F.nome, age: +F.idade||null,
       weight: +F.peso||null, height: +F.altura||null, goal: F.objetivo,
-      guardian_phone: F.whatsapp, level: F.nivel || null,
+      guardian_phone: F.whatsapp, level: F.nivel || null, sexo: F.sexo || null,
     }).eq('id', studentId)
 
     await upsertAnamnese(studentId, {
@@ -2675,6 +2676,7 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
               ['Nível de Atividade', anamData.perfil.nivel],
               ['Experiência', anamData.perfil.experiencia],
               ['Objetivo', anamData.perfil.objetivo],
+              ['Sexo', student?.sexo === 'M' ? 'Masculino' : student?.sexo === 'F' ? 'Feminino' : null],
               ['Frequência', anamData.perfil.frequencia],
               ['Local', anamData.perfil.local],
               ['Horário', anamData.perfil.horario],
@@ -2707,6 +2709,14 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
         <select style={sel} value={F.objetivo} onChange={e=>f('objetivo')(e.target.value)}>
           <option value="">Selecione</option>
           {GOALS.map(g=><option key={g}>{g}</option>)}
+        </select>
+      </FichaField>
+
+      <FichaField label="Sexo">
+        <select style={sel} value={F.sexo} onChange={e=>f('sexo')(e.target.value)}>
+          <option value="">Selecione</option>
+          <option value="M">Masculino</option>
+          <option value="F">Feminino</option>
         </select>
       </FichaField>
 
