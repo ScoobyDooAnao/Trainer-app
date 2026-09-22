@@ -1162,46 +1162,38 @@ function ExerciseSetsCard({ ex, dayColor, sets, todayLog, lastLog, onChangeSets 
 
   const updateSet = (idx, field, val) => {
     const novo = sets.map((s,i) => i===idx ? { ...s, [field]:val } : s)
-    // Auto-confirma a série assim que peso e reps estiverem preenchidos
     novo[idx].checked = !!(novo[idx].weight && novo[idx].reps)
     onChangeSets(novo)
   }
 
   return (
-    <div style={{ marginBottom: 18, padding:'14px', borderRadius:16, background:'rgba(255,255,255,0.025)', border:'1px solid rgba(255,255,255,0.06)' }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:10, marginBottom:10 }}>
-        <div style={{ minWidth:0 }}>
-          {ex.type && <span style={{ fontSize:9, padding:'2px 8px', borderRadius:20, fontWeight:700, background:`${typeColor}22`, color:typeColor, border:`1px solid ${typeColor}40`, display:'inline-block', marginBottom:4 }}>{ex.type}</span>}
-          <div style={{ fontWeight:800, fontSize:15, color:'#F1F5F9', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ex.name}</div>
+    <div style={{ marginBottom: 10, padding:'10px 12px', borderRadius:12, background:'rgba(255,255,255,0.02)', border:'1px solid rgba(255,255,255,0.05)' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, marginBottom:8 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
+          {ex.type && <span style={{ fontSize:8, padding:'1px 6px', borderRadius:20, fontWeight:700, background:`${typeColor}22`, color:typeColor, flexShrink:0 }}>{ex.type}</span>}
+          <span style={{ fontWeight:700, fontSize:13, color:'#F1F5F9', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ex.name}</span>
         </div>
         {ex.rest && (
           <button onClick={() => { setActiveTimer(true); setRestKey(k=>k+1) }}
-            style={{ flexShrink:0, padding:'8px 14px', borderRadius:12, border:'1px solid rgba(59,130,246,0.4)', background:'rgba(59,130,246,0.12)', color:'#60A5FA', fontSize:13, fontWeight:800, cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}>
+            style={{ flexShrink:0, padding:'5px 10px', borderRadius:9, border:'1px solid rgba(59,130,246,0.4)', background:'rgba(59,130,246,0.1)', color:'#60A5FA', fontSize:11, fontWeight:700, cursor:'pointer' }}>
             ⏱ {ex.rest}
           </button>
         )}
       </div>
-      {ex.tip && <div style={{ fontSize:11, color:'#475569', marginBottom:10 }}>💡 {ex.tip}</div>}
-      {activeTimer && <div style={{ marginBottom:10 }}><RestTimer key={restKey} seconds={parseRestSeconds(ex.rest)} dayColor={dayColor} onDone={() => {}} /></div>}
-
-      <div style={{ display:'grid', gridTemplateColumns:'24px 46px 1fr 1fr', gap:6, marginBottom:4, padding:'0 2px' }}>
-        {['','Ant.','Kg','Reps'].map(h => (
-          <div key={h} style={{ fontSize:8, color:'#334155', textTransform:'uppercase', letterSpacing:0.5, textAlign: h==='Ant.'?'center':undefined }}>{h}</div>
-        ))}
-      </div>
+      {activeTimer && <div style={{ marginBottom:8 }}><RestTimer key={restKey} seconds={parseRestSeconds(ex.rest)} dayColor={dayColor} onDone={() => {}} /></div>}
 
       {sets.map((s, idx) => {
         const ant = lastLog?.sets?.[idx]
         return (
-          <div key={idx} style={{ display:'grid', gridTemplateColumns:'24px 46px 1fr 1fr', gap:6, marginBottom:5, alignItems:'center' }}>
-            <div style={{ fontSize:11, fontWeight:800, color: s.checked ? '#34D399' : dayColor, textAlign:'center' }}>{s.set}</div>
-            <div style={{ fontSize:10, color:'#475569', textAlign:'center' }}>{ant ? `${ant.weight||'—'}×${ant.reps||'—'}` : '—'}</div>
-            <input type="number" inputMode="decimal" placeholder="0" value={s.weight}
+          <div key={idx} style={{ display:'grid', gridTemplateColumns:'20px 40px 1fr 1fr', gap:5, marginBottom:4, alignItems:'center' }}>
+            <div style={{ fontSize:10, fontWeight:800, color: s.checked ? '#34D399' : dayColor, textAlign:'center' }}>{s.set}</div>
+            <div style={{ fontSize:9, color:'#3F4A5C', textAlign:'center' }}>{ant ? `${ant.weight||'—'}×${ant.reps||'—'}` : '—'}</div>
+            <input type="number" inputMode="decimal" placeholder="kg" value={s.weight}
               onChange={e => updateSet(idx,'weight',e.target.value)}
-              style={{ background: s.checked ? 'rgba(52,211,153,0.08)' : '#12161F', border:`1px solid ${s.checked?'rgba(52,211,153,0.4)':'rgba(255,255,255,0.07)'}`, borderRadius:7, padding:'6px 4px', color:'#E2E8F0', fontSize:13, textAlign:'center', outline:'none', width:'100%', fontWeight:700, boxSizing:'border-box' }} />
-            <input type="number" inputMode="numeric" placeholder="0" value={s.reps}
+              style={{ background: s.checked ? 'rgba(52,211,153,0.07)' : '#12161F', border:`1px solid ${s.checked?'rgba(52,211,153,0.35)':'rgba(255,255,255,0.06)'}`, borderRadius:6, padding:'5px 4px', color:'#E2E8F0', fontSize:12, textAlign:'center', outline:'none', width:'100%', fontWeight:700, boxSizing:'border-box' }} />
+            <input type="number" inputMode="numeric" placeholder="reps" value={s.reps}
               onChange={e => updateSet(idx,'reps',e.target.value)}
-              style={{ background: s.checked ? 'rgba(52,211,153,0.08)' : '#12161F', border:`1px solid ${s.checked?'rgba(52,211,153,0.4)':'rgba(255,255,255,0.07)'}`, borderRadius:7, padding:'6px 4px', color:'#E2E8F0', fontSize:13, textAlign:'center', outline:'none', width:'100%', fontWeight:700, boxSizing:'border-box' }} />
+              style={{ background: s.checked ? 'rgba(52,211,153,0.07)' : '#12161F', border:`1px solid ${s.checked?'rgba(52,211,153,0.35)':'rgba(255,255,255,0.06)'}`, borderRadius:6, padding:'5px 4px', color:'#E2E8F0', fontSize:12, textAlign:'center', outline:'none', width:'100%', fontWeight:700, boxSizing:'border-box' }} />
           </div>
         )
       })}
@@ -2191,6 +2183,23 @@ function WorkoutCarousel({ days, activePlan, confirmedToday, confirming, confirm
                   ▶ Iniciar Treino
                 </button>
               </div>
+            ) : slot.diff > 0 ? (
+              <div style={{ padding:'16px' }}>
+                {workout.exercises.map(ex => {
+                  const tc = TYPE_COLORS[ex.type] || '#64748B'
+                  return (
+                    <div key={ex.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 0', borderBottom:'1px solid rgba(255,255,255,0.04)' }}>
+                      {ex.type && <span style={{ fontSize:9, padding:'2px 7px', borderRadius:20, fontWeight:700, background:`${tc}20`, color:tc, border:`1px solid ${tc}40` }}>{ex.type}</span>}
+                      <span style={{ fontSize:13, fontWeight:600, color:'#CBD5E1', flex:1 }}>{ex.name}</span>
+                      <span style={{ fontSize:12, color:'#475569' }}>{ex.sets}×{ex.reps}</span>
+                    </div>
+                  )
+                })}
+                <button onClick={() => setMakeupSession(workout)}
+                  style={{ width:'100%', marginTop:14, padding:'13px', borderRadius:12, border:`1px solid ${color}50`, background:`${color}15`, color, fontWeight:800, fontSize:14, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                  ⏩ Adiantar treino?
+                </button>
+              </div>
             ) : (
               <div>
                 {/* Column headers desktop */}
@@ -2371,7 +2380,7 @@ export default function StudentView({ studentId }) {
         // Precisamos aguardar o state ser setado, então fazemos direto aqui
         if (plans?.[0]) {
           const { data: daysData2 } = await supabase
-            .from('workout_days').select('id, name, day_of_week, focus, order_index')
+            .from('workout_days').select('*, exercises(*)')
             .eq('plan_id', plans[0].id).order('order_index')
 
           if (daysData2) {
@@ -2403,7 +2412,7 @@ export default function StudentView({ studentId }) {
                 }
                 return false
               })()
-              if (!jaFez) missed.push({ ...d, dia: d.day_of_week })
+              if (!jaFez) missed.push({ ...d, dia: d.day_of_week, exercises: (d.exercises || []).sort((a,b) => a.order_index - b.order_index) })
             })
             setMissedDays(missed)
           }
