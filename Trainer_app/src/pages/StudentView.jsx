@@ -1155,64 +1155,56 @@ function fmtDuracao(seg) {
   return `${m}min ${String(s).padStart(2,'0')}s`
 }
 
-function ExerciseSetsCard({ ex, dayColor, sets, todayLog, lastLog, onChangeSets, onAddSet }) {
+function ExerciseSetsCard({ ex, dayColor, sets, todayLog, lastLog, onChangeSets }) {
   const typeColor = TYPE_COLORS[ex.type] || '#64748B'
-  const [activeTimerIdx, setActiveTimerIdx] = useState(null)
+  const [activeTimer, setActiveTimer] = useState(false)
   const [restKey, setRestKey] = useState(0)
 
-  const updateSet = (idx, field, val) => onChangeSets(sets.map((s,i) => i===idx ? { ...s, [field]:val } : s))
-  const toggleChecked = (idx) => updateSet(idx, 'checked', !sets[idx].checked)
+  const updateSet = (idx, field, val) => {
+    const novo = sets.map((s,i) => i===idx ? { ...s, [field]:val } : s)
+    // Auto-confirma a série assim que peso e reps estiverem preenchidos
+    novo[idx].checked = !!(novo[idx].weight && novo[idx].reps)
+    onChangeSets(novo)
+  }
 
   return (
-    <div style={{ marginBottom: 22, paddingBottom: 18, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4, flexWrap:'wrap' }}>
-        {ex.type && <span style={{ fontSize:10, padding:'2px 8px', borderRadius:20, fontWeight:700, background:`${typeColor}22`, color:typeColor, border:`1px solid ${typeColor}40` }}>{ex.type}</span>}
-        <span style={{ fontWeight:800, fontSize:16, color:'#E2E8F0' }}>{ex.name}</span>
-      </div>
-      {ex.tip && <div style={{ fontSize:12, color:'#475569', marginBottom:8 }}>💡 {ex.tip}</div>}
-
-      {ex.rest && (
-        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
-          <span style={{ fontSize:12, color:dayColor, fontWeight:700 }}>⏱ Descanso: {ex.rest}</span>
-          <button onClick={() => { setActiveTimerIdx(0); setRestKey(k=>k+1) }} style={{ fontSize:10, color:dayColor, background:'none', border:`1px solid ${dayColor}50`, borderRadius:8, padding:'2px 8px', cursor:'pointer' }}>Iniciar</button>
+    <div style={{ marginBottom: 18, padding:'14px', borderRadius:16, background:'rgba(255,255,255,0.025)', border:'1px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:10, marginBottom:10 }}>
+        <div style={{ minWidth:0 }}>
+          {ex.type && <span style={{ fontSize:9, padding:'2px 8px', borderRadius:20, fontWeight:700, background:`${typeColor}22`, color:typeColor, border:`1px solid ${typeColor}40`, display:'inline-block', marginBottom:4 }}>{ex.type}</span>}
+          <div style={{ fontWeight:800, fontSize:15, color:'#F1F5F9', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ex.name}</div>
         </div>
-      )}
-      {activeTimerIdx === 0 && <div style={{ marginBottom:10 }}><RestTimer key={restKey} seconds={parseRestSeconds(ex.rest)} dayColor={dayColor} onDone={() => {}} /></div>}
+        {ex.rest && (
+          <button onClick={() => { setActiveTimer(true); setRestKey(k=>k+1) }}
+            style={{ flexShrink:0, padding:'8px 14px', borderRadius:12, border:'1px solid rgba(59,130,246,0.4)', background:'rgba(59,130,246,0.12)', color:'#60A5FA', fontSize:13, fontWeight:800, cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}>
+            ⏱ {ex.rest}
+          </button>
+        )}
+      </div>
+      {ex.tip && <div style={{ fontSize:11, color:'#475569', marginBottom:10 }}>💡 {ex.tip}</div>}
+      {activeTimer && <div style={{ marginBottom:10 }}><RestTimer key={restKey} seconds={parseRestSeconds(ex.rest)} dayColor={dayColor} onDone={() => {}} /></div>}
 
-      <div style={{ display:'grid', gridTemplateColumns:'34px 62px 1fr 1fr 40px 34px', gap:6, marginBottom:6 }}>
-        {['Série','Anterior','Kg','Reps','RIR',''].map(h => (
-          <div key={h} style={{ fontSize:9, color:'#334155', textTransform:'uppercase', letterSpacing:0.6, textAlign: h==='Anterior'?'center':undefined }}>{h}</div>
+      <div style={{ display:'grid', gridTemplateColumns:'24px 46px 1fr 1fr', gap:6, marginBottom:4, padding:'0 2px' }}>
+        {['','Ant.','Kg','Reps'].map(h => (
+          <div key={h} style={{ fontSize:8, color:'#334155', textTransform:'uppercase', letterSpacing:0.5, textAlign: h==='Ant.'?'center':undefined }}>{h}</div>
         ))}
       </div>
 
       {sets.map((s, idx) => {
         const ant = lastLog?.sets?.[idx]
         return (
-          <div key={idx} style={{ display:'grid', gridTemplateColumns:'34px 62px 1fr 1fr 40px 34px', gap:6, marginBottom:8, alignItems:'center' }}>
-            <div style={{ width:28, height:28, borderRadius:8, background:'#1E293B', color:dayColor, fontWeight:800, fontSize:13, display:'flex', alignItems:'center', justifyContent:'center' }}>{s.set}</div>
-            <div style={{ fontSize:11, color:'#475569', textAlign:'center' }}>
-              {ant ? `${ant.weight||'—'}×${ant.reps||'—'}` : '—'}
-            </div>
+          <div key={idx} style={{ display:'grid', gridTemplateColumns:'24px 46px 1fr 1fr', gap:6, marginBottom:5, alignItems:'center' }}>
+            <div style={{ fontSize:11, fontWeight:800, color: s.checked ? '#34D399' : dayColor, textAlign:'center' }}>{s.set}</div>
+            <div style={{ fontSize:10, color:'#475569', textAlign:'center' }}>{ant ? `${ant.weight||'—'}×${ant.reps||'—'}` : '—'}</div>
             <input type="number" inputMode="decimal" placeholder="0" value={s.weight}
               onChange={e => updateSet(idx,'weight',e.target.value)}
-              style={{ background:'#161B27', border:`1px solid ${s.checked?'#34D39960':'rgba(255,255,255,0.08)'}`, borderRadius:8, padding:'10px 4px', color:'#E2E8F0', fontSize:15, textAlign:'center', outline:'none', width:'100%', fontWeight:700, boxSizing:'border-box' }} />
+              style={{ background: s.checked ? 'rgba(52,211,153,0.08)' : '#12161F', border:`1px solid ${s.checked?'rgba(52,211,153,0.4)':'rgba(255,255,255,0.07)'}`, borderRadius:7, padding:'6px 4px', color:'#E2E8F0', fontSize:13, textAlign:'center', outline:'none', width:'100%', fontWeight:700, boxSizing:'border-box' }} />
             <input type="number" inputMode="numeric" placeholder="0" value={s.reps}
               onChange={e => updateSet(idx,'reps',e.target.value)}
-              style={{ background:'#161B27', border:`1px solid ${s.checked?'#34D39960':'rgba(255,255,255,0.08)'}`, borderRadius:8, padding:'10px 4px', color:'#E2E8F0', fontSize:15, textAlign:'center', outline:'none', width:'100%', fontWeight:700, boxSizing:'border-box' }} />
-            <input type="number" inputMode="numeric" min="0" max="5" placeholder="—" value={s.rir||''}
-              onChange={e => updateSet(idx,'rir',e.target.value)} title="RIR"
-              style={{ background:'#161B27', border:'1px solid rgba(255,255,255,0.08)', borderRadius:8, padding:'10px 2px', color:'#94A3B8', fontSize:12, textAlign:'center', outline:'none', width:'100%', boxSizing:'border-box' }} />
-            <button onClick={() => toggleChecked(idx)}
-              style={{ width:30, height:30, borderRadius:8, border:'none', background: s.checked ? '#34D399' : 'rgba(255,255,255,0.06)', color: s.checked ? '#022c22' : '#475569', fontSize:15, fontWeight:900, cursor:'pointer' }}>
-              ✓
-            </button>
+              style={{ background: s.checked ? 'rgba(52,211,153,0.08)' : '#12161F', border:`1px solid ${s.checked?'rgba(52,211,153,0.4)':'rgba(255,255,255,0.07)'}`, borderRadius:7, padding:'6px 4px', color:'#E2E8F0', fontSize:13, textAlign:'center', outline:'none', width:'100%', fontWeight:700, boxSizing:'border-box' }} />
           </div>
         )
       })}
-
-      <button onClick={onAddSet} style={{ width:'100%', marginTop:4, padding:'9px', borderRadius:8, border:'1px dashed rgba(255,255,255,0.15)', background:'transparent', color:'#475569', fontSize:12, fontWeight:700, cursor:'pointer' }}>
-        + Adicionar série
-      </button>
     </div>
   )
 }
@@ -1271,43 +1263,57 @@ function TrainingSessionView({ day, studentId, dayColor, onClose, onConfirm, con
     setLogsByEx(p => ({ ...p, [exId]: { ...p[exId], sets:newSets } }))
     persist(exId)
   }
-  const addSet = (exId) => {
-    const entry = logsByEx[exId]
-    const nextNum = (entry.sets[entry.sets.length-1]?.set || entry.sets.length) + 1
-    updateExSets(exId, [...entry.sets, { set:nextNum, weight:'', reps:'', rir:'', checked:false }])
-  }
 
   const volume = Object.values(logsByEx).reduce((tot, e) => tot + (e.sets||[]).reduce((s,x) => s + (x.checked ? (+x.weight||0)*(+x.reps||0) : 0), 0), 0)
-  const seriesCount = Object.values(logsByEx).reduce((tot, e) => tot + (e.sets||[]).filter(x => x.checked).length, 0)
+  const grupos = [...new Set((day.exercises||[]).map(e => e.type).filter(Boolean))]
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'#080B12', zIndex:300, overflowY:'auto' }}>
-      <div style={{ position:'sticky', top:0, background:'#0D1117', borderBottom:'1px solid rgba(255,255,255,0.08)', padding:'14px 16px', display:'flex', justifyContent:'space-between', alignItems:'center', zIndex:2 }}>
-        <button onClick={onClose} style={{ background:'none', border:'none', color:'#64748B', fontSize:14, fontWeight:700, cursor:'pointer' }}>▾ {day.focus || day.name || 'Treino'}</button>
-        <button onClick={() => setShowFeedback(true)} disabled={confirming}
-          style={{ padding:'9px 20px', borderRadius:10, border:'none', background:dayColor, color:'#0B0F17', fontWeight:800, fontSize:14, cursor:'pointer' }}>
-          Concluir
-        </button>
-      </div>
+    <div style={{ position:'fixed', inset:0, zIndex:300, overflowY:'auto' }}>
+      <CosmicCSS />
+      <StarField />
+      <div style={{ position:'relative', zIndex:1 }}>
+        <div style={{ position:'sticky', top:0, background:'rgba(8,11,18,0.92)', backdropFilter:'blur(10px)', borderBottom:'1px solid rgba(255,255,255,0.08)', padding:'14px 16px', zIndex:2 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+            <button onClick={onClose} style={{ background:'none', border:'none', color:'#64748B', fontSize:14, fontWeight:700, cursor:'pointer' }}>▾ {day.focus || day.name || 'Treino'}</button>
+            <button onClick={() => setShowFeedback(true)} disabled={confirming}
+              style={{ padding:'9px 22px', borderRadius:10, border:'none', background:`linear-gradient(135deg, ${dayColor}, ${dayColor}cc)`, color:'#0B0F17', fontWeight:800, fontSize:14, cursor:'pointer', boxShadow:`0 4px 16px ${dayColor}55` }}>
+              Concluir
+            </button>
+          </div>
+          <div style={{ display:'flex', gap:18, alignItems:'center', flexWrap:'wrap' }}>
+            <div>
+              <div style={{ fontSize:9, color:'#475569', textTransform:'uppercase', letterSpacing:0.5 }}>Duração</div>
+              <div style={{ fontSize:17, fontWeight:800, color:dayColor, fontVariantNumeric:'tabular-nums' }}>{fmtDuracao(elapsed)}</div>
+            </div>
+            <div style={{ width:1, height:26, background:'rgba(255,255,255,0.1)' }} />
+            <div>
+              <div style={{ fontSize:9, color:'#475569', textTransform:'uppercase', letterSpacing:0.5 }}>Volume</div>
+              <div style={{ fontSize:17, fontWeight:800, color:'#E2E8F0' }}>{volume} <span style={{fontSize:11,fontWeight:600,color:'#64748B'}}>kg</span></div>
+            </div>
+            {grupos.length > 0 && (
+              <>
+                <div style={{ width:1, height:26, background:'rgba(255,255,255,0.1)' }} />
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:9, color:'#475569', textTransform:'uppercase', letterSpacing:0.5 }}>Grupos</div>
+                  <div style={{ fontSize:12, fontWeight:700, color:'#94A3B8', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{grupos.join(' · ')}</div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, padding:'16px' }}>
-        <div><div style={{ fontSize:10, color:'#475569', textTransform:'uppercase' }}>Duração</div><div style={{ fontSize:16, fontWeight:800, color:dayColor }}>{fmtDuracao(elapsed)}</div></div>
-        <div><div style={{ fontSize:10, color:'#475569', textTransform:'uppercase' }}>Volume</div><div style={{ fontSize:16, fontWeight:800, color:'#E2E8F0' }}>{volume} kg</div></div>
-        <div><div style={{ fontSize:10, color:'#475569', textTransform:'uppercase' }}>Séries</div><div style={{ fontSize:16, fontWeight:800, color:'#E2E8F0' }}>{seriesCount}</div></div>
-      </div>
-
-      <div style={{ padding:'0 16px 100px' }}>
-        {loading ? (
-          <div style={{ textAlign:'center', color:'#475569', padding:40 }}>Carregando...</div>
-        ) : (day.exercises || []).map(ex => (
-          <ExerciseSetsCard key={ex.id} ex={ex} dayColor={dayColor}
-            sets={logsByEx[ex.id]?.sets || []}
-            todayLog={logsByEx[ex.id]?.todayLogId}
-            lastLog={logsByEx[ex.id]?.lastLog}
-            onChangeSets={(s) => updateExSets(ex.id, s)}
-            onAddSet={() => addSet(ex.id)}
-          />
-        ))}
+        <div style={{ padding:'16px 16px 100px' }}>
+          {loading ? (
+            <div style={{ textAlign:'center', color:'#475569', padding:40 }}>Carregando...</div>
+          ) : (day.exercises || []).map(ex => (
+            <ExerciseSetsCard key={ex.id} ex={ex} dayColor={dayColor}
+              sets={logsByEx[ex.id]?.sets || []}
+              todayLog={logsByEx[ex.id]?.todayLogId}
+              lastLog={logsByEx[ex.id]?.lastLog}
+              onChangeSets={(s) => updateExSets(ex.id, s)}
+            />
+          ))}
+        </div>
       </div>
 
       {showFeedback && (
@@ -2072,6 +2078,7 @@ function FeedbackModal({ studentId, onConfirm, onClose, confirming }) {
 function WorkoutCarousel({ days, activePlan, confirmedToday, confirming, confirmWorkout, missedDays, showMakeup, setShowMakeup, studentId, isMobile }) {
   const [showFeedback, setShowFeedback] = useState(false)
   const [sessionActive, setSessionActive] = useState(false)
+  const [makeupSession, setMakeupSession] = useState(null)
   const DIAS_SEMANA = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
   const DAY_COLORS = ['#60A5FA','#34D399','#F59E0B','#A78BFA','#F87171','#38BDF8','#FB923C']
 
@@ -2211,6 +2218,14 @@ function WorkoutCarousel({ days, activePlan, confirmedToday, confirming, confirm
           onConfirm={confirmWorkout}
         />
       )}
+      {makeupSession && (
+        <TrainingSessionView
+          day={makeupSession} studentId={studentId} dayColor={color}
+          confirming={confirming}
+          onClose={() => setMakeupSession(null)}
+          onConfirm={() => confirmWorkout(makeupSession)}
+        />
+      )}
 
       {/* Status — botão de concluir agora vive dentro da sessão de treino */}
       {isToday && workout && confirmedToday && (
@@ -2240,7 +2255,7 @@ function WorkoutCarousel({ days, activePlan, confirmedToday, confirming, confirm
               <div style={{ fontSize:11, color:'#92400E', fontWeight:700, marginBottom:8, textAlign:'center' }}>Selecione o treino para recuperar</div>
               <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                 {missedDays.map(missed => (
-                  <button key={missed.id} onClick={() => confirmWorkout(missed)} disabled={confirming}
+                  <button key={missed.id} onClick={() => setMakeupSession(missed)} disabled={confirming}
                     style={{ padding:'11px 14px', borderRadius:12, border:'1px solid rgba(251,191,36,0.4)', background:'rgba(255,255,255,0.04)', cursor:'pointer', textAlign:'left', display:'flex', alignItems:'center', gap:10 }}>
                     <div style={{ width:34, height:34, borderRadius:9, background:'linear-gradient(135deg,#F5C842,#D97706)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                       <span style={{ fontSize:10, fontWeight:900, color:'#431C00' }}>{missed.dia}</span>
