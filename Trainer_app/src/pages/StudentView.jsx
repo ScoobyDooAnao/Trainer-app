@@ -2326,7 +2326,7 @@ export default function StudentView({ studentId }) {
     const load = async () => {
       try {
         const { data: st } = await supabase
-          .from('students').select('*').eq('id', studentId).single()
+          .from('students_public').select('*').eq('id', studentId).single()
         if (st) setStudent(st)
 
         const { data: plans } = await supabase
