@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../supabase'
 import { today, DAY_COLORS } from '../../lib/studentViewShared'
-import { CosmicCSS, StarField } from '../CosmicBackground'
+import { CosmicCSS, StarField } from '../backgrounds/CosmicBackground'
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 const TYPE_COLORS = {
