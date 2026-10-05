@@ -372,19 +372,24 @@ function StudentCard({ st, onClick, onDelete }) {
         supabase.from('student_feedbacks').delete().eq('student_id', st.id),
         supabase.from('cardio_sessions').delete().eq('student_id', st.id),
         supabase.from('student_goals').delete().eq('student_id', st.id),
+        supabase.from('measure_logs').delete().eq('student_id', st.id),
+        supabase.from('anamnese').delete().eq('student_id', st.id),
+        supabase.from('anamnese_tokens').delete().eq('student_id', st.id),
       ])
       const { data: plans } = await supabase.from('workout_plans').select('id').eq('student_id', st.id)
       if (plans?.length) {
         const pids = plans.map(p => p.id)
-        const { data: days } = await supabase.from('workout_days').select('id').in('workout_plan_id', pids)
-        if (days?.length) await supabase.from('exercises').delete().in('workout_day_id', days.map(d => d.id))
-        await supabase.from('workout_days').delete().in('workout_plan_id', pids)
+        const { data: days } = await supabase.from('workout_days').select('id').in('plan_id', pids)
+        if (days?.length) await supabase.from('exercises').delete().in('day_id', days.map(d => d.id))
+        await supabase.from('workout_days').delete().in('plan_id', pids)
         await supabase.from('workout_plans').delete().in('id', pids)
       }
-      await supabase.from('students').delete().eq('id', st.id)
-      onDelete()
+      const { error: delErr } = await supabase.from('students').delete().eq('id', st.id)
+      if (delErr) throw delErr
+      onDelete(st.id)
     } catch (e) {
       console.error(e)
+      alert('Não foi possível excluir o aluno: ' + e.message)
       setDeleting(false)
     }
   }
@@ -3579,7 +3584,7 @@ export default function Dashboard({ session }) {
               </div>
             ) : (
               <div className="db-students-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
-                {filtered.map(st => <StudentCard key={st.id} st={st} onClick={() => navigate('student-detail', { id: st.id })} onDelete={fetchAll} />)}
+                {filtered.map(st => <StudentCard key={st.id} st={st} onClick={() => navigate('student-detail', { id: st.id })} onDelete={(deletedId) => { setStudents(p => p.filter(s => s.id !== deletedId)); fetchAll() }} />)}
                 {Array.from({ length: (3 - (filtered.length % 3)) % 3 }).map((_, i) => <AddCard key={'add' + i} onClick={() => setShowModal(true)} />)}
               </div>
             )}
