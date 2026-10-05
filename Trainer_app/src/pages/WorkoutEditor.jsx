@@ -731,7 +731,7 @@ export default function WorkoutEditor() {
     // Delete exercises first, then days, then plan
     const dayIds = days.map(d => d.id)
     if (dayIds.length > 0) {
-      await supabase.from('exercises').delete().in('workout_day_id', dayIds)
+      await supabase.from('exercises').delete().in('day_id', dayIds)
       await supabase.from('workout_days').delete().in('id', dayIds)
     }
     await supabase.from('workout_plans').delete().eq('id', planId)
@@ -751,6 +751,7 @@ export default function WorkoutEditor() {
 
   const deleteDay = async (dayId) => {
     if (!confirm('Excluir este dia de treino e todos os exercícios?')) return
+    await supabase.from('exercises').delete().eq('day_id', dayId)
     await supabase.from('workout_days').delete().eq('id', dayId)
     setDays(d => d.filter(day => day.id !== dayId))
   }
