@@ -76,6 +76,7 @@ function DuplicarPlanoModal({ plan, student, onClose }) {
   useEffect(() => {
     supabase.from('students').select('id,name,goal')
       .eq('teacher_id', student.teacher_id)
+      .eq('status', STUDENT_STATUS.ATIVO)
       .neq('id', student.id)
       .order('name')
       .then(({ data }) => setAllStudents(data || []))
