@@ -232,7 +232,7 @@ function TabMetas({ studentId, student, goals, onUpdate }) {
       <ConstellationDisplay goals={concluidas} />
 
       {/* Sugestões rápidas */}
-      <SugestoesMetas goals={goals} sugestoes={sugestoes} student={student} onAdd={() => setAddGoalModal(true)} />
+      <SugestoesMetas goals={goals} sugestoes={sugestoes} student={student} onAdd={() => setShowModal(true)} />
 
       {/* Metas ativas */}
       {ativas.length===0 && concluidas.length===0 ? (
@@ -450,3 +450,35 @@ function ConstellationDisplay({ goals }) {
 }
 
 export { TabMetas, ConstellationDisplay }
+
+// ── SugestoesMetas ───────────────────────────────────────────────────────────
+function SugestoesMetas({ goals, sugestoes, student, onAdd }) {
+  const jaAdicionadas = (goals||[]).map(g => g.title)
+  const disponiveis   = (sugestoes||[]).filter(s => !jaAdicionadas.includes(s.titulo) && s.titulo !== 'Meta personalizada')
+  if (!disponiveis.length) return null
+  const CAT_C = { forca:'rgba(99,102,241,0.15)', cardio:'rgba(239,68,68,0.15)', mobilidade:'rgba(16,185,129,0.15)', composicao:'rgba(245,158,11,0.15)', outro:'rgba(100,116,139,0.15)' }
+  const CAT_T = { forca:'#818CF8', cardio:'#F87171', mobilidade:'#34D399', composicao:'#FBBF24', outro:'#94A3B8' }
+  return (
+    <div style={{ background:'rgba(167,139,250,0.05)', border:'1px solid rgba(167,139,250,0.15)', borderRadius:14, padding:'14px 16px', marginBottom:20 }}>
+      <div style={{ fontSize:10, color:'#A78BFA', fontWeight:800, textTransform:'uppercase', letterSpacing:2, marginBottom:12 }}>
+        Sugestões para {student?.goal}
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+        {disponiveis.slice(0,4).map((s,i) => {
+          const cc = CAT_C[s.categoria] || CAT_C.outro
+          const ct = CAT_T[s.categoria] || CAT_T.outro
+          return (
+            <div key={i} onClick={onAdd}
+              style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px', borderRadius:10, background:cc, cursor:'pointer' }}>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:12, fontWeight:700, color:ct }}>{s.titulo}</div>
+                {s.descricao && <div style={{ fontSize:10, color:ct, opacity:0.7, marginTop:1 }}>{s.descricao}</div>}
+              </div>
+              <span style={{ fontSize:16, color:ct }}>+</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
