@@ -12,6 +12,7 @@ const ROUTES = {
   'workout-editor':  (p) => `/workout/${p.studentId}/${p.planId}`,
   'teacher-profile': () => '/perfil',
   'planner':         (p) => `/planner/${p.studentId}`,
+  'exercise-library':() => '/biblioteca-exercicios',
 }
 
 export function useAppNavigate() {
