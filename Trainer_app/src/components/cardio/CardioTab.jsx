@@ -458,3 +458,54 @@ function StudentCardioTab({ studentId, student, sessions, onNewSession, simplifi
 
 
 export { StudentCardioTab }
+
+// ── PaceChart ────────────────────────────────────────────────────────────────
+function PaceChart({ paceData }) {
+  if (!paceData || paceData.length < 2) return null
+  const W = 340, H = 140, PAD = { t:14, r:14, b:30, l:44 }
+  const vals  = paceData.map(d => d.Pace)
+  const minV  = Math.min(...vals), maxV = Math.max(...vals)
+  const range = maxV - minV || 1
+  const cx = (i) => PAD.l + (i/(paceData.length-1))*(W-PAD.l-PAD.r)
+  const cy = (v) => PAD.t + ((v-minV)/range)*(H-PAD.t-PAD.b)
+  const pts  = paceData.map((d,i) => cx(i)+','+cy(d.Pace)).join(' ')
+  const area = 'M'+cx(0)+','+cy(paceData[0].Pace)+' '+
+    paceData.slice(1).map((d,i)=>'L'+cx(i+1)+','+cy(d.Pace)).join(' ')+
+    ' L'+cx(paceData.length-1)+','+(H-PAD.b)+' L'+cx(0)+','+(H-PAD.b)+' Z'
+  const bestM = Math.floor(minV)
+  const bestS = Math.round((minV-bestM)*60).toString().padStart(2,'0')
+  return (
+    <div style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:14, padding:'14px 16px', marginBottom:14 }}>
+      <div style={{ fontSize:13, fontWeight:800, color:'#E2E8F0', marginBottom:10 }}>Evolução do Pace</div>
+      <div style={{ overflowX:'auto' }}>
+        <svg width={W} height={H} style={{ display:'block', minWidth:W }}>
+          {[0,.5,1].map(t => {
+            const y = PAD.t + t*(H-PAD.t-PAD.b)
+            const lv = minV + (1-t)*range
+            const m=Math.floor(lv), s=Math.round((lv-m)*60).toString().padStart(2,'0')
+            return (
+              <g key={t}>
+                <line x1={PAD.l} y1={y} x2={W-PAD.r} y2={y} stroke="rgba(255,255,255,0.05)" strokeDasharray="3,3" />
+                <text x={PAD.l-4} y={y+4} textAnchor="end" fontSize={9} fill="#475569">{m}:{s}</text>
+              </g>
+            )
+          })}
+          {paceData.map((d,i) => (
+            (i===0||i===paceData.length-1||(paceData.length>4&&i===Math.floor(paceData.length/2)))
+              ? <text key={i} x={cx(i)} y={H-PAD.b+14} textAnchor="middle" fontSize={9} fill="#475569">{d.date}</text>
+              : null
+          ))}
+          <path d={area} fill="rgba(167,139,250,0.08)" />
+          <polyline points={pts} fill="none" stroke="#A78BFA" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+          {paceData.map((d,i) => (
+            <circle key={i} cx={cx(i)} cy={cy(d.Pace)} r={4} fill="#A78BFA" stroke="#02040F" strokeWidth={2} />
+          ))}
+        </svg>
+      </div>
+      <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:'#475569', marginTop:6 }}>
+        <span>Melhor pace: {bestM}:{bestS}/km</span>
+        <span>Últimas {paceData.length} sessões com distância</span>
+      </div>
+    </div>
+  )
+}
