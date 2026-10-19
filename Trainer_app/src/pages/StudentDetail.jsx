@@ -568,7 +568,7 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
           student={student}
           anamData={anamData}
           readOnly={false}
-          onClose={() => { setOpenAvaliacaoId(null); fetchAll() }}
+          onClose={() => { setOpenAvaliacaoId(null); onSaved && onSaved() }}
         />
       )}
       {fichaPage===0 && <>
