@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../supabase'
-
-const TOLERANCIA = 1 // cm (ou kg) — diferença máxima entre Teste e Reteste antes de exigir desempate
+import { qk } from '../lib/queries'
+import { calcFinal, precisaDesempate } from '../lib/anthropometry'
 
 const BASICAS = [
   { key:'peso',             label:'Peso (kg)',           unit:'kg', umaVez:false },
@@ -28,19 +29,6 @@ const PERIM_BILATERAIS = [
   { key:'coxa',            label:'Coxa' },
   { key:'panturrilha',     label:'Panturrilha' },
 ]
-
-function calcFinal(t1, t2, t3) {
-  const n1 = parseFloat(t1), n2 = parseFloat(t2), n3 = parseFloat(t3)
-  if (isNaN(n1) || isNaN(n2)) return null
-  if (Math.abs(n1 - n2) <= TOLERANCIA) return +((n1 + n2) / 2).toFixed(1)
-  if (isNaN(n3)) return null
-  return [n1, n2, n3].sort((a, b) => a - b)[1] // mediana das 3
-}
-function precisaDesempate(t1, t2) {
-  const n1 = parseFloat(t1), n2 = parseFloat(t2)
-  if (isNaN(n1) || isNaN(n2)) return false
-  return Math.abs(n1 - n2) > TOLERANCIA
-}
 
 const cellInp = { width:'100%', background:'#111827', border:'1px solid rgba(255,255,255,0.08)', borderRadius:6, padding:'6px 4px', color:'#E2E8F0', fontSize:12, textAlign:'center', outline:'none', fontFamily:'inherit', boxSizing:'border-box' }
 
@@ -78,7 +66,11 @@ export default function FichaAvaliacao({ avaliacaoId, studentId, student, anamDa
   const [hora, setHora] = useState('')
   const [sexo, setSexo] = useState(student?.sexo || '')
   const [primeiraRef, setPrimeiraRef] = useState(null) // avaliação de referência p/ segmentares/estatura em reavaliações
+  const qc = useQueryClient()
   const [loading, setLoading] = useState(true)
+  const [bioGordura, setBioGordura] = useState('')
+  const [bioMagra, setBioMagra] = useState('')
+  const TBL = readOnly ? 'measure_logs_public' : 'measure_logs'
   const [sav, setSav] = useState(false)
   const lastSavedRef = useRef('')
 
@@ -86,14 +78,16 @@ export default function FichaAvaliacao({ avaliacaoId, studentId, student, anamDa
 
   const fetchAv = async () => {
     setLoading(true)
-    const { data: row } = await supabase.from('measure_logs').select('*').eq('id', avaliacaoId).single()
+    const { data: row } = await supabase.from(TBL).select('*').eq('id', avaliacaoId).single()
     if (row) {
       setAv(row)
       setMedidas(row.medidas || {})
+      setBioGordura(row.body_fat ?? '')
+      setBioMagra(row.lean_mass ?? '')
       setData(row.date || '')
       setHora(row.hora || '')
       if (!row.is_primeira) {
-        const { data: prim } = await supabase.from('measure_logs').select('*').eq('student_id', studentId).eq('is_primeira', true).limit(1)
+        const { data: prim } = await supabase.from(TBL).select('*').eq('student_id', studentId).eq('is_primeira', true).limit(1)
         if (prim?.[0]) setPrimeiraRef(prim[0])
       }
     }
@@ -121,20 +115,23 @@ export default function FichaAvaliacao({ avaliacaoId, studentId, student, anamDa
   // Autosave
   useEffect(() => {
     if (readOnly || !av) return
-    const snapshot = JSON.stringify({ medidas, data, hora, sexo })
+    const snapshot = JSON.stringify({ medidas, data, hora, sexo, bioGordura, bioMagra })
     if (snapshot === lastSavedRef.current) return
     const t = setTimeout(async () => {
       setSav(true)
       await supabase.from('measure_logs').update({
         medidas, date: data, hora, imc, rcq,
+        body_fat: bioGordura === '' ? null : +bioGordura,
+        lean_mass: bioMagra === '' ? null : +bioMagra,
         weight: pesoKg, waist: cinturaCm, hip: quadrilCm, // sincroniza colunas planas (usadas no card do Dashboard)
       }).eq('id', avaliacaoId)
       if (sexo && sexo !== student?.sexo) await supabase.from('students').update({ sexo }).eq('id', studentId)
       lastSavedRef.current = snapshot
+      qc.invalidateQueries({ queryKey: qk.evolution(studentId) })
       setSav(false)
     }, 900)
     return () => clearTimeout(t)
-  }, [medidas, data, hora, sexo])
+  }, [medidas, data, hora, sexo, bioGordura, bioMagra])
 
   if (loading || !av) return (
     <div style={{ position:'fixed', inset:0, background:'#000', zIndex:400, display:'flex', alignItems:'center', justifyContent:'center', color:'#3B82F6' }}>Carregando...</div>
@@ -228,6 +225,18 @@ export default function FichaAvaliacao({ avaliacaoId, studentId, student, anamDa
             <LinhaMedida label={`${m.label} (E)`} val={medidas[bilateralKey(m.key,'e')]} onChange={setCampo(bilateralKey(m.key,'e'))} readOnly={readOnly} />
           </div>
         ))}
+
+        <SecTitle>Bioimpedância</SecTitle>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+          <div>
+            <div style={{ fontSize:11, color:'#94A3B8', marginBottom:4 }}>% Gordura</div>
+            <input type="number" inputMode="decimal" style={{ ...cellInp, textAlign:'left', padding:'9px 10px' }} disabled={readOnly} value={bioGordura} onChange={e => setBioGordura(e.target.value)} placeholder="—" />
+          </div>
+          <div>
+            <div style={{ fontSize:11, color:'#94A3B8', marginBottom:4 }}>Massa magra (kg)</div>
+            <input type="number" inputMode="decimal" style={{ ...cellInp, textAlign:'left', padding:'9px 10px' }} disabled={readOnly} value={bioMagra} onChange={e => setBioMagra(e.target.value)} placeholder="—" />
+          </div>
+        </div>
 
         {!readOnly && (
           <div style={{ textAlign:'center', fontSize:11, color: sav ? '#64748B' : '#334155', marginTop:16 }}>
