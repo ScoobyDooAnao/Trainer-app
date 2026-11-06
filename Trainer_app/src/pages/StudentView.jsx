@@ -3,6 +3,7 @@ import { supabase } from '../supabase'
 import FichaAvaliacao from './FichaAvaliacao'
 import { today, DAY_COLORS, CARD, INP, LBL } from '../lib/studentViewShared'
 import { ProgressChart } from '../components/progress/ProgressChart'
+import EvolutionCharts from '../components/evolution/EvolutionCharts'
 import { TabEscolinhaAluno } from '../components/escolinha/EscolinhaAluno'
 import { CosmicCSS, StarField } from '../components/backgrounds/CosmicBackground'
 import { WorkoutCarousel } from '../components/training/TrainingSession'
@@ -143,9 +144,9 @@ export default function StudentView({ studentId }) {
 
   useEffect(() => {
     if (!studentId) return
-    supabase.from('anamnese').select('*').eq('student_id', studentId).limit(1)
+    supabase.from('anamnese_public').select('*').eq('student_id', studentId).limit(1)
       .then(({ data }) => { if (data?.[0]) setAnamData(data[0]) })
-    supabase.from('measure_logs').select('*').eq('student_id', studentId).not('medidas','is',null).order('date', { ascending:false })
+    supabase.from('measure_logs_public').select('*').eq('student_id', studentId).not('medidas','is',null).order('date', { ascending:false })
       .then(({ data }) => setAvaliacoesProf(data || []))
   }, [studentId])
 
@@ -454,6 +455,11 @@ export default function StudentView({ studentId }) {
                   background:'linear-gradient(135deg,#34D399,#059669)', color:'#022c22',
                   fontWeight:800, fontSize:13, boxShadow:'0 4px 16px rgba(52,211,153,0.3)',
                 }}>+ Medidas</button>
+            </div>
+
+            {/* ── Evolução por objetivo (mesmos gráficos do professor) ── */}
+            <div style={{ marginBottom: 22 }}>
+              <EvolutionCharts studentId={studentId} goal={student?.goal} publicMode medidaPrioritaria={student?.medida_prioritaria} />
             </div>
 
             {/* ── Avaliações do professor (somente leitura) ── */}
