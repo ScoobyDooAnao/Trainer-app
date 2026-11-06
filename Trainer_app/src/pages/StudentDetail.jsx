@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../supabase'
 import { nivelFromExperiencia, STUDENT_STATUS, upsertAnamnese } from '../lib/alunos'
-import { useConfirmarMatricula } from '../lib/queries'
+import { useConfirmarMatricula, qk } from '../lib/queries'
 import { useAppNavigate } from '../lib/useAppNavigate'
 import { useParams } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import FichaAvaliacao from './FichaAvaliacao'
+import EvolutionCharts from '../components/evolution/EvolutionCharts'
 
 // ── Design tokens StudentDetail ──────────────────────────────────────────────
 const C = {
@@ -269,6 +271,13 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
   const [sav,setSav]  = useState(false)
   const [ok, setOk]   = useState(false)
   const [fichaPage,setFichaPage] = useState(0)
+  const qc = useQueryClient()
+  const refreshEvolution = () => qc.invalidateQueries({ queryKey: qk.evolution(studentId) })
+  const [medidaPrior, setMedidaPrior] = useState(student?.medida_prioritaria || '')
+  const salvarMedidaPrior = async (key) => {
+    setMedidaPrior(key)
+    await supabase.from('students').update({ medida_prioritaria: key }).eq('id', studentId)
+  }
 
   // ── Página 2: Avaliações Físicas (medidas do aluno + testes do professor) ──
   const [avaliacoes, setAvaliacoes] = useState([])
@@ -290,6 +299,7 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
     if (!window.confirm('Excluir esta avaliação permanentemente?')) return
     await supabase.from('measure_logs').delete().eq('id', id)
     setAvaliacoes(p => p.filter(a => a.id !== id))
+    refreshEvolution()
   }
 
   const criarNovaAvaliacao = async () => {    setCriandoAval(true)
@@ -320,6 +330,7 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
     const { data, error } = await supabase.from('measure_logs').insert([payload]).select().single()
     if (!error && data) {
       setAvaliacoes(p => [data, ...p])
+      refreshEvolution()
       setNovoTeste({ date: new Date().toISOString().slice(0,10), label:'', value:'' })
       setShowTesteForm(false)
     }
@@ -427,6 +438,10 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
       </div>
       {fichaPage===1 && (
         <div style={{ padding:'8px 0' }}>
+          <EvolutionCharts studentId={studentId} goal={student?.goal} medidaPrioritaria={medidaPrior} onChangeMedida={salvarMedidaPrior} />
+          <details style={{ marginTop:22 }}>
+            <summary style={{ cursor:'pointer', fontSize:11, color:'#475569', fontWeight:700, textTransform:'uppercase', letterSpacing:0.6 }}>Treinos e cargas (detalhado)</summary>
+            <div style={{ paddingTop:14 }}>
           {exerciciosDisponiveis.length === 0 ? (
             <div style={{textAlign:'center',padding:'40px 20px'}}><div style={{fontSize:36,marginBottom:10,opacity:0.2}}>📈</div><div style={{fontSize:14,fontWeight:700,color:'#475569',marginBottom:6}}>Evolução do Treinamento</div><div style={{fontSize:12,color:'#334155'}}>Nenhum registro de carga ainda.</div></div>
           ) : (
@@ -476,6 +491,8 @@ function FichaInformacoes({ student, anamData, studentId, onSaved, exLogs = [], 
               )}
             </>
           )}
+            </div>
+          </details>
         </div>
       )}
       {fichaPage===2 && (
@@ -811,7 +828,7 @@ export default function StudentDetail() {
     setFetchError(null)
     try {
       const [stRes, plRes, prRes, gsRes, elRes] = await Promise.all([
-        supabase.from('students').select('id,name,age,weight,height,goal,level,notes,teacher_id,status,birth_date,sport,sport_position,experience_years,guardian_name,guardian_phone,parent_message,parent_message_date,parent_height_father,parent_height_mother,height_sitting,tgmd_scores,tgmd_date').eq('id', studentId).single(),
+        supabase.from('students').select('id,name,age,weight,height,goal,level,sexo,medida_prioritaria,notes,teacher_id,status,birth_date,sport,sport_position,experience_years,guardian_name,guardian_phone,parent_message,parent_message_date,parent_height_father,parent_height_mother,height_sitting,tgmd_scores,tgmd_date').eq('id', studentId).single(),
         supabase.from('workout_plans').select('*').eq('student_id', studentId).order('created_at', { ascending: false }),
         supabase.from('progress_entries').select('*').eq('student_id', studentId).order('date', { ascending: false }),
         supabase.from('student_goals').select('*').eq('student_id', studentId).order('created_at', { ascending: false }),
@@ -822,7 +839,7 @@ export default function StudentDetail() {
       let st = stRes.data
       if (stRes.error) {
         console.warn('fetch with new cols failed, retrying basic:', stRes.error.message)
-        const fallback = await supabase.from('students').select('id,name,age,weight,height,goal,level,notes,teacher_id,status').eq('id', studentId).single()
+        const fallback = await supabase.from('students').select('id,name,age,weight,height,goal,level,sexo,notes,teacher_id,status').eq('id', studentId).single()
         st = fallback.data
         if (!st) { setFetchError('Aluno não encontrado. Verifique o ID ou as permissões.'); setLoadingPage(false); return }
       }
