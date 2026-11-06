@@ -3,6 +3,7 @@ import { supabase } from '../../supabase'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from 'recharts'
 import { GOAL, MEDIDAS_CONFIG, GLASS_CARD, YELLOW, fmtDate } from '../../lib/dashboardShared'
 import { CustomTooltip, EmptyChart } from '../shared/DashboardUI'
+import EvolutionCharts from '../evolution/EvolutionCharts'
 
 // Modal para registrar nova entrada
 export function EvolucaoModal({ studentId, mode, onSave, onClose, exercises }) {
@@ -106,6 +107,13 @@ export function EvolucaoModal({ studentId, mode, onSave, onClose, exercises }) {
 
 export function TabEvolucao({ students }) {
   const [selectedId, setSelectedId] = useState(null)
+  const [medidaOv, setMedidaOv]     = useState({})
+  const selStudent  = students.find(s => s.id === selectedId)
+  const medidaAtual = medidaOv[selectedId] ?? selStudent?.medida_prioritaria
+  const salvarMedida = async (key) => {
+    setMedidaOv(p => ({ ...p, [selectedId]: key }))
+    await supabase.from('students').update({ medida_prioritaria: key }).eq('id', selectedId)
+  }
   const [subTab, setSubTab]         = useState('peso')
   const [entries, setEntries]       = useState([])
   const [exLogs, setExLogs]         = useState([])
@@ -228,6 +236,14 @@ export function TabEvolucao({ students }) {
 
       {selectedId && (
         <>
+          {/* Evolução por objetivo — mesmos gráficos da Ficha e do link do aluno */}
+          <div style={{ marginBottom: 26 }}>
+            <div style={{ fontSize: 11, color: '#0C4A6E', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
+              Evolução por objetivo · {selStudent?.goal || 'sem objetivo definido'}
+            </div>
+            <EvolutionCharts studentId={selectedId} goal={selStudent?.goal} medidaPrioritaria={medidaAtual} onChangeMedida={salvarMedida} />
+          </div>
+
           {/* Sub-tabs */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
             {subTabs.map(t => (
