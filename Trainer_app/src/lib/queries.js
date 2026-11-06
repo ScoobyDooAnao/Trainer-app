@@ -11,6 +11,7 @@ export const qk = {
   student:       (studentId) => ['student', studentId],
   notificacoes:  (teacherId) => ['notificacoes', teacherId],
   avaliacoes:    (studentId) => ['avaliacoes', studentId],
+  evolution:     (studentId) => ['evolution', studentId],
 }
 
 /** Cria aluno pendente e invalida a lista de alunos + notificações do professor. */
