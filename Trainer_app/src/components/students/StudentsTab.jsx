@@ -217,7 +217,7 @@ export function NovoAlunoModal({ onSave, onClose, teacherId }) {
 
     const isAcademiaOuAmbos = plano === 'academia' || plano === 'ambos'
 
-    await criarAlunoPendente({
+    const resultado = await criarAlunoPendente({
       teacherId,
       token: isAcademiaOuAmbos ? token : null,
       studentData: {
@@ -249,6 +249,11 @@ export function NovoAlunoModal({ onSave, onClose, teacherId }) {
     })
 
     setSaving(false)
+    if (resultado.error) {
+      alert('Não foi possível cadastrar o aluno: ' + (resultado.error.message || 'erro desconhecido'))
+      return
+    }
+    if (resultado.avisos?.length) alert('Aluno cadastrado, mas: ' + resultado.avisos.join('; ') + '.')
     onSave()
     onClose()
   }
