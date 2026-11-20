@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabase'
-import { criarAlunoPendente, nivelFromExperiencia } from '../lib/alunos'
+import { submeterAnamnesePublica, buscarInfoLink, nivelFromExperiencia } from '../lib/alunos'
 import { montarPerfilInterpretado } from '../lib/anamneseInterpret'
 
 const BG   = '#080F1A'
@@ -143,6 +143,7 @@ export default function AnamnesePublica({ token: tokenProp }) {
   const [status,    setStatus]    = useState('loading')
   const [step,      setStep]      = useState(1)
   const [saving,    setSaving]    = useState(false)
+  const [submitError, setSubmitError] = useState('')
   const [errors,    setErrors]    = useState({})
   const [finalData, setFinalData] = useState(null)
 
@@ -190,9 +191,10 @@ export default function AnamnesePublica({ token: tokenProp }) {
 
   useEffect(() => {
     if (!token) { setStatus('invalid'); return }
-    supabase.from('anamnese_tokens').select('*')
-      .eq('token',token).eq('status','pendente').single()
-      .then(({data}) => { if (!data){setStatus('invalid');return} setTokenData(data); setStatus('form') })
+    buscarInfoLink(token).then(({ info }) => {
+      if (!info) { setStatus('invalid'); return }
+      setTokenData(info); setStatus('form')
+    })
   }, [token])
 
   const submit = async () => {
@@ -206,11 +208,11 @@ export default function AnamnesePublica({ token: tokenProp }) {
       ? (parseFloat(D.peso) / Math.pow(parseFloat(D.altura)/100, 2)).toFixed(1)
       : null
 
-    await criarAlunoPendente({
-      teacherId: tokenData.teacher_id,
+    setSubmitError('')
+    const { error: envioErr } = await submeterAnamnesePublica({
       token,
       studentData: {
-        name: D.nome, plano: tokenData.plano,
+        name: D.nome,
         guardian_phone: whatsapp,
         goal: OBJ_MAP[D.objetivo] || D.objetivo || null,
         weight: +D.peso || null,
@@ -250,6 +252,15 @@ export default function AnamnesePublica({ token: tokenProp }) {
         },
       },
     })
+
+    if (envioErr) {
+      console.error('submeterAnamnesePublica:', envioErr)
+      setSaving(false)
+      setSubmitError(/link_invalido/.test(envioErr.message || '')
+        ? 'Este link já foi utilizado ou não é mais válido. Peça um novo link ao seu professor.'
+        : 'Não foi possível enviar agora. Suas respostas continuam aqui — toque em Enviar para tentar de novo.')
+      return
+    }
 
     setSaving(false)
     setFinalData(D)
@@ -636,6 +647,9 @@ export default function AnamnesePublica({ token: tokenProp }) {
             </button>
           )}
         </div>
+        {submitError && (
+          <div style={{marginTop:12,padding:'12px 14px',borderRadius:12,background:'rgba(248,113,113,0.12)',border:'1px solid rgba(248,113,113,0.4)',fontSize:13,color:'#FCA5A5',textAlign:'center',lineHeight:1.5}}>{submitError}</div>
+        )}
         {Object.keys(errors).length>0 && (
           <div style={{marginTop:10,fontSize:12,color:'#F87171',textAlign:'center'}}>Preencha todos os campos obrigatorios para continuar.</div>
         )}
