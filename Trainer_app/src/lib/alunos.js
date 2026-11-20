@@ -23,14 +23,6 @@ export async function upsertAnamnese(studentId, fields) {
 }
 
 /**
- * Centraliza a criação de aluno pendente.
- * Sempre: INSERT students (status='pendente') + upsert anamnese (opcional)
- * + marca token como respondido (opcional) + cria notificação nova_anamnese.
- *
- * Nunca criar aluno fora desta função — evita status inconsistente
- * e aluno "órfão" sem notificação.
- */
-/**
  * Transcreve a resposta da anamnese "Como você se descreve em relação
  * ao exercício?" para o nível de experiência do aluno (mesmo campo
  * `level` usado no WorkoutEditor para volume/frequência de referência).
@@ -44,17 +36,33 @@ export function nivelFromExperiencia(texto) {
   return null
 }
 
-export async function criarAlunoPendente({ teacherId, studentData, anamneseData, token, notifPayload }) {
-  const { data: aluno, error: alunoErr } = await supabase
-    .from('students')
-    .insert([{ ...studentData, teacher_id: teacherId, status: STUDENT_STATUS.PENDENTE }])
-    .select().single()
+/** UUID gerado no navegador — evita depender do RETURNING do banco (que exige permissão de leitura). */
+const novoUuid = () =>
+  (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = (Math.random() * 16) | 0
+        return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
+      })
 
-  if (alunoErr || !aluno) return { aluno: null, error: alunoErr }
+/**
+ * CADASTRO PELO PROFESSOR (logado). Cria o aluno pendente + anamnese + notificação.
+ * O id é gerado aqui: o insert NÃO usa .select(), então não depende de nenhuma
+ * política de leitura. Devolve { aluno, error, avisos } — quem chama DEVE mostrar
+ * erro/avisos ao usuário (nunca engolir em silêncio).
+ */
+export async function criarAlunoPendente({ teacherId, studentData, anamneseData, token, notifPayload }) {
+  const avisos = []
+  const id = novoUuid()
+  const { error: alunoErr } = await supabase
+    .from('students')
+    .insert([{ id, ...studentData, teacher_id: teacherId, status: STUDENT_STATUS.PENDENTE }])
+  if (alunoErr) return { aluno: null, error: alunoErr, avisos }
+  const aluno = { id, ...studentData, teacher_id: teacherId, status: STUDENT_STATUS.PENDENTE }
 
   if (anamneseData) {
     const { error: anamErr } = await upsertAnamnese(aluno.id, { ...anamneseData, teacher_id: teacherId })
-    if (anamErr) console.error('criarAlunoPendente: falha ao salvar anamnese', anamErr)
+    if (anamErr) { console.error('criarAlunoPendente: anamnese', anamErr); avisos.push('anamnese não foi salva') }
   }
 
   if (token) {
@@ -62,7 +70,7 @@ export async function criarAlunoPendente({ teacherId, studentData, anamneseData,
       .from('anamnese_tokens')
       .update({ student_id: aluno.id, status: 'respondido', respondido_em: new Date().toISOString() })
       .eq('token', token)
-    if (tokenErr) console.error('criarAlunoPendente: falha ao marcar token', tokenErr)
+    if (tokenErr) { console.error('criarAlunoPendente: token', tokenErr); avisos.push('link não foi marcado como usado') }
   }
 
   const { error: notifErr } = await supabase.from('notificacoes').insert([{
@@ -73,9 +81,32 @@ export async function criarAlunoPendente({ teacherId, studentData, anamneseData,
     lida: false,
     payload: { student_id: aluno.id, ...(notifPayload?.payload || {}) },
   }])
-  if (notifErr) console.error('criarAlunoPendente: falha ao criar notificação', notifErr)
+  if (notifErr) { console.error('criarAlunoPendente: notificação', notifErr); avisos.push('notificação não foi criada') }
 
-  return { aluno, error: null }
+  return { aluno, error: null, avisos }
+}
+
+/**
+ * ANAMNESE PÚBLICA (visitante sem login). Uma única chamada ao servidor
+ * (função submeter_anamnese) grava aluno + anamnese + notificação + link usado
+ * numa transação. Ou tudo acontece, ou nada. Devolve { studentId, error }.
+ */
+export async function submeterAnamnesePublica({ token, studentData, anamneseData, notifPayload }) {
+  const { data, error } = await supabase.rpc('submeter_anamnese', {
+    p_token: token,
+    p_aluno: studentData,
+    p_anamnese: anamneseData,
+    p_notif: notifPayload || {},
+  })
+  if (error) return { studentId: null, error }
+  return { studentId: data?.student_id || null, error: null }
+}
+
+/** Lê o link da anamnese (professor + plano) sem listar os links — null se inválido/já usado. */
+export async function buscarInfoLink(token) {
+  const { data, error } = await supabase.rpc('anamnese_token_info', { p_token: token })
+  if (error) return { info: null, error }
+  return { info: data || null, error: null }
 }
 
 /**
